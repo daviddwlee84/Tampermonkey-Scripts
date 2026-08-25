@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build output (only if a bundler is introduced later; see docs/07-dev-workflow.md)
+dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+
+# Local-only notes & tooling state
+.specstory/
+*.local.js
+*.local.md
+
+# Claude Code local state (settings.json itself is shared project config)
+.claude/plans/
+.claude/settings.local.json

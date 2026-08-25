@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.specstory/
+
+# README.md 裡有一段由 `npm run index` 產生的表格。讓 prettier 去對齊它，
+# 就會和產生器的輸出不一致，`npm run index:check` 會失敗。
+README.md

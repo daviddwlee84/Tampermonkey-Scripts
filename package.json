@@ -1,0 +1,25 @@
+{
+  "name": "tampermonkey-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Da-Wei Lee's userscripts + a Traditional Chinese guide to writing them",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daviddwlee84/Tampermonkey-Scripts"
+  },
+  "author": "Da-Wei Lee",
+  "license": "MIT",
+  "scripts": {
+    "new": "node scripts/new-script.mjs",
+    "check": "node scripts/check-meta.mjs",
+    "index": "node scripts/build-index.mjs",
+    "index:check": "node scripts/build-index.mjs --check",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "npm run check && npm run index:check"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2"
+  }
+}
