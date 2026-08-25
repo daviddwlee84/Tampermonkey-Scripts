@@ -29,7 +29,7 @@ userscripts/<slug>/
 | `{{SLUG}}`        | 資料夾名稱（kebab-case，也是檔名）       |
 | `{{DESCRIPTION}}` | 一句話說明，會出現在 README 索引表        |
 | `{{MATCH}}`       | `@match` pattern                         |
-| `{{DOMAIN}}`      | favicon 用的網域，例如 `github.com`      |
+| `{{ICON}}`        | 自動產生的 `data:` URI 圖示（見 `scripts/lib/icon.mjs`）|
 
 最後跑一次 `npm run check && npm run index`。
 

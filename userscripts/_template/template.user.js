@@ -6,7 +6,7 @@
 // @author       Da-Wei Lee
 // @license      MIT
 // @match        {{MATCH}}
-// @icon         https://www.google.com/s2/favicons?sz=64&domain={{DOMAIN}}
+// @icon         {{ICON}}
 // @run-at       document-idle
 // @grant        none
 // @updateURL    https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/{{SLUG}}/{{SLUG}}.user.js

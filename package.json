@@ -17,9 +17,11 @@
     "index:check": "node scripts/build-index.mjs --check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "npm run check && npm run index:check"
+    "verify": "npm run check && npm run index:check",
+    "preview": "node scripts/preview.mjs"
   },
   "devDependencies": {
-    "prettier": "^3.4.2"
+    "prettier": "^3.4.2",
+    "playwright": "^1.62.1"
   }
 }

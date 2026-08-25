@@ -18,3 +18,4 @@ Thumbs.db
 # Claude Code local state (settings.json itself is shared project config)
 # .claude/plans/
 .claude/settings.local.json
+.preview/

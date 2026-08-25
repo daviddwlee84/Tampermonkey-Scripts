@@ -6639,3 +6639,1322 @@ Checked 2 userscript(s): 0 error(s), 0 warning(s).
 README.md script index is up to date.
 ```
 </details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:28:48Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Commit and push install docs
+
+```bash
+git add -A && git commit -q -F - <<'EOF'
+docs: cover first-time install, and why "New from file" is the wrong door
+
+Installing via the dashboard's "Install from URL" records the remote source,
+so auto-update works from then on. "New from file" creates a local copy and
+"Import from zip" restores manager state — both look like they import the
+script, but neither wires up the GitHub distribution path.
+
+Also documents that Chromium browsers sometimes download a .user.js URL
+instead of letting the manager intercept it, and that Violentmonkey ships
+with "Notify script updates" off, which hides when a pushed version lands.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011fP1QvR8e5SHPU8Ud2oyJL
+EOF
+git push -q origin main && echo pushed
+```
+
+```text
+pushed
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:29:11Z)**_
+
+## 步驟
+
+Dashboard → `+` → **Install from URL** → 貼上網址 → 確認頁會列出 `@match` / `@grant` → Confirm。兩支各做一次。
+
+```
+https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/hello-userscript/hello-userscript.user.js
+https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/page-title-tag/page-title-tag.user.js
+```
+
+裝完開 <https://example.com> 驗證——右下角出現深色面板就代表整條鏈路（安裝 → `@match` → `@grant` → GM API）都通了。`page-title-tag` 則是開 ChatGPT 看分頁標題有沒有變成 `[GPT] ...`。
+
+## 你截圖裡那個選單，另外三個都不要用
+
+這是最關鍵的一點：
+
+| 選項 | 實際上是 |
+|---|---|
+| **Install from URL** | ✅ 從遠端安裝並**記住來源** → 自動更新可用 |
+| New from file | ⚠️ 從本機檔案建一份**副本** |
+| Import from zip / Sync… | ⚠️ 還原 VM 自己的備份 —— 那是 **state**，不是 code |
+
+`New from file` 看起來最直覺（你檔案就在本機），但它裝進去的是一份拷貝，很快就會和 repo 變成各自演化的兩份。**code 走 URL，state 走 zip/Sync**，這兩條路不要混。
+
+## 你的 Settings 有一項建議改
+
+截圖裡 `Check for script updates every 1 day(s)` 已經是開的 ✅，但：
+
+```
+☐ Notify script updates     ← 建議打勾
+```
+
+預設關閉。開起來的話，你 push 新版之後其他機器會主動告訴你更新了；不然它會安靜地更新，你不會知道版本何時真的生效——debug 時很容易搞混「到底跑的是哪一版」。
+
+想立刻拉更新就按 `+` 旁邊那個重新整理圖示。
+
+## 補充：你自己開發時其實不該走這條路
+
+上面是**消費端**的流程（其他機器、bootstrap 用）。你在主力開發機上改腳本時，走 install-from-URL 意味著每次都要 commit → push → 等更新，太慢。
+
+Violentmonkey 的 external editor tracking 才是開發用的：設定成追蹤 `userscripts/<slug>/<slug>.user.js` 這個本機檔案，並勾選「偵測到變更就 reload 分頁」，就變成存檔 → 網頁自動生效。`docs/07-dev-workflow.md` 有寫。
+
+⚠️ 但同一支腳本**不要同時**用兩種方式裝——會變成兩個 entry，你會分不清網頁上跑的是哪一個。
+
+文件已補進 `docs/08` 並 push 了。
+
+---
+
+_**User (2026-08-25 08:36:40Z)**_
+
+教我設定 external editor tracking
+另外是否有agent skills 能夠使用？(是否agent能夠互動式的測試？ 還是只能deploy後user自己測？)
+另外什麼時候用Playwright等 什麼時候用userscript？ -> 也做成doc介紹
+
+[Image #4] [Image #6] 例外我們的hello world範例應該怎麽測試使用？(在哪裏打開？會有什麼效果？)
+
+---
+
+_**User (2026-08-25 08:36:40Z)**_
+
+[Image: source: /Users/david/.claude/image-cache/f9187add-bba2-45fc-9da7-e5ae51dfcc52/4.png]
+
+[Image: source: /Users/david/.claude/image-cache/f9187add-bba2-45fc-9da7-e5ae51dfcc52/6.png]
+
+---
+
+_**Agent (claude-opus-5 2026-08-25 08:36:51Z)**_
+
+幾件事，先查那個紅色的 `Error fetching resource!` —— 那是我 template 的 bug：
+
+_**Agent (claude-opus-5 2026-08-25 08:36:53Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Investigate the resource fetch error
+
+```bash
+echo "=== @icon URL ==="; curl -sI "https://www.google.com/s2/favicons?sz=64&domain=example.com" | head -5
+echo; echo "=== does our script have @require/@resource? ==="; grep -nE "@(require|resource|icon)" userscripts/*/*.user.js
+```
+
+```text
+=== @icon URL ===
+HTTP/1.1 200 Connection established
+
+HTTP/2 301 
+location: https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://example.com&size=64
+x-content-type-options: nosniff
+
+=== does our script have @require/@resource? ===
+userscripts/_template/template.user.js:9:// @icon         https://www.google.com/s2/favicons?sz=64&domain={{DOMAIN}}
+userscripts/page-title-tag/page-title-tag.user.js:11:// @icon         https://www.google.com/s2/favicons?sz=64&domain=chatgpt.com
+userscripts/hello-userscript/hello-userscript.user.js:10:// @icon         https://www.google.com/s2/favicons?sz=64&domain=example.com
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:37:07Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Test favicon URL alternatives
+
+```bash
+echo "=== follow redirect ==="; curl -sL -o /dev/null -w "final=%{url_effective}\nstatus=%{http_code}\ntype=%{content_type}\nsize=%{size_download}\n" "https://www.google.com/s2/favicons?sz=64&domain=example.com"
+echo; echo "=== duckduckgo alternative ==="; curl -sL -o /dev/null -w "status=%{http_code} type=%{content_type} size=%{size_download} redirects=%{num_redirects}\n" "https://icons.duckduckgo.com/ip3/example.com.ico"
+echo; echo "=== direct site favicon ==="; curl -sL -o /dev/null -w "status=%{http_code} redirects=%{num_redirects}\n" "https://example.com/favicon.ico"
+```
+
+```text
+=== follow redirect ===
+final=https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://example.com&size=64
+status=404
+type=image/png
+size=726
+
+=== duckduckgo alternative ===
+status=200 type=text/plain;charset=US-ASCII size=0 redirects=0
+
+=== direct site favicon ===
+status=404 redirects=0
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:37:27Z)**_
+
+Confirmed — Google's favicon service returns **404** for `example.com` (it sends a fallback image body but with a 404 status, which VM reports as a fetch error). Let me check what browser tooling I have before fixing:
+
+_**Agent (claude-opus-5 2026-08-25 08:37:27Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="ToolSearch"><details>
+<summary>Tool use: **ToolSearch**</summary>
+
+**Input:**
+
+- max_results: `8`
+- query: `browser automation playwright screenshot navigate page`
+
+**Result:**
+
+```
+
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:37:49Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check for Playwright and browsers
+
+```bash
+echo "=== playwright available? ==="; npx playwright --version 2>&1 | head -2; which chromium chrome 2>/dev/null; ls ~/Library/Caches/ms-playwright 2>/dev/null | head
+echo; echo "=== chrome/arc installed? ==="; ls /Applications | grep -iE "chrome|arc|brave|edge" || true
+echo; echo "=== node deps ==="; ls node_modules 2>/dev/null | head -3 || echo "(no node_modules)"
+```
+
+```text
+=== playwright available? ===
+npm warn exec The following package was not found and will be installed: playwright@1.62.1
+Version 1.62.1
+chromium not found
+chrome not found
+chromium-1234
+ffmpeg-1011
+
+=== chrome/arc installed? ===
+Arc.app
+'Google Chrome.app'
+'The Unarchiver.app'
+
+=== node deps ===
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:37:59Z)**_
+
+No browser MCP in this session, but Playwright + a cached Chromium are available — so I *can* drive a real browser via Bash. Let me fix the icon bug first, then build that into the repo.
+
+_**Agent (claude-opus-5 2026-08-25 08:38:08Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Build self-contained data URI icon generator
+
+```bash
+cat > scripts/lib/icon.mjs <<'EOF'
+// Generate a self-contained `data:` URI icon for a userscript.
+//
+// Why not a favicon service: https://www.google.com/s2/favicons?domain=<x>
+// returns HTTP 404 for domains it has no icon for (example.com is one), and
+// Violentmonkey surfaces that as a red "Error fetching resource!" on the
+// script card. A remote icon also leaks to a third party which sites you run
+// scripts on, and breaks offline. A data URI has none of those problems.
+
+/** Deterministic hue from a slug, so each script keeps a stable colour. */
+function hueFor(slug) {
+  let hash = 0;
+  for (const ch of slug) hash = (hash * 31 + ch.codePointAt(0)) % 360;
+  return hash;
+}
+
+/** 1–2 uppercase initials: "page-title-tag" -> "PT", "hello" -> "HE". */
+function initialsFor(slug) {
+  const words = slug.split('-').filter(Boolean);
+  const letters = words.length >= 2 ? words[0][0] + words[1][0] : slug.slice(0, 2);
+  return letters.toUpperCase();
+}
+
+export function iconFor(slug) {
+  const hue = hueFor(slug);
+  const initials = initialsFor(slug);
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">` +
+    `<rect width="64" height="64" rx="14" fill="hsl(${hue} 62% 46%)"/>` +
+    `<text x="32" y="33" fill="#fff" font-family="Helvetica,Arial,sans-serif"` +
+    ` font-size="27" font-weight="700" text-anchor="middle"` +
+    ` dominant-baseline="central">${initials}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}`;
+}
+EOF
+node -e "
+import('./scripts/lib/icon.mjs').then(({iconFor}) => {
+  for (const s of ['hello-userscript','page-title-tag']) {
+    const uri = iconFor(s);
+    console.log(s, '->', uri.length, 'chars');
+    console.log('  decoded:', Buffer.from(uri.split(',')[1],'base64').toString('utf8').slice(0,90)+'...');
+  }
+});"
+```
+
+```text
+hello-userscript -> 418 chars
+  decoded: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" r...
+page-title-tag -> 418 chars
+  decoded: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" r...
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:38:16Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Replace remote icons with data URIs and bump versions
+
+```bash
+python3 - <<'PY'
+import pathlib, subprocess, json
+
+# get generated icons
+out = subprocess.run(['node','-e','''
+import("./scripts/lib/icon.mjs").then(({iconFor}) => {
+  console.log(JSON.stringify({
+    "hello-userscript": iconFor("hello-userscript"),
+    "page-title-tag": iconFor("page-title-tag"),
+  }));
+});'''], capture_output=True, text=True, check=True)
+icons = json.loads(out.stdout.strip())
+
+for slug, uri in icons.items():
+    p = pathlib.Path(f'userscripts/{slug}/{slug}.user.js')
+    s = p.read_text()
+    old = [l for l in s.split('\n') if l.startswith('// @icon')][0]
+    s = s.replace(old, f'// @icon         {uri}')
+    # bump patch version: metadata fix that users should receive
+    s = s.replace('// @version      1.0.0', '// @version      1.0.1')
+    p.write_text(s)
+    print(f'{slug}: icon -> data URI, version -> 1.0.1')
+
+# template placeholder
+p = pathlib.Path('userscripts/_template/template.user.js'); s = p.read_text()
+s = s.replace('// @icon         https://www.google.com/s2/favicons?sz=64&domain={{DOMAIN}}',
+              '// @icon         {{ICON}}')
+p.write_text(s)
+print('template: {{DOMAIN}} -> {{ICON}}')
+PY
+grep -h "@icon\|@version" userscripts/*/*.user.js | cut -c1-70
+```
+
+```text
+hello-userscript: icon -> data URI, version -> 1.0.1
+page-title-tag: icon -> data URI, version -> 1.0.1
+template: {{DOMAIN}} -> {{ICON}}
+// @version      1.0.1
+// @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d
+// @version      0.1.0
+// @icon         {{ICON}}
+ * - 改動後記得把 @version 往上加，否則其他機器的 Tampermonkey 不會更新。
+// @version      1.0.1
+// @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:38:26Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Wire icon generator into scaffolder and smoke-test it
+
+```bash
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path('scripts/new-script.mjs'); s = p.read_text()
+s = s.replace("import { USERSCRIPTS_DIR, rawUrlFor } from './lib/meta.mjs';",
+              "import { USERSCRIPTS_DIR, rawUrlFor } from './lib/meta.mjs';\nimport { iconFor } from './lib/icon.mjs';")
+s = s.replace("""let domain = 'example.com';
+try {
+  domain = new URL(match.replace(/^\\*:\\/\\//, 'https://')).hostname.replace(/^\\*\\./, '');
+} catch {
+  // @match patterns like *://*/* have no parseable host; leave the placeholder.
+}
+
+""", "")
+s = s.replace("""  .replaceAll('{{MATCH}}', match)
+  .replaceAll('{{DOMAIN}}', domain);""",
+"""  .replaceAll('{{MATCH}}', match)
+  .replaceAll('{{ICON}}', iconFor(slug));""")
+p.write_text(s)
+
+# template README: {{DOMAIN}} row -> {{ICON}}
+p = pathlib.Path('userscripts/_template/README.md'); s = p.read_text()
+s = s.replace("| `{{DOMAIN}}`      | favicon 用的網域，例如 `github.com`      |",
+              "| `{{ICON}}`        | 自動產生的 `data:` URI 圖示（見 `scripts/lib/icon.mjs`）|")
+p.write_text(s)
+print('scaffolder + template README patched')
+PY
+rm -rf userscripts/tmp-probe && node scripts/new-script.mjs tmp-probe "Probe" "https://example.org/*" "scaffolder smoke test" >/dev/null \
+  && grep -E "@icon|@version|@match|@run-at" userscripts/tmp-probe/tmp-probe.user.js | cut -c1-64 \
+  && node --check userscripts/tmp-probe/tmp-probe.user.js && echo "syntax ok" \
+  && node scripts/check-meta.mjs; rm -rf userscripts/tmp-probe
+```
+
+```text
+scaffolder + template README patched
+// @version      0.1.0
+// @match        https://example.org/*
+// @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0c
+// @run-at       document-idle
+ * - 改動後記得把 @version 往上加，否則其他機器的 Tampermonkey 不會更新。
+syntax ok
+
+Checked 3 userscript(s): 0 error(s), 0 warning(s).
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:38:38Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Add and test remote-icon lint rule
+
+```bash
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path('scripts/check-meta.mjs'); s = p.read_text()
+s = s.replace("""  // Cross-manager portability (see docs/09-managers-comparison.md).""",
+"""  // A remote @icon is a runtime dependency: favicon services return 404 for
+  // domains they lack an icon for, which managers surface as a fetch error on
+  // the script card. scripts/lib/icon.mjs generates a data: URI instead.
+  const icon = first(s.meta, 'icon');
+  if (icon && !icon.startsWith('data:')) {
+    warnings.push(at(`@icon is a remote URL — prefer a data: URI (see scripts/lib/icon.mjs)`));
+  }
+
+  // Cross-manager portability (see docs/09-managers-comparison.md).""")
+p.write_text(s)
+print('ok')
+PY
+npm run check
+echo "--- negative test ---"
+python3 -c "
+import pathlib
+p=pathlib.Path('userscripts/page-title-tag/page-title-tag.user.js');s=p.read_text()
+i=[l for l in s.split('\n') if l.startswith('// @icon')][0]
+p.write_text(s.replace(i,'// @icon         https://www.google.com/s2/favicons?sz=64&domain=chatgpt.com'))"
+node scripts/check-meta.mjs 2>&1 | head -2
+git checkout userscripts/page-title-tag/page-title-tag.user.js 2>/dev/null; git stash list >/dev/null
+```
+
+```text
+ok
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 2 userscript(s): 0 error(s), 0 warning(s).
+--- negative test ---
+warn  userscripts/page-title-tag/page-title-tag.user.js: @icon is a remote URL — prefer a data: URI (see scripts/lib/icon.mjs)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:38:42Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check if git checkout reverted the icon fix
+
+`grep -E "@version|@icon" userscripts/page-title-tag/page-title-tag.user.js | cut -c1-60`
+
+```text
+// @version      1.0.0
+// @icon         https://www.google.com/s2/favicons?sz=64&do
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:38:45Z)**_
+
+That `git checkout` reverted my fix — re-applying:
+
+_**Agent (claude-opus-5 2026-08-25 08:38:50Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Re-apply the icon fix
+
+```bash
+python3 - <<'PY'
+import pathlib, subprocess, json
+out = subprocess.run(['node','-e','import("./scripts/lib/icon.mjs").then(({iconFor})=>console.log(iconFor("page-title-tag")))'],
+                     capture_output=True, text=True, check=True)
+uri = out.stdout.strip()
+p = pathlib.Path('userscripts/page-title-tag/page-title-tag.user.js'); s = p.read_text()
+old = [l for l in s.split('\n') if l.startswith('// @icon')][0]
+s = s.replace(old, f'// @icon         {uri}').replace('// @version      1.0.0','// @version      1.0.1')
+p.write_text(s)
+PY
+grep -E "@version|@icon" userscripts/*/*.user.js | grep -v _template | cut -c1-72
+npm run check
+```
+
+```text
+userscripts/page-title-tag/page-title-tag.user.js:// @version      1.0.1
+userscripts/page-title-tag/page-title-tag.user.js:// @icon         data:
+userscripts/hello-userscript/hello-userscript.user.js:// @version      1
+userscripts/hello-userscript/hello-userscript.user.js:// @icon         d
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 2 userscript(s): 0 error(s), 0 warning(s).
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:38:53Z)**_
+
+Now the Playwright harness — this is what makes agent-side testing possible:
+
+_**Agent (claude-opus-5 2026-08-25 08:39:23Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Build Playwright preview harness
+
+```bash
+cat > scripts/preview.mjs <<'EOF'
+#!/usr/bin/env node
+// Run a userscript against a real page in headless Chromium and screenshot it.
+//
+// This is a SMOKE TEST, not a userscript manager. It shims the GM_* APIs in
+// plain page context, so it proves "the DOM logic runs and renders" — it does
+// NOT prove sandbox behaviour, @match handling, cross-origin GM_xmlhttpRequest,
+// or menu commands. Those only exist inside a real manager.
+// See docs/13-playwright-vs-userscript.md.
+//
+// Usage: npm run preview -- <slug> [url] [--headed] [--out <file>]
+import { readFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { listUserscripts, first, REPO_ROOT } from './lib/meta.mjs';
+
+const argv = process.argv.slice(2);
+const flag = (name) => argv.includes(name);
+const value = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
+const positional = argv.filter((a, i) => !a.startsWith('--') && !argv[i - 1]?.startsWith('--'));
+
+const [slug, urlArg] = positional;
+if (!slug) {
+  console.error('Usage: npm run preview -- <slug> [url] [--headed] [--out <file>]');
+  process.exit(1);
+}
+
+const script = listUserscripts().find((s) => s.slug === slug);
+if (!script || script.missing) {
+  console.error(`No such userscript: ${slug}`);
+  process.exit(1);
+}
+
+// Derive a concrete URL from the first @match when none is given.
+const matchPattern = first(script.meta, 'match');
+const url =
+  urlArg ??
+  matchPattern.replace(/^\*:\/\//, 'https://').replace(/\/\*$/, '/').replace('*.', '');
+
+let chromium;
+try {
+  ({ chromium } = await import('playwright'));
+} catch {
+  console.error('playwright is not installed. Run: npm install');
+  process.exit(1);
+}
+
+/** Minimal in-page GM_* shims. Storage is per-run, not persisted. */
+const GM_SHIM = `
+window.__gmStore = {};
+window.__gmClipboard = null;
+window.__gmMenu = [];
+window.GM_setValue = (k, v) => { window.__gmStore[k] = v; };
+window.GM_getValue = (k, d) => (k in window.__gmStore ? window.__gmStore[k] : d);
+window.GM_deleteValue = (k) => { delete window.__gmStore[k]; };
+window.GM_listValues = () => Object.keys(window.__gmStore);
+window.GM_setClipboard = (text) => { window.__gmClipboard = text; };
+window.GM_registerMenuCommand = (caption, fn) => {
+  window.__gmMenu.push({ caption, fn });
+  return caption;
+};
+window.GM_unregisterMenuCommand = (id) => {
+  window.__gmMenu = window.__gmMenu.filter((m) => m.caption !== id);
+};
+window.GM_addStyle = (css) => {
+  const el = document.createElement('style');
+  el.textContent = css;
+  document.head.appendChild(el);
+  return el;
+};
+window.GM_info = { script: { version: 'preview' }, scriptHandler: 'preview-harness' };
+window.unsafeWindow = window;
+`;
+
+const outDir = join(REPO_ROOT, '.preview');
+mkdirSync(outDir, { recursive: true });
+const outFile = value('--out') ?? join(outDir, `${slug}.png`);
+
+const browser = await chromium.launch({ headless: !flag('--headed') });
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+
+const logs = [];
+page.on('console', (msg) => logs.push(`  [${msg.type()}] ${msg.text()}`));
+page.on('pageerror', (err) => logs.push(`  [pageerror] ${err.message}`));
+
+console.log(`→ ${url}`);
+await page.goto(url, { waitUntil: 'domcontentloaded' });
+
+// @run-at document-idle roughly corresponds to after load + a beat.
+await page.addScriptTag({ content: GM_SHIM });
+await page.addScriptTag({ content: readFileSync(script.file, 'utf8') });
+await page.waitForTimeout(600);
+
+const result = await page.evaluate(() => ({
+  title: document.title,
+  menu: window.__gmMenu.map((m) => m.caption),
+  storage: window.__gmStore,
+  clipboard: window.__gmClipboard,
+}));
+
+await page.screenshot({ path: outFile, fullPage: false });
+await browser.close();
+
+console.log(`\ndocument.title : ${result.title}`);
+console.log(`menu commands  : ${result.menu.length ? result.menu.join(', ') : '(none)'}`);
+console.log(`GM storage     : ${JSON.stringify(result.storage)}`);
+if (result.clipboard) console.log(`clipboard      : ${result.clipboard.slice(0, 80)}...`);
+if (logs.length) console.log(`\nconsole:\n${logs.join('\n')}`);
+console.log(`\nscreenshot     : ${outFile}`);
+EOF
+python3 - <<'PY'
+import pathlib, json
+p = pathlib.Path('package.json'); d = json.loads(p.read_text())
+d['scripts']['preview'] = 'node scripts/preview.mjs'
+d['devDependencies']['playwright'] = '^1.62.1'
+p.write_text(json.dumps(d, indent=2) + '\n')
+PY
+echo ".preview/" >> .gitignore
+npm install --silent 2>&1 | tail -2; echo "installed"
+```
+
+```text
+installed
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:39:31Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Run the hello-userscript preview
+
+`npm run preview -- hello-userscript 2>&1 | tail -25`
+
+```text
+> tampermonkey-scripts@1.0.0 preview
+> node scripts/preview.mjs hello-userscript
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+browserType.launch: Executable doesn't exist at /Users/david/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-x64/chrome-headless-shell
+╔════════════════════════════════════════════════════════════╗
+║ Looks like Playwright was just installed or updated.       ║
+║ Please run the following command to download new browsers: ║
+║                                                            ║
+║     npx playwright install                                 ║
+║                                                            ║
+║ <3 Playwright Team                                         ║
+╚════════════════════════════════════════════════════════════╝
+    at /Users/david/Documents/Program/Tampermonkey-Scripts/scripts/preview.mjs:77:32 {
+  log: [],
+  name: 'Error'
+}
+
+Node.js v24.13.1
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:40:09Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Install chromium and rerun preview
+
+`npx playwright install chromium 2>&1 | tail -4 && npm run preview -- hello-userscript 2>&1 | tail -20`
+
+```text
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 98.8 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 98.8 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 98.8 MiB
+Chrome Headless Shell 151.0.7922.34 (playwright chromium-headless-shell v1234) downloaded to /Users/david/Library/Caches/ms-playwright/chromium_headless_shell-1234
+
+> tampermonkey-scripts@1.0.0 preview
+> node scripts/preview.mjs hello-userscript
+
+→ https://example.com/
+
+document.title : Example Domain
+menu commands  : Copy page as Markdown, Reset visit counter, Show panel
+GM storage     : {"visitCount":1}
+
+screenshot     : /Users/david/Documents/Program/Tampermonkey-Scripts/.preview/hello-userscript.png
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:40:11Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./.preview/hello-userscript.png`
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:40:21Z)**_
+
+Panel renders correctly. Let me add menu-command invocation so export-type scripts can be tested too:
+
+_**Agent (claude-opus-5 2026-08-25 08:40:33Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Add --click and --menu to preview harness
+
+```bash
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path('scripts/preview.mjs'); s = p.read_text()
+s = s.replace("// Usage: npm run preview -- <slug> [url] [--headed] [--out <file>]",
+              "// Usage: npm run preview -- <slug> [url] [--headed] [--out <file>]\n//                          [--click <selector>] [--menu <caption>]")
+s = s.replace("""  console.error('Usage: npm run preview -- <slug> [url] [--headed] [--out <file>]');""",
+"""  console.error('Usage: npm run preview -- <slug> [url] [--headed] [--out <file>]');
+  console.error('                          [--click <selector>] [--menu <caption>]');""")
+s = s.replace("""const result = await page.evaluate(() => ({""",
+"""// Optionally drive the script the way a user would, then re-screenshot.
+const clickSelector = value('--click');
+if (clickSelector) {
+  await page.click(clickSelector);
+  await page.waitForTimeout(300);
+  console.log(`clicked        : ${clickSelector}`);
+}
+
+const menuCaption = value('--menu');
+if (menuCaption) {
+  const ran = await page.evaluate((caption) => {
+    const cmd = window.__gmMenu.find((m) => m.caption === caption);
+    if (!cmd) return false;
+    cmd.fn();
+    return true;
+  }, menuCaption);
+  if (!ran) {
+    console.error(`No menu command named "${menuCaption}"`);
+    await browser.close();
+    process.exit(1);
+  }
+  await page.waitForTimeout(300);
+  console.log(`ran menu       : ${menuCaption}`);
+}
+
+const result = await page.evaluate(() => ({""")
+s = s.replace("""if (result.clipboard) console.log(`clipboard      : ${result.clipboard.slice(0, 80)}...`);""",
+"""if (result.clipboard) {
+  console.log(`clipboard      :\\n${result.clipboard.split('\\n').map((l) => `  | ${l}`).join('\\n')}`);
+}""")
+p.write_text(s)
+print('ok')
+PY
+npm run preview -- hello-userscript --menu "Copy page as Markdown" 2>&1 | tail -18
+```
+
+```text
+ok
+> node scripts/preview.mjs hello-userscript --menu Copy page as Markdown
+
+→ https://example.com/
+ran menu       : Copy page as Markdown
+
+document.title : Example Domain
+menu commands  : Copy page as Markdown, Reset visit counter, Show panel
+GM storage     : {"visitCount":1}
+clipboard      :
+  | # Example Domain
+  | 
+  | <https://example.com/>
+  | 
+  | This domain is for use in documentation examples without needing permission. Avoid use in operations.
+  | Learn more
+  | 你在這個網站觸發本腳本第 1 次（存在 GM storage，reload 不會歸零）。
+
+screenshot     : /Users/david/Documents/Program/Tampermonkey-Scripts/.preview/hello-userscript.png
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:40:39Z)**_
+
+The harness immediately caught a real bug — the Markdown export is scraping its own panel. Fixing:
+
+_**Agent (claude-opus-5 2026-08-25 08:40:47Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Fix self-scraping bug and re-verify
+
+```bash
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path('userscripts/hello-userscript/hello-userscript.user.js'); s = p.read_text()
+old = """    const paragraphs = [...document.querySelectorAll('p')]
+      .map((p) => p.textContent.trim())
+      .filter(Boolean);"""
+new = """    const paragraphs = [...document.querySelectorAll('p')]
+      // 排除我們自己注入的面板，否則匯出的 Markdown 會含自己的 UI 文字。
+      .filter((p) => !p.closest(`#${PANEL_ID}`))
+      .map((p) => p.textContent.trim())
+      .filter(Boolean);"""
+assert old in s
+s = s.replace(old, new).replace('// @version      1.0.1', '// @version      1.0.2')
+p.write_text(s)
+print('fixed + bumped to 1.0.2')
+PY
+npm run preview -- hello-userscript --menu "Copy page as Markdown" 2>&1 | sed -n '/clipboard/,/screenshot/p'
+```
+
+```text
+fixed + bumped to 1.0.2
+clipboard      :
+  | # Example Domain
+  | 
+  | <https://example.com/>
+  | 
+  | This domain is for use in documentation examples without needing permission. Avoid use in operations.
+  | Learn more
+
+screenshot     : /Users/david/Documents/Program/Tampermonkey-Scripts/.preview/hello-userscript.png
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:40:52Z)**_
+
+Now the docs. Let me get VM's exact external-editor mechanism right:
+
+_**Agent (claude-opus-5 2026-08-25 08:41:00Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="WebFetch"><details>
+<summary>Tool use: **WebFetch**</summary>
+ `https://violentmonkey.github.io/posts/how-to-edit-scripts-with-your-favorite-editor/`
+
+```text
+# External Editor Setup for Violentmonkey Scripts
+
+## Step-by-Step Process
+
+**Preparation:** First, export your script code from Violentmonkey and save it locally with a `.user.js` extension.
+
+**Installation Methods** (choose one):
+
+1. **Chrome drag-and-drop** (most efficient): Drag the `.user.js` file directly onto any Violentmonkey UI page. Requires Chrome 86+ and Violentmonkey 2.16+.
+
+2. **Browser toolbar method**: Drag into the toolbar or tab area. In Chrome, you must first enable `"Allow access to file URLs"` in the extension settings at `chrome://extensions`.
+
+3. **Local HTTP server**: Set up a server and navigate to `http://localhost:8080/my-script.user.js`. The guide recommends `http-server` with the `-c5` flag to set cache time, or use `http-server -c-1` to disable caching entirely.
+
+**Enable Tracking:** Click the `"Track external edits"` button to activate automatic synchronization. A checkbox option allows setting it as the default action for local files.
+
+**The Reload Feature:** The interface includes a `"Reload tab"` option that automatically refreshes the active browser tab when changes are detected, but only if the tab contains a website matching the script's scope.
+
+**File System:** Methods 1-2 read files directly from your disk; Method 3 requires an HTTP server intermediary.
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:41:34Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Document external editor tracking and preview harness
+
+````bash
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path('docs/07-dev-workflow.md'); s = p.read_text()
+
+old = """## 本機檔案熱重載（最舒服的做法）
+
+較新版的 Tampermonkey 支援**開啟本機 `.user.js` 檔案並追蹤磁碟上的變化**。
+設定好之後：
+
+```text
+VS Code / Neovim 存檔
+        ↓
+Tampermonkey 偵測到檔案變動
+        ↓
+reload 網頁 → 新版本生效
+```
+
+不用再 copy → paste → save → reload。
+
+Violentmonkey 沒有這個功能，但有等價的做法：跑一個本機 static server
+指到 repo，然後用一支 loader 腳本 `@require` 本機檔案。
+
+### 沒有熱重載時的最低成本做法
+
+在 manager 裡建一支「載入器」，內容只有：
+
+```js
+// ==UserScript==
+// @name         DEV loader
+// @match        https://chatgpt.com/*
+// @require      file:///Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/chatgpt-export/chatgpt-export.user.js
+// @grant        none
+// ==/UserScript==
+```
+
+需要在 extension 設定裡開啟「允許存取檔案網址」（Chrome 的
+`chrome://extensions` → 該 extension → Allow access to file URLs）。"""
+
+new = """## 本機檔案熱重載（Track external edits）
+
+這是開發 userscript 最有感的一個設定。設定好之後：
+
+```text
+VS Code / Neovim 存檔
+        ↓
+manager 偵測到磁碟上的檔案變動
+        ↓
+自動 reload 符合 @match 的分頁
+        ↓
+新版本生效
+```
+
+不用再 commit → push → 等更新，也不用 copy/paste 到內建編輯器。
+
+### Violentmonkey（建議，功能最完整）
+
+**方法 A：拖放（最快，Chrome 86+ / VM 2.16+）**
+
+1. 打開 Violentmonkey Dashboard（任何一個 VM 的 UI 頁面都行）
+2. 從 Finder 把 `userscripts/<slug>/<slug>.user.js` **直接拖進那個頁面**
+3. 出現安裝畫面，點 **Track external edits**
+   （旁邊的 checkbox 可以勾「以後本機檔案都預設這樣做」）
+4. 勾 **Reload tab** —— 偵測到變更時自動重新整理符合 `@match` 的分頁
+
+**方法 B：從檔案網址安裝**
+
+需要先在 `chrome://extensions` → Violentmonkey → **詳細資料** →
+開啟 **允許存取檔案網址（Allow access to file URLs）**，
+然後把 `.user.js` 拖到工具列或分頁區。
+
+**方法 C：本機 HTTP server**（前兩者不行時的後備）
+
+```bash
+npx http-server /Users/david/Documents/Program/Tampermonkey-Scripts -c-1
+# -c-1 = 完全停用快取，否則你會改了檔案卻抓到舊版
+```
+
+然後在瀏覽器打開
+`http://localhost:8080/userscripts/<slug>/<slug>.user.js`，
+一樣點 **Track external edits**。
+
+### Tampermonkey
+
+較新版本也支援開啟本機 `.user.js` 並追蹤磁碟變化，
+在 Dashboard 的 **Utilities** 分頁。功能比 VM 的略陽春（沒有 auto-reload tab）。
+
+### ⚠️ 不要同時裝兩份
+
+「從 URL 安裝的那份」和「追蹤本機檔案的那份」是**兩個獨立的 entry**，
+兩個都在的話會同時執行，你會分不清網頁上跑的是哪一版（症狀通常是 UI 出現兩次）。
+
+**開發機上的建議**：只留 tracking 那份，把 URL 安裝的那份停用或刪掉。
+其他機器則相反，只留 URL 安裝的那份。"""
+
+assert old in s
+s = s.replace(old, new)
+
+# Add the preview harness to the debug section
+old2 = """**確認腳本有沒有被載入**：manager 圖示上會顯示目前頁面啟用中的腳本數量。
+是 0 就是 `@match` 沒中，不是你的邏輯有問題。"""
+new2 = """**確認腳本有沒有被載入**：manager 圖示上會顯示目前頁面啟用中的腳本數量。
+是 0 就是 `@match` 沒中，不是你的邏輯有問題。
+
+## 不開瀏覽器也能跑一次：`npm run preview`
+
+repo 內建一個 Playwright 煙霧測試，把腳本注入真實頁面並截圖：
+
+```bash
+npm run preview -- hello-userscript
+npm run preview -- hello-userscript --menu "Copy page as Markdown"
+npm run preview -- page-title-tag https://example.com/ --headed
+```
+
+輸出包含 `document.title`、註冊了哪些選單指令、GM storage 內容、剪貼簿內容、
+page console log，以及 `.preview/<slug>.png` 截圖。
+
+**它能證明什麼、不能證明什麼**，以及什麼時候該改用真的 manager，
+見 [13 Playwright vs. userscript](./13-playwright-vs-userscript.md)。"""
+assert old2 in s
+s = s.replace(old2, new2)
+p.write_text(s)
+print('docs/07 patched')
+PY
+grep -n "Track external edits\|npm run preview" docs/07-dev-workflow.md | head
+````
+
+```text
+docs/07 patched
+42:## 本機檔案熱重載（Track external edits）
+64:3. 出現安裝畫面，點 **Track external edits**
+83:一樣點 **Track external edits**。
+139:## 不開瀏覽器也能跑一次：`npm run preview`
+144:npm run preview -- hello-userscript
+145:npm run preview -- hello-userscript --menu "Copy page as Markdown"
+146:npm run preview -- page-title-tag https://example.com/ --headed
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:41:36Z)**_
+
+Now the Playwright-vs-userscript doc you asked for:
+
+_**Agent (claude-opus-5 2026-08-25 08:42:23Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Write Playwright vs userscript doc
+
+````bash
+cat > docs/13-playwright-vs-userscript.md <<'EOF'
+# 13 · Playwright vs. userscript
+
+兩個都是「用程式操作網頁」，但解決的是**不同問題**。選錯會很痛苦。
+
+## 一句話分界
+
+```text
+使用者在瀏覽器裡看著網頁，想要多一個功能
+        → userscript
+
+沒有人在看，程式自己跑一輪網頁
+        → Playwright
+```
+
+再具體一點：
+
+| 問題                                       | 用            |
+| ------------------------------------------ | ------------- |
+| 「這個網站少一個匯出按鈕」                   | userscript    |
+| 「我想在已登入的頁面上加熱鍵」               | userscript    |
+| 「隱藏廣告、改版面」                        | userscript    |
+| 「每天早上抓 100 頁存進資料庫」              | Playwright    |
+| 「CI 裡驗證這個網站沒壞」                   | Playwright    |
+| 「跑完就關掉，不需要 UI」                    | Playwright    |
+| 「截圖 / PDF / 效能追蹤」                    | Playwright    |
+
+## 對照
+
+|                    | **Userscript**                     | **Playwright**                          |
+| ------------------ | ---------------------------------- | --------------------------------------- |
+| 誰觸發             | 使用者開網頁                        | 你的程式 / 排程 / CI                     |
+| 跑在哪             | 使用者真實的瀏覽器 profile          | 自動化控制的瀏覽器實例                   |
+| 登入狀態           | ✅ 直接沿用（已登入的 session）      | ⚠️ 要自己處理 cookie / storage state     |
+| 有 UI              | ✅ 可以注入按鈕、面板、熱鍵          | ❌ 通常無頭，沒有人會看                   |
+| 被反機器人偵測     | 低（就是真人在用）                  | 較高                                     |
+| 需要安裝什麼       | 一個 extension                      | Node/Python + 瀏覽器 binary              |
+| 能跨頁保存資料     | `GM_setValue`                       | 你自己的檔案 / DB                        |
+| 能跨域打 API       | `GM_xmlhttpRequest`                 | 原生就可以（不受頁面同源限制）            |
+| 適合長時間批次作業 | ❌（綁在使用者的分頁上）             | ✅                                       |
+| 適合寫測試         | ❌                                  | ✅                                       |
+
+## 決策樹
+
+```text
+你要做的事需要「人在場」嗎？
+│
+├─ 需要（我一邊用網站，一邊要這個功能）
+│     │
+│     └──────────────────────────────► userscript
+│
+└─ 不需要（跑就對了）
+      │
+      ├─ 需要已登入的 session，而且很難自動化登入？
+      │     │
+      │     ├─ 是 ──► userscript 抓資料 + 送到本機服務
+      │     │          （見 docs/10 的「送到本機 coding agent」）
+      │     │
+      │     └─ 否 ──► Playwright
+      │
+      └─ 要排程 / 大量 / 寫進 CI ──► Playwright
+```
+
+## 混合用法：其實常常是兩個一起
+
+最實用的模式是**用 userscript 當抓取端，Playwright 或本機服務當處理端**：
+
+```text
+你已登入的 ChatGPT 分頁
+        │  userscript 抽出對話（沿用登入狀態，不會被擋）
+        ▼
+   localhost:8765
+        │  本機服務
+        ▼
+   檔案 / DB / coding agent
+```
+
+反過來也有：Playwright 開一個瀏覽器，然後 `page.addInitScript()`
+把你的 userscript 注進去——這正是下面 `npm run preview` 在做的事。
+
+## 本 repo 的 `npm run preview`
+
+```bash
+npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selector>"]
+```
+
+它用 Playwright 開一個真的 Chromium，導到 `@match` 對應的網址，
+注入 GM API 的 shim 和你的腳本，然後回報結果並截圖到 `.preview/<slug>.png`。
+
+```bash
+$ npm run preview -- hello-userscript --menu "Copy page as Markdown"
+→ https://example.com/
+ran menu       : Copy page as Markdown
+
+document.title : Example Domain
+menu commands  : Copy page as Markdown, Reset visit counter, Show panel
+GM storage     : {"visitCount":1}
+clipboard      :
+  | # Example Domain
+  |
+  | <https://example.com/>
+  ...
+screenshot     : .preview/hello-userscript.png
+```
+
+### ✅ 它能證明的事
+
+- 腳本語法正確、載入時不會丟例外
+- selector 抓得到東西，DOM 邏輯跑得動
+- 注入的 UI 真的畫出來了（看截圖）
+- 匯出 / 轉換邏輯的輸出長什麼樣
+- `GM_setValue` / `GM_setClipboard` / `GM_registerMenuCommand` 有被正確呼叫
+
+### ❌ 它不能證明的事
+
+這是一個 **shim，不是 userscript manager**。以下只有真的裝進 manager 才算數：
+
+| 不涵蓋                       | 為什麼                                        |
+| ---------------------------- | --------------------------------------------- |
+| `@match` / `@exclude` 對不對 | harness 是直接注入，沒有做 URL 比對            |
+| `@run-at` 時機               | harness 固定在 `domcontentloaded` 之後注入     |
+| sandbox / `unsafeWindow`     | shim 直接跑在 page context（見 [06](./06-sandbox-and-unsafewindow.md)）|
+| `GM_xmlhttpRequest` 跨域     | 沒有 extension 就沒有繞過 CORS 的能力          |
+| `@grant` 宣告是否正確        | shim 一律提供，manager 則會是 `undefined`      |
+| 選單指令的真實 UI            | 只是呼叫函式，沒有真的選單                     |
+| 自動更新 / `@version`        | 完全不涉及                                     |
+
+所以流程是：
+
+```text
+npm run preview     快速迭代，抓語法錯誤與 DOM 邏輯錯誤
+        ↓ 通過
+裝進 Violentmonkey  驗 @match、@grant、sandbox、時機
+        ↓ 通過
+commit + push
+```
+
+### 它抓到過真的 bug
+
+`hello-userscript` 的 `Copy as Markdown` 原本會把**自己注入的面板文字**
+也一起匯出，因為 `querySelectorAll('p')` 選到了面板裡的 `<p>`。
+截圖看不出來，是 harness 印出剪貼簿內容才發現的。修法是加一行
+`.filter((p) => !p.closest('#' + PANEL_ID))`。
+
+「注入的 UI 汙染了自己的抓取結果」是寫 exporter 類腳本非常容易犯的錯，
+值得每次都用 `--menu` 把輸出印出來看一眼。
+
+## 什麼時候該從 userscript 換成 Playwright
+
+出現這些訊號時：
+
+- 你發現自己「為了讓腳本跑，得先手動開 20 個分頁」
+- 需要排程（每天、每小時）
+- 一次要處理的資料量大到瀏覽器分頁會卡
+- 想把它放進 CI
+
+反過來，如果你在 Playwright 裡花大把時間對抗登入、2FA、機器人偵測，
+那訊號是：**這件事應該讓 userscript 在你已登入的瀏覽器裡做**。
+
+## 回到索引
+
+[docs/README.md](./README.md)
+EOF
+echo written
+````
+
+```text
+written
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:42:45Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Update doc indexes and README
+
+```bash
+python3 - <<'PY'
+import pathlib
+row = "| 13 | [Playwright vs. userscript]({p}13-playwright-vs-userscript.md)          | 什麼時候該用哪個，以及 `npm run preview` 測試 harness |"
+
+# docs/README.md
+p = pathlib.Path('docs/README.md'); s = p.read_text()
+s = s.replace("| 12 | [安全性](./12-security.md)                                        | 別把 secret 放腳本裡，以及安裝別人的腳本前該看什麼            |",
+"| 12 | [安全性](./12-security.md)                                        | 別把 secret 放腳本裡，以及安裝別人的腳本前該看什麼            |\n" + row.format(p="./"))
+p.write_text(s)
+
+# docs/12 next-step pointer
+p = pathlib.Path('docs/12-security.md'); s = p.read_text()
+s = s.replace("## 回到索引\n\n[docs/README.md](./README.md)",
+              "## 下一步\n\n[13 · Playwright vs. userscript](./13-playwright-vs-userscript.md)")
+p.write_text(s)
+
+# root README
+p = pathlib.Path('README.md'); s = p.read_text()
+s = s.replace("| 12 | [安全性](./docs/12-security.md)                                   | 別把 secret 放腳本裡，以及安裝別人的腳本前該看什麼            |",
+"| 12 | [安全性](./docs/12-security.md)                                   | 別把 secret 放腳本裡，以及安裝別人的腳本前該看什麼            |\n" + row.format(p="./docs/"))
+
+s = s.replace("""npm run check      # 驗證 metadata：必填欄位、@grant 對不對、URL 有沒有指對
+npm run index      # 依據 metadata 重新產生上面的腳本清單
+npm run verify     # check + 確認 README 索引是最新的（CI 跑這個）""",
+"""npm run check      # 驗證 metadata：必填欄位、@grant 對不對、URL 有沒有指對
+npm run index      # 依據 metadata 重新產生上面的腳本清單
+npm run verify     # check + 確認 README 索引是最新的（CI 跑這個）
+
+# 用 Playwright 把腳本注入真實頁面跑一次並截圖到 .preview/
+npm run preview -- hello-userscript
+npm run preview -- hello-userscript --menu "Copy page as Markdown"
+npm run preview -- <slug> <url> --headed""")
+
+s = s.replace("""npm install        # 只為了 prettier；scripts/ 本身零相依
+npm run format     # 格式化 JS 與 docs（README.md 被排除，見 .prettierignore）""",
+"""npm install                   # prettier + playwright（check/index 本身零相依）
+npx playwright install chromium   # preview 需要，只需做一次
+npm run format                # 格式化 JS 與 docs（README.md 被排除，見 .prettierignore）""")
+p.write_text(s)
+print('indexes updated')
+PY
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path('README.md'); s = p.read_text()
+old = """└── scripts/                     # repo 自己的維護工具（零相依，只用 Node 內建模組）
+    ├── new-script.mjs           # 從範本產生新腳本
+    ├── check-meta.mjs           # 驗證 metadata
+    └── build-index.mjs          # 產生上面那張腳本清單"""
+new = """└── scripts/                     # repo 自己的維護工具
+    ├── new-script.mjs           # 從範本產生新腳本
+    ├── check-meta.mjs           # 驗證 metadata（零相依）
+    ├── build-index.mjs          # 產生上面那張腳本清單（零相依）
+    └── preview.mjs              # 用 Playwright 跑一次腳本並截圖"""
+assert old in s
+p.write_text(s.replace(old, new))
+print('tree updated')
+PY
+npm run verify 2>&1 | grep -E "Checked|up to date"
+```
+
+```text
+indexes updated
+tree updated
+Checked 2 userscript(s): 0 error(s), 0 warning(s).
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:43:13Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Document how to test hello-userscript
+
+````bash
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path('userscripts/hello-userscript/README.md'); s = p.read_text()
+old = """## 使用方式
+
+1. 安裝後打開 <https://example.com>
+2. 右下角會出現一個深色小面板，顯示你觸發過幾次
+3. 按 **Copy as Markdown** 把頁面轉成 Markdown 複製走
+4. 點瀏覽器工具列的 Tampermonkey 圖示，會看到三個選單指令
+
+想確認 GM storage 真的持久：reload 幾次看計數器往上加，再用選單的
+**Reset visit counter** 歸零。"""
+new = """## 怎麼測試
+
+### 在瀏覽器裡
+
+打開 **<https://example.com>**（就是這個網址，`@match` 只設了它）。
+
+會看到：
+
+1. **右下角出現一個深色浮動面板**，寫著
+   「你在這個網站觸發本腳本第 N 次（存在 GM storage，reload 不會歸零）」
+2. **reload 幾次** → N 會往上加。這證明 `GM_setValue` 真的跨 reload 持久，
+   和 `localStorage` 不同
+3. 按 **Copy as Markdown** → 頁面被轉成 Markdown 進剪貼簿，
+   按鈕短暫變成 "Copied!"。貼到任何地方看看：
+
+   ```markdown
+   # Example Domain
+
+   <https://example.com/>
+
+   This domain is for use in documentation examples without needing permission. Avoid use in operations.
+   Learn more
+   ```
+
+4. 按 **Hide** → 面板消失
+5. 點工具列的 Violentmonkey / Tampermonkey 圖示 → 看到三個選單指令：
+   **Copy page as Markdown**、**Reset visit counter**、**Show panel**
+6. 點 **Reset visit counter** → 計數器歸零並 reload
+7. 點 **Show panel** → 剛剛 Hide 掉的面板回來
+
+### 不開瀏覽器
+
+```bash
+npm run preview -- hello-userscript
+npm run preview -- hello-userscript --menu "Copy page as Markdown"
+```
+
+會把腳本注入真實頁面、印出 GM storage 與剪貼簿內容，並截圖到
+`.preview/hello-userscript.png`。這個 harness 能證明什麼、不能證明什麼，
+見 [`docs/13`](../../docs/13-playwright-vs-userscript.md)。"""
+assert old in s
+s = s.replace(old, new)
+
+old2 = """- 面板的 `MutationObserver` 監看整個 `document.body`，在超大型網站上會偏吃效能。
+  正式腳本應該縮小 observe 範圍。"""
+new2 = """- 面板的 `MutationObserver` 監看整個 `document.body`，在超大型網站上會偏吃效能。
+  正式腳本應該縮小 observe 範圍。
+- `pageAsMarkdown()` 必須把自己注入的面板排除掉
+  （`.filter((p) => !p.closest('#' + PANEL_ID))`），否則匯出的內容會含自己的 UI 文字。
+  這是 exporter 類腳本非常容易犯的錯，而且截圖看不出來——1.0.1 版就有這個 bug。"""
+assert old2 in s
+p.write_text(s.replace(old2, new2))
+print('ok')
+PY
+npm run verify 2>&1 | grep -E "Checked|up to date"
+````
+
+```text
+ok
+Checked 2 userscript(s): 0 error(s), 0 warning(s).
+```
+</details></tool-use>

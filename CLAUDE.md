@@ -46,6 +46,22 @@ npm run new -- <slug> "<Name>" "<@match>" ["<description>"]
 
 `npm run verify` = `check` + `index:check`，等同 CI 跑的內容。
 
+## 測試腳本
+
+```bash
+npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selector>"]
+```
+
+用 Playwright 把腳本注入真實頁面，印出 GM storage / 剪貼簿 / console，
+並截圖到 `.preview/<slug>.png`（agent 可以直接 Read 那張圖驗證）。
+
+**這是 shim 不是 manager**：它不驗 `@match`、`@run-at`、sandbox、`@grant`
+是否正確、也沒有真的跨域能力。那些只有裝進真的 manager 才算數，需要使用者操作。
+邊界寫在 `docs/13-playwright-vs-userscript.md`，改 harness 前先讀。
+
+寫 exporter 類腳本時，一定要用 `--menu` 把輸出印出來看——
+「注入的 UI 汙染自己的抓取結果」這種 bug 截圖看不出來。
+
 ## 寫腳本的規範
 
 **腳本必須同時支援 Tampermonkey 與 Violentmonkey**（見 `docs/09-managers-comparison.md`）：
@@ -64,6 +80,9 @@ npm run new -- <slug> "<Name>" "<@match>" ["<description>"]
 - `@match` 與 `@connect` 開最小必要範圍。
 - **絕對不要放 secret 進腳本**（見 `docs/12-security.md`）。
 - 註解用繁體中文，技術名詞保留英文。
+- `@icon` 一律用 `scripts/lib/icon.mjs` 產生的 `data:` URI，不要用 favicon 服務——
+  它們對沒有圖示的網域回 404，manager 會顯示紅色的 "Error fetching resource!"。
+  `check` 會警告遠端 `@icon`。
 
 ## 寫文件的規範
 

@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         Page Title Tag
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      1.0.0
+// @version      1.0.1
 // @description  在分頁標題前面加上網站標籤（如 [GPT]），一堆分頁時好找
 // @author       Da-Wei Lee
 // @license      MIT
 // @match        https://chatgpt.com/*
 // @match        https://claude.ai/*
 // @match        https://gemini.google.com/*
-// @icon         https://www.google.com/s2/favicons?sz=64&domain=chatgpt.com
+// @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9ImhzbCgxMzUgNjIlIDQ2JSkiLz48dGV4dCB4PSIzMiIgeT0iMzMiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJIZWx2ZXRpY2EsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNyIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9ImNlbnRyYWwiPlBUPC90ZXh0Pjwvc3ZnPg==
 // @run-at       document-idle
 // @grant        none
 // @updateURL    https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/page-title-tag/page-title-tag.user.js

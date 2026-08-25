@@ -93,6 +93,14 @@ for (const s of scripts) {
     errors.push(at(`declares "@grant none" but uses ${[...used].join(', ')}`));
   }
 
+  // A remote @icon is a runtime dependency: favicon services return 404 for
+  // domains they lack an icon for, which managers surface as a fetch error on
+  // the script card. scripts/lib/icon.mjs generates a data: URI instead.
+  const icon = first(s.meta, 'icon');
+  if (icon && !icon.startsWith('data:')) {
+    warnings.push(at(`@icon is a remote URL — prefer a data: URI (see scripts/lib/icon.mjs)`));
+  }
+
   // Cross-manager portability (see docs/09-managers-comparison.md).
   for (const api of used) {
     if (!PORTABLE_GM.has(api)) {

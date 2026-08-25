@@ -4,6 +4,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { USERSCRIPTS_DIR, rawUrlFor } from './lib/meta.mjs';
+import { iconFor } from './lib/icon.mjs';
 
 const [slug, name, match, description] = process.argv.slice(2);
 
@@ -23,13 +24,6 @@ if (existsSync(dir)) {
   process.exit(1);
 }
 
-let domain = 'example.com';
-try {
-  domain = new URL(match.replace(/^\*:\/\//, 'https://')).hostname.replace(/^\*\./, '');
-} catch {
-  // @match patterns like *://*/* have no parseable host; leave the placeholder.
-}
-
 const desc = description || `TODO: 一句話說明 ${name} 做什麼`;
 const template = readFileSync(join(USERSCRIPTS_DIR, '_template', 'template.user.js'), 'utf8');
 const script = template
@@ -37,7 +31,7 @@ const script = template
   .replaceAll('{{SLUG}}', slug)
   .replaceAll('{{DESCRIPTION}}', desc)
   .replaceAll('{{MATCH}}', match)
-  .replaceAll('{{DOMAIN}}', domain);
+  .replaceAll('{{ICON}}', iconFor(slug));
 
 const readme = `# ${name}
 

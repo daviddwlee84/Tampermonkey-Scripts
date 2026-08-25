@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Hello Userscript
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      1.0.0
+// @version      1.0.2
 // @description  教學用 demo：示範 metadata、GM API、MutationObserver 與注入 UI
 // @author       Da-Wei Lee
 // @license      MIT
 // @match        https://example.com/*
 // @match        https://www.example.com/*
-// @icon         https://www.google.com/s2/favicons?sz=64&domain=example.com
+// @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9ImhzbCgzMDUgNjIlIDQ2JSkiLz48dGV4dCB4PSIzMiIgeT0iMzMiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJIZWx2ZXRpY2EsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNyIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9ImNlbnRyYWwiPkhVPC90ZXh0Pjwvc3ZnPg==
 // @run-at       document-idle
 // @grant        GM_addStyle
 // @grant        GM_setValue
@@ -75,6 +75,8 @@
   function pageAsMarkdown() {
     const heading = document.querySelector('h1')?.textContent?.trim() ?? document.title;
     const paragraphs = [...document.querySelectorAll('p')]
+      // 排除我們自己注入的面板，否則匯出的 Markdown 會含自己的 UI 文字。
+      .filter((p) => !p.closest(`#${PANEL_ID}`))
       .map((p) => p.textContent.trim())
       .filter(Boolean);
     return [`# ${heading}`, '', `<${location.href}>`, '', ...paragraphs].join('\n');

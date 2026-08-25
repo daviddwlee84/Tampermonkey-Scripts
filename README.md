@@ -45,6 +45,7 @@
 | 10 | [常用食譜](./docs/10-recipes.md)                                  | 可直接抄的 pattern                                            |
 | 11 | [疑難排解](./docs/11-troubleshooting.md)                          | 症狀 → 原因 → 修法對照表                                      |
 | 12 | [安全性](./docs/12-security.md)                                   | 別把 secret 放腳本裡，以及安裝別人的腳本前該看什麼            |
+| 13 | [Playwright vs. userscript](./docs/13-playwright-vs-userscript.md)          | 什麼時候該用哪個，以及 `npm run preview` 測試 harness |
 
 ## 這個 repo 怎麼運作
 
@@ -72,10 +73,11 @@ Git 管原始碼與歷史，`@updateURL` 管發佈，manager 內建的 Sync 管�
 │       └── README.md            # 這支腳本的說明
 ├── shared/                      # 可用 @require 引入的共用工具
 ├── docs/                        # 教學文件
-└── scripts/                     # repo 自己的維護工具（零相依，只用 Node 內建模組）
+└── scripts/                     # repo 自己的維護工具
     ├── new-script.mjs           # 從範本產生新腳本
-    ├── check-meta.mjs           # 驗證 metadata
-    └── build-index.mjs          # 產生上面那張腳本清單
+    ├── check-meta.mjs           # 驗證 metadata（零相依）
+    ├── build-index.mjs          # 產生上面那張腳本清單（零相依）
+    └── preview.mjs              # 用 Playwright 跑一次腳本並截圖
 ```
 
 ## 開發
@@ -89,8 +91,14 @@ npm run check      # 驗證 metadata：必填欄位、@grant 對不對、URL 有
 npm run index      # 依據 metadata 重新產生上面的腳本清單
 npm run verify     # check + 確認 README 索引是最新的（CI 跑這個）
 
-npm install        # 只為了 prettier；scripts/ 本身零相依
-npm run format     # 格式化 JS 與 docs（README.md 被排除，見 .prettierignore）
+# 用 Playwright 把腳本注入真實頁面跑一次並截圖到 .preview/
+npm run preview -- hello-userscript
+npm run preview -- hello-userscript --menu "Copy page as Markdown"
+npm run preview -- <slug> <url> --headed
+
+npm install                   # prettier + playwright（check/index 本身零相依）
+npx playwright install chromium   # preview 需要，只需做一次
+npm run format                # 格式化 JS 與 docs（README.md 被排除，見 .prettierignore）
 ```
 
 ### 改動腳本的檢查清單

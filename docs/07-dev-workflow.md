@@ -39,39 +39,61 @@ git push
 
 `npm run verify` = `check` + `index:check`，CI 跑的就是這個。
 
-## 本機檔案熱重載（最舒服的做法）
+## 本機檔案熱重載（Track external edits）
 
-較新版的 Tampermonkey 支援**開啟本機 `.user.js` 檔案並追蹤磁碟上的變化**。
-設定好之後：
+這是開發 userscript 最有感的一個設定。設定好之後：
 
 ```text
 VS Code / Neovim 存檔
         ↓
-Tampermonkey 偵測到檔案變動
+manager 偵測到磁碟上的檔案變動
         ↓
-reload 網頁 → 新版本生效
+自動 reload 符合 @match 的分頁
+        ↓
+新版本生效
 ```
 
-不用再 copy → paste → save → reload。
+不用再 commit → push → 等更新，也不用 copy/paste 到內建編輯器。
 
-Violentmonkey 沒有這個功能，但有等價的做法：跑一個本機 static server
-指到 repo，然後用一支 loader 腳本 `@require` 本機檔案。
+### Violentmonkey（建議，功能最完整）
 
-### 沒有熱重載時的最低成本做法
+**方法 A：拖放（最快，Chrome 86+ / VM 2.16+）**
 
-在 manager 裡建一支「載入器」，內容只有：
+1. 打開 Violentmonkey Dashboard（任何一個 VM 的 UI 頁面都行）
+2. 從 Finder 把 `userscripts/<slug>/<slug>.user.js` **直接拖進那個頁面**
+3. 出現安裝畫面，點 **Track external edits**
+   （旁邊的 checkbox 可以勾「以後本機檔案都預設這樣做」）
+4. 勾 **Reload tab** —— 偵測到變更時自動重新整理符合 `@match` 的分頁
 
-```js
-// ==UserScript==
-// @name         DEV loader
-// @match        https://chatgpt.com/*
-// @require      file:///Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/chatgpt-export/chatgpt-export.user.js
-// @grant        none
-// ==/UserScript==
+**方法 B：從檔案網址安裝**
+
+需要先在 `chrome://extensions` → Violentmonkey → **詳細資料** →
+開啟 **允許存取檔案網址（Allow access to file URLs）**，
+然後把 `.user.js` 拖到工具列或分頁區。
+
+**方法 C：本機 HTTP server**（前兩者不行時的後備）
+
+```bash
+npx http-server /Users/david/Documents/Program/Tampermonkey-Scripts -c-1
+# -c-1 = 完全停用快取，否則你會改了檔案卻抓到舊版
 ```
 
-需要在 extension 設定裡開啟「允許存取檔案網址」（Chrome 的
-`chrome://extensions` → 該 extension → Allow access to file URLs）。
+然後在瀏覽器打開
+`http://localhost:8080/userscripts/<slug>/<slug>.user.js`，
+一樣點 **Track external edits**。
+
+### Tampermonkey
+
+較新版本也支援開啟本機 `.user.js` 並追蹤磁碟變化，
+在 Dashboard 的 **Utilities** 分頁。功能比 VM 的略陽春（沒有 auto-reload tab）。
+
+### ⚠️ 不要同時裝兩份
+
+「從 URL 安裝的那份」和「追蹤本機檔案的那份」是**兩個獨立的 entry**，
+兩個都在的話會同時執行，你會分不清網頁上跑的是哪一版（症狀通常是 UI 出現兩次）。
+
+**開發機上的建議**：只留 tracking 那份，把 URL 安裝的那份停用或刪掉。
+其他機器則相反，只留 URL 安裝的那份。
 
 ## Console PoC → userscript
 
@@ -113,6 +135,22 @@ GM_registerMenuCommand('Debug selectors', () => {
 
 **確認腳本有沒有被載入**：manager 圖示上會顯示目前頁面啟用中的腳本數量。
 是 0 就是 `@match` 沒中，不是你的邏輯有問題。
+
+## 不開瀏覽器也能跑一次：`npm run preview`
+
+repo 內建一個 Playwright 煙霧測試，把腳本注入真實頁面並截圖：
+
+```bash
+npm run preview -- hello-userscript
+npm run preview -- hello-userscript --menu "Copy page as Markdown"
+npm run preview -- page-title-tag https://example.com/ --headed
+```
+
+輸出包含 `document.title`、註冊了哪些選單指令、GM storage 內容、剪貼簿內容、
+page console log，以及 `.preview/<slug>.png` 截圖。
+
+**它能證明什麼、不能證明什麼**，以及什麼時候該改用真的 manager，
+見 [13 Playwright vs. userscript](./13-playwright-vs-userscript.md)。
 
 ## 什麼時候該升級成 bundler / TypeScript
 

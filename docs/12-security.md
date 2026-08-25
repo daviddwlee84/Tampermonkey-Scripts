@@ -93,6 +93,6 @@ panel.textContent = userContent;             // ✅
 
 manager Dashboard 裡把不用的腳本刪掉。每一支都是一份長期有效的授權。
 
-## 回到索引
+## 下一步
 
-[docs/README.md](./README.md)
+[13 · Playwright vs. userscript](./13-playwright-vs-userscript.md)
