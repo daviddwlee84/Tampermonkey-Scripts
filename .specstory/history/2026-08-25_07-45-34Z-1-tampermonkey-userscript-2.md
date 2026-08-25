@@ -8089,3 +8089,94 @@ README.md script index is up to date.
 verify exit=0
 ```
 </details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:44:40Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Fix index and push
+
+```bash
+git add -A && git commit -q -m "chore: regenerate README script index for 1.0.1/1.0.2 bumps
+
+The version column is generated from metadata, so bumping @version leaves the
+table stale and index:check red. Caught by CI.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011fP1QvR8e5SHPU8Ud2oyJL" \
+&& git push -q origin main && echo pushed && sleep 14 && gh run list --limit 2
+```
+
+```text
+pushed
+completed	success	chore: regenerate README script index for 1.0.1/1.0.2 bumps	CI	main	push	32828185831	10s	2026-08-25T08:44:26Z
+completed	failure	fix(icon): replace favicon-service @icon with generated data: URIs	CI	main	push	32828118969	8s	2026-08-25T08:43:42Z
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:44:46Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="SendUserFile"><details>
+<summary>Tool use: **SendUserFile**</summary>
+
+```text
+1 file delivered to user.
+  /Users/david/Documents/Program/Tampermonkey-Scripts/.preview/hello-userscript.png → file_uuid: 6c123210-fe7e-4bfe-b244-403a7fbe403c
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:45:20Z)**_
+
+CI 綠燈。先講那個紅字，那是我的 bug。
+
+## 1. `Error fetching resource!` — 我的 `@icon` 壞的
+
+`https://www.google.com/s2/favicons?domain=example.com` 對**沒有圖示的網域回 HTTP 404**（body 裡塞了一張 fallback 圖，但狀態碼是 404）。`example.com` 剛好就是其中之一，VM 看到 404 就標紅。我 curl 驗證過確實是 404。
+
+改成 `scripts/lib/icon.mjs` 產生的 **`data:` URI SVG**（slug 決定色相、取首字母當圖案）。自帶、不會 404、離線可用，也不會讓 Google 知道你在哪些網站掛腳本。`npm run check` 現在會警告任何遠端 `@icon`。
+
+**你需要更新**：VM Dashboard 按 `+` 旁邊的重新整理圖示，拉到 1.0.2，紅框就會消失。
+
+## 2. External editor tracking（你問的重點）
+
+Violentmonkey 的做法比 TM 好，三種擇一：
+
+**拖放（最快，Chrome 86+ / VM 2.16+）**
+1. 打開 VM Dashboard
+2. 從 Finder 把 `userscripts/hello-userscript/hello-userscript.user.js` **直接拖進那個頁面**
+3. 安裝畫面上點 **Track external edits**（不是 Install）
+4. 勾 **Reload tab** — 存檔就自動重整符合 `@match` 的分頁
+
+**⚠️ 關鍵陷阱**：你現在已經從 URL 裝了一份。tracking 那份是**另一個獨立 entry**，兩份會同時跑，UI 會出現兩次。開發機上把 URL 那份停用或刪掉，只留 tracking。
+
+備援方案（HTTP server）和 TM 的做法都寫在 `docs/07` 了。
+
+## 3. Agent 能互動式測試嗎 —— 能，但有明確邊界
+
+這個 session **沒有 browser MCP**，但 Playwright 可以透過 Bash 驅動。我做了 `scripts/preview.mjs`：
+
+```bash
+npm run preview -- hello-userscript
+npm run preview -- hello-userscript --menu "Copy page as Markdown"
+npm run preview -- <slug> <url> --headed --click "#my-fab"
+```
+
+它開真的 Chromium、注入 GM shim + 腳本，回報 title / 選單指令 / GM storage / 剪貼簿 / console，截圖到 `.preview/`。我可以直接讀那張圖驗證——上面那張就是這樣來的。
+
+**它馬上抓到一個真 bug**：`Copy as Markdown` 會把**自己注入面板裡的 `<p>`** 也抓進匯出內容，所以剪貼簿裡混進了「你在這個網站觸發本腳本第 1 次…」。截圖完全看不出來，是印出剪貼簿才發現的。已修（1.0.2）。
+
+**但這是 shim 不是 manager**，以下一律不涵蓋，只能你裝上去測：`@match` 比對、`@run-at` 時機、sandbox / `unsafeWindow`、`@grant` 是否漏宣告、真正的跨域 `GM_xmlhttpRequest`、自動更新。所以是 `preview` 快速迭代 → 裝進 VM 驗真實行為 → push。
+
+至於 **agent skills**：這個 repo 目前沒有自訂 skill，也不需要——`npm run` 那幾個指令就是介面。
+
+## 4. `docs/13-playwright-vs-userscript.md` 已建立
+
+一句話分界：**有人在看著網頁 → userscript；沒人在看、程式自己跑 → Playwright**。文件裡有決策樹、對照表、混合用法（userscript 抓取 + 本機服務處理，避開登入與反機器人），以及「什麼時候該從 userscript 換成 Playwright」的訊號。
+
+## 5. hello-userscript 怎麼測
+
+打開 **<https://example.com>**（`@match` 只設了這個）。右下角出現面板 → **reload 幾次看計數器往上加**（這是證明 `GM_setValue` 跨 reload 持久的關鍵動作）→ 按 Copy as Markdown 貼出來看 → 點 VM 圖示看三個選單指令 → Reset counter 歸零。完整步驟在該腳本的 README。
+
+---
+
+過程中 CI 紅了一次：我改了 `@version` 卻沒重跑 `npm run index`（版本號是索引表的一欄）。已修並 push，現在綠的。我本地漏看是因為 grep 過濾掉了錯誤訊息——之後驗證不再過濾輸出。
