@@ -12,6 +12,7 @@
 
 | Script | 用途 | 生效網站 | Version | 安裝 |
 | --- | --- | --- | --- | --- |
+| [ChatGPT Export Markdown](userscripts/chatgpt-export-markdown/) | 把整段 ChatGPT 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用 | `https://chatgpt.com/*` | 1.0.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js) |
 | [Hello Userscript](userscripts/hello-userscript/) | 教學用 demo：示範 metadata、GM API、MutationObserver 與注入 UI | `https://example.com/*`<br>`https://www.example.com/*` | 1.0.2 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/hello-userscript/hello-userscript.user.js) |
 | [Page Title Tag](userscripts/page-title-tag/) | 在分頁標題前面加上網站標籤（如 [GPT]），一堆分頁時好找 | `https://chatgpt.com/*`<br>`https://claude.ai/*`<br>`https://gemini.google.com/*` | 1.0.1 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/page-title-tag/page-title-tag.user.js) |
 

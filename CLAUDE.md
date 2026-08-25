@@ -49,7 +49,7 @@ npm run new -- <slug> "<Name>" "<@match>" ["<description>"]
 ## 測試腳本
 
 ```bash
-npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selector>"]
+npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selector>"] [--wait <ms>]
 ```
 
 用 Playwright 把腳本注入真實頁面，印出 GM storage / 剪貼簿 / console，
@@ -61,6 +61,8 @@ npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selec
 
 寫 exporter 類腳本時，一定要用 `--menu` 把輸出印出來看——
 「注入的 UI 汙染自己的抓取結果」這種 bug 截圖看不出來。
+選單指令是 async 的（要等頁面資料就緒）就再加 `--wait <ms>`，
+否則 harness 會在它寫進剪貼簿之前就收工。
 
 ## 寫腳本的規範
 

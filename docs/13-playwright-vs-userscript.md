@@ -80,7 +80,7 @@
 ## 本 repo 的 `npm run preview`
 
 ```bash
-npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selector>"]
+npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selector>"] [--wait <ms>]
 ```
 
 它用 Playwright 開一個真的 Chromium，導到 `@match` 對應的網址，
@@ -109,6 +109,16 @@ screenshot     : .preview/hello-userscript.png
 - 注入的 UI 真的畫出來了（看截圖）
 - 匯出 / 轉換邏輯的輸出長什麼樣
 - `GM_setValue` / `GM_setClipboard` / `GM_registerMenuCommand` 有被正確呼叫
+
+`--menu` 觸發的指令如果是 async（例如要等網站自己的資料載完才有東西可以匯出），
+預設 300ms 的等待會來不及，剪貼簿那一欄會是空的。加 `--wait`：
+
+```bash
+npm run preview -- chatgpt-export-markdown "https://chatgpt.com/share/<id>" \
+  --menu "Copy Markdown" --wait 20000
+```
+
+它會在剪貼簿一有內容就往下走，`--wait` 只是上限。
 
 ### ❌ 它不能證明的事
 

@@ -8,7 +8,7 @@
 // See docs/13-playwright-vs-userscript.md.
 //
 // Usage: npm run preview -- <slug> [url] [--headed] [--out <file>]
-//                          [--click <selector>] [--menu <caption>]
+//                          [--click <selector>] [--menu <caption>] [--wait <ms>]
 import { readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { listUserscripts, first, REPO_ROOT } from './lib/meta.mjs';
@@ -21,7 +21,7 @@ const positional = argv.filter((a, i) => !a.startsWith('--') && !argv[i - 1]?.st
 const [slug, urlArg] = positional;
 if (!slug) {
   console.error('Usage: npm run preview -- <slug> [url] [--headed] [--out <file>]');
-  console.error('                          [--click <selector>] [--menu <caption>]');
+  console.error('                          [--click <selector>] [--menu <caption>] [--wait <ms>]');
   process.exit(1);
 }
 
@@ -75,6 +75,7 @@ window.unsafeWindow = window;
 const outDir = join(REPO_ROOT, '.preview');
 mkdirSync(outDir, { recursive: true });
 const outFile = value('--out') ?? join(outDir, `${slug}.png`);
+const waitMs = Number(value('--wait') ?? 300);
 
 const browser = await chromium.launch({ headless: !flag('--headed') });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
@@ -112,7 +113,12 @@ if (menuCaption) {
     await browser.close();
     process.exit(1);
   }
-  await page.waitForTimeout(300);
+  // A menu command may be async (e.g. it has to wait for the page's own data
+  // before it has anything to export). Resolve as soon as the clipboard is
+  // written, or after --wait ms for commands that never touch it.
+  await page
+    .waitForFunction(() => window.__gmClipboard !== null, null, { timeout: waitMs })
+    .catch(() => {});
   console.log(`ran menu       : ${menuCaption}`);
 }
 
