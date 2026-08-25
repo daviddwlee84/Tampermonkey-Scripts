@@ -7958,3 +7958,134 @@ ok
 Checked 2 userscript(s): 0 error(s), 0 warning(s).
 ```
 </details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:43:54Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Commit and push icon fix, preview harness, docs
+
+````bash
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path('CLAUDE.md'); s = p.read_text()
+s = s.replace("""`npm run verify` = `check` + `index:check`，等同 CI 跑的內容。""",
+"""`npm run verify` = `check` + `index:check`，等同 CI 跑的內容。
+
+## 測試腳本
+
+```bash
+npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selector>"]
+```
+
+用 Playwright 把腳本注入真實頁面，印出 GM storage / 剪貼簿 / console，
+並截圖到 `.preview/<slug>.png`（agent 可以直接 Read 那張圖驗證）。
+
+**這是 shim 不是 manager**：它不驗 `@match`、`@run-at`、sandbox、`@grant`
+是否正確、也沒有真的跨域能力。那些只有裝進真的 manager 才算數，需要使用者操作。
+邊界寫在 `docs/13-playwright-vs-userscript.md`，改 harness 前先讀。
+
+寫 exporter 類腳本時，一定要用 `--menu` 把輸出印出來看——
+「注入的 UI 汙染自己的抓取結果」這種 bug 截圖看不出來。""")
+s = s.replace("""- 註解用繁體中文，技術名詞保留英文。""",
+"""- 註解用繁體中文，技術名詞保留英文。
+- `@icon` 一律用 `scripts/lib/icon.mjs` 產生的 `data:` URI，不要用 favicon 服務——
+  它們對沒有圖示的網域回 404，manager 會顯示紅色的 "Error fetching resource!"。
+  `check` 會警告遠端 `@icon`。""")
+p.write_text(s)
+print('ok')
+PY
+git add -A && git commit -q -F - <<'EOF'
+fix(icon): replace favicon-service @icon with generated data: URIs
+
+Violentmonkey showed a red "Error fetching resource!" on the installed script
+card. Cause: https://www.google.com/s2/favicons?domain=<x> answers 404 for
+domains it has no icon for — example.com is one — and the manager treats the
+404 as a failed resource fetch even though a fallback image is in the body.
+
+scripts/lib/icon.mjs now generates a small SVG data: URI per script (stable
+hue from the slug, initials as the glyph). Self-contained, no 404, no offline
+break, and no third party learning which sites have scripts. check-meta warns
+on any remaining remote @icon.
+
+Also adds scripts/preview.mjs: a Playwright smoke test that injects a script
+into a real page with GM_* shims, then reports title / menu commands / GM
+storage / clipboard / console and screenshots to .preview/. --menu runs a
+registered menu command, --click drives injected UI.
+
+It immediately found a real bug: hello-userscript's Copy as Markdown scraped
+the <p> inside its own injected panel, so exports contained the script's own
+UI text. Invisible in a screenshot; obvious once the clipboard is printed.
+Fixed and documented as a limitation worth checking in every exporter.
+
+New docs/13 covers when to reach for Playwright vs a userscript, and draws
+the line around what the harness can and cannot prove (no @match, @run-at,
+sandbox, @grant, or real cross-origin). docs/07 gains the Violentmonkey
+"Track external edits" setup for save-and-reload development.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011fP1QvR8e5SHPU8Ud2oyJL
+EOF
+git push -q origin main && echo pushed && sleep 12 && gh run list --limit 1
+````
+
+```text
+ok
+pushed
+completed	failure	fix(icon): replace favicon-service @icon with generated data: URIs	CI	main	push	32828118969	8s	2026-08-25T08:43:42Z
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:44:01Z)**_
+
+CI failed — my `grep` filter hid an index:check failure locally. The version bumps made the README table stale:
+
+_**Agent (claude-opus-5 2026-08-25 08:44:03Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Reproduce the CI failure
+
+`npm run index:check; echo "exit=$?"`
+
+```text
+> tampermonkey-scripts@1.0.0 index:check
+> node scripts/build-index.mjs --check
+
+README.md script index is out of date. Run: npm run index
+exit=1
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:44:12Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Regenerate index and verify unfiltered
+
+`npm run index && echo "--- full verify (unfiltered) ---" && npm run verify; echo "verify exit=$?"`
+
+```text
+> tampermonkey-scripts@1.0.0 index
+> node scripts/build-index.mjs
+
+README.md script index updated (2 script(s)).
+--- full verify (unfiltered) ---
+
+> tampermonkey-scripts@1.0.0 verify
+> npm run check && npm run index:check
+
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 2 userscript(s): 0 error(s), 0 warning(s).
+
+> tampermonkey-scripts@1.0.0 index:check
+> node scripts/build-index.mjs --check
+
+README.md script index is up to date.
+verify exit=0
+```
+</details></tool-use>
