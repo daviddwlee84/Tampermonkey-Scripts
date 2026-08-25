@@ -3,8 +3,31 @@
 // @version, canonical @updateURL/@downloadURL, and @grant vs. actual GM_* usage.
 import { listUserscripts, first, rawUrlFor, stripCommentsAndStrings } from './lib/meta.mjs';
 
-const REQUIRED = ['name', 'namespace', 'version', 'description', 'author', 'grant'];
+// @run-at is required because the default differs between managers:
+// Tampermonkey defaults to document-idle, Violentmonkey to document-end.
+const REQUIRED = ['name', 'namespace', 'version', 'description', 'author', 'grant', 'run-at'];
 const KNOWN_GM = /\bGM[._]([A-Za-z]\w*)/g;
+
+// GM APIs documented as supported by BOTH Tampermonkey and Violentmonkey.
+// Anything outside this set ties the script to one manager.
+const PORTABLE_GM = new Set([
+  'GM_info', 'GM_cookie',
+  'GM_getValue', 'GM_getValues', 'GM_setValue', 'GM_setValues',
+  'GM_deleteValue', 'GM_deleteValues', 'GM_listValues',
+  'GM_addValueChangeListener', 'GM_removeValueChangeListener',
+  'GM_getResourceText', 'GM_getResourceURL',
+  'GM_addElement', 'GM_addStyle', 'GM_openInTab',
+  'GM_registerMenuCommand', 'GM_unregisterMenuCommand',
+  'GM_notification', 'GM_setClipboard', 'GM_xmlhttpRequest', 'GM_download',
+]);
+
+// Metadata keys that only one manager understands.
+const MANAGER_SPECIFIC_KEYS = {
+  sandbox: 'Tampermonkey',
+  'inject-into': 'Violentmonkey',
+  'exclude-match': 'Violentmonkey',
+  antifeature: 'Tampermonkey / script hosts',
+};
 
 const errors = [];
 const warnings = [];
@@ -41,6 +64,7 @@ for (const s of scripts) {
     warnings.push(at(`@version "${version}" is not X.Y.Z — Tampermonkey compares versions to decide updates`));
   }
 
+  // Violentmonkey only reads @downloadURL; Tampermonkey uses both. Write both.
   const expected = rawUrlFor(s.slug);
   for (const key of ['updateURL', 'downloadURL']) {
     const actual = first(s.meta, key);
@@ -67,6 +91,16 @@ for (const s of scripts) {
   }
   if (grants.has('none') && used.size > 0) {
     errors.push(at(`declares "@grant none" but uses ${[...used].join(', ')}`));
+  }
+
+  // Cross-manager portability (see docs/09-managers-comparison.md).
+  for (const api of used) {
+    if (!PORTABLE_GM.has(api)) {
+      warnings.push(at(`${api} is not supported by both Tampermonkey and Violentmonkey`));
+    }
+  }
+  for (const [key, manager] of Object.entries(MANAGER_SPECIFIC_KEYS)) {
+    if (s.meta[key]) warnings.push(at(`@${key} is ${manager}-only — the script will not be portable`));
   }
 }
 

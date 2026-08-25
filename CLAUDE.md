@@ -48,8 +48,16 @@ npm run new -- <slug> "<Name>" "<@match>" ["<description>"]
 
 ## 寫腳本的規範
 
+**腳本必須同時支援 Tampermonkey 與 Violentmonkey**（見 `docs/09-managers-comparison.md`）：
+
 - 每個用到的 `GM_*` API 都要有對應的 `// @grant`。`npm run check` 會掃程式碼交叉比對。
-- 用底線版 GM API（`GM_setValue`）而非 `GM.setValue`，為了 Violentmonkey 相容性。
+- 只用兩邊都支援的 GM API。`check` 會對照 `PORTABLE_GM` 清單並在超出時警告。
+- 用底線版 GM API（`GM_setValue`）而非 `GM.setValue`，避免 async 傳染。
+- **一定要明寫 `@run-at`**：TM 預設 `document-idle`、VM 預設 `document-end`。`check` 會強制。
+- `@updateURL` 和 `@downloadURL` 兩個都寫：VM 只讀後者。
+- 不要用 manager 限定的 key（`@sandbox`、`@inject-into`、`@exclude-match`、`@antifeature`），
+  也不要用 `GM_registerMenuCommand` 的 `accessKey`（TM 限定）。
+- 不要引入 `VM.observe` / `VM.shortcut` 之類的 Violentmonkey helper。
 - 主邏輯包在 `(function () { 'use strict'; ... })()` 裡。
 - **假設所有目標網站都是 SPA**：進入點函式必須 idempotent（可重複呼叫），
   並搭配 `MutationObserver` / URL 變化偵測。理由見 `docs/05-spa-and-timing.md`。

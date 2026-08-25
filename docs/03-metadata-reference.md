@@ -98,7 +98,7 @@ Chrome extension 的 match pattern 格式：
 | 需求                                    | 用           |
 | --------------------------------------- | ------------ |
 | 攔截／覆寫網站的全域物件、擋掉某些請求   | `document-start` |
-| 一般 DOM 操作、加按鈕                    | `document-idle`（預設） |
+| 一般 DOM 操作、加按鈕                    | `document-idle` |
 | 想早一點插入 CSS 避免閃爍                | `document-start` + `GM_addStyle` |
 
 細節見 [05 SPA 與執行時機](./05-spa-and-timing.md)。
@@ -159,16 +159,25 @@ Chrome extension 的 match pattern 格式：
 - `@downloadURL`：真的要更新時，從這裡抓完整腳本
 
 兩個通常填一樣。沒有 `@version` 的話，這兩個 key 形同虛設。
+
+Violentmonkey 只看 `@downloadURL`（它的文件沒有 `@updateURL`），Tampermonkey 兩個都用。
+**兩個都寫**就能同時滿足。
 完整說明見 [08 發佈與同步](./08-distribution-and-sync.md)。
 
 ## 其他常用
 
-| Key             | 說明                                                        |
-| --------------- | ----------------------------------------------------------- |
-| `@antifeature`  | 誠實標示腳本含廣告／追蹤／付費功能（發佈到 Greasy Fork 需要）|
-| `@sandbox`      | 指定執行環境：`raw` / `JavaScript` / `DOM`                   |
-| `@top-level-await` | 允許最外層 `await`                                        |
-| `@unwrap`       | 不要把腳本包在函式裡（很少用）                               |
+| Key             | 說明                                                        | 支援          |
+| --------------- | ----------------------------------------------------------- | ------------- |
+| `@top-level-await` | 允許最外層 `await`                                        | 兩者皆可      |
+| `@noframes`     | 見上                                                         | 兩者皆可      |
+| `@unwrap`       | 不要把腳本包在函式裡（很少用）                               | 兩者皆可      |
+| `@antifeature`  | 誠實標示腳本含廣告／追蹤／付費功能（Greasy Fork 需要）        | TM／市集      |
+| `@sandbox`      | 指定執行環境：`raw` / `JavaScript` / `DOM`                   | **TM 限定**   |
+| `@inject-into`  | 指定注入 context：`page` / `content` / `auto`（預設 `auto`） | **VM 限定**   |
+| `@exclude-match`| 用 match pattern 語法排除                                    | **VM 限定**   |
+
+`@sandbox` 和 `@inject-into` 是兩邊各自解決「腳本要跑在哪個 JS context」的答案，
+見 [06 Sandbox 與 unsafeWindow](./06-sandbox-and-unsafewindow.md)。
 
 ## 本 repo 的慣例
 

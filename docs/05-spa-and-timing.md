@@ -129,14 +129,16 @@ function run() {
 // @run-at document-start   HTML 剛開始解析，DOM 幾乎是空的
 // @run-at document-body    <body> 出現
 // @run-at document-end     DOMContentLoaded
-// @run-at document-idle    大致載入完（預設）
+// @run-at document-idle    大致載入完
 ```
+
+不寫的話預設值兩邊不同（TM 是 `document-idle`，VM 是 `document-end`），所以一律明寫。
 
 | 你要做的事                        | 用                     |
 | --------------------------------- | ---------------------- |
 | 攔截網站的全域物件、覆寫 `fetch`   | `document-start`       |
 | 注入 CSS 避免元素閃一下            | `document-start`       |
-| 一般加按鈕、抓資料                 | `document-idle`（預設）|
+| 一般加按鈕、抓資料                 | `document-idle`        |
 
 **`document-start` + `MutationObserver`** 是應付難搞網站的組合技：
 腳本比網站的 JS 還早跑，然後靜靜等它把東西畫出來。

@@ -18,9 +18,11 @@
 <!-- END SCRIPT INDEX -->
 
 > 點 **Install** 之前要先裝好 [Tampermonkey](https://www.tampermonkey.net/) 或
-> [Violentmonkey](https://violentmonkey.github.io/)。
-> Chrome 系瀏覽器還要到 `chrome://extensions` 開啟 **Developer mode**，
-> 否則腳本裝了不會執行。
+> [Violentmonkey](https://violentmonkey.github.io/) —— 本 repo 的腳本**兩者皆相容**，
+> `npm run check` 會強制這件事（見 [09 Manager 比較](./docs/09-managers-comparison.md)）。
+>
+> Chromium 系瀏覽器（Chrome / Edge / Brave / Vivaldi / **Arc**）還要到
+> `<browser>://extensions` 開啟 **Developer mode**，否則腳本裝了不會執行。
 
 ## 教學文件
 

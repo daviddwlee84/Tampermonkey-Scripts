@@ -115,9 +115,9 @@ unsafeWindow.fetch = async function (...args) {
 - **必須 `@run-at document-start`**，否則網站早就抓完資料了
 - **必須用 `response.clone()`**，body 只能讀一次，讀掉了網站就壞了
 
-## `@sandbox` 明確指定
+## 明確指定 context（兩邊的 key 不一樣）
 
-Tampermonkey 支援直接指定：
+Tampermonkey：
 
 ```js
 // @sandbox raw          不要 sandbox，直接在頁面 context
@@ -125,7 +125,19 @@ Tampermonkey 支援直接指定：
 // @sandbox DOM          只保證 DOM 可用
 ```
 
-需要精準控制時再用，一般不必。
+Violentmonkey：
+
+```js
+// @inject-into auto     預設：先試 page context，被 CSP 擋就退回 content
+// @inject-into page     頁面 context（等同 unsafeWindow 的世界）
+// @inject-into content  content script context（較隔離，但不受頁面 CSP 影響）
+```
+
+`@inject-into content` 是 Violentmonkey 拿來解 CSP 問題的手段——網站的
+Content-Security-Policy 擋不到 content script。Tampermonkey 沒有等價的 key。
+
+兩個都是 manager 限定的 key，用了就等於放棄跨 manager 相容。
+**一般情況不必碰**：只要你的腳本靠 DOM 而不是頁面 internals，預設值就夠用。
 
 ## 下一步
 

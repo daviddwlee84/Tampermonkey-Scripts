@@ -59,7 +59,7 @@ manager Dashboard 裡看那支腳本的 Enabled 開關。
 腳本跑的當下元素還沒生出來。三個修法：
 
 1. 改用 `waitForElement()`（[05](./05-spa-and-timing.md#修法-1等元素出現)）
-2. `@run-at document-idle`（預設就是）
+2. 明寫 `@run-at document-idle`（別靠預設，TM 與 VM 的預設值不同）
 3. 用 `MutationObserver` 等它出現
 
 驗證方法：在 DevTools Console 手動跑同一句 `querySelector`。

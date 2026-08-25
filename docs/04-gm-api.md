@@ -104,8 +104,10 @@ const res = await gmFetch({ method: 'GET', url: 'https://api.example.com/data' }
 ```js
 // @grant GM_registerMenuCommand
 GM_registerMenuCommand('Export conversation', exportConversation);
-GM_registerMenuCommand('Copy as Markdown', copyMarkdown, { accessKey: 'c' });
 ```
+
+⚠️ 第三個參數的 options 兩邊不完全一樣（`accessKey` 是 Tampermonkey 限定）。
+想跨 manager 就只用前兩個參數。
 
 不用動網站 UI 就能提供功能：
 
@@ -116,12 +118,16 @@ Tampermonkey
  └─ Debug selectors
 ```
 
-想移除的話留住回傳值：
+想移除的話，**自己指定一個 id**，不要依賴回傳值：
 
 ```js
-const id = GM_registerMenuCommand('Stop', stop);
-GM_unregisterMenuCommand(id);   // 需要 // @grant GM_unregisterMenuCommand
+// @grant GM_unregisterMenuCommand
+GM_registerMenuCommand('Stop', stop, { id: 'stop' });
+GM_unregisterMenuCommand('stop');
 ```
+
+Tampermonkey 的 `GM_registerMenuCommand` 會回傳一個 id，Violentmonkey 則是用
+caption 或你自己給的 id 來反註冊。明確指定 id 是唯一兩邊都可靠的寫法。
 
 ## 注入 CSS
 

@@ -5199,3 +5199,1204 @@ git commit && git push
 **Chrome 要開 Developer mode**（`chrome://extensions`），否則 Manifest V3 下腳本裝了不會跑。這是安裝後「完全沒反應」的第一名原因，`docs/11-troubleshooting.md` 有寫。
 
 **`page-title-tag` 我沒有實際在 chatgpt.com 上驗證過** — 它的邏輯（監看 `<title>` 節點 + 防遞迴旗標）是照 SPA 的通則寫的，語法檢查也過了，但真實網站的行為要你裝上去看一次才算數。`hello-userscript` 綁在 example.com，可以先拿它確認整條安裝鏈路通不通。
+
+---
+
+_**User (2026-08-25 08:19:29Z)**_
+
+我們項目現在是 Tampermonkey & Violentmonkey兼容的嗎？有更推薦使用哪個嗎？
+(Arc上或其他Chromium-based browser也可以使用吧？)
+
+
+以下是ChatGPT的回覆
+```
+如果是你現在這個情境——**自己寫 userscripts、GitHub 管 source、多機開發、可能讓 coding agent 改 code**——我會比較偏向 **Violentmonkey**；但 Tampermonkey 在「最大相容性 + Safari/iOS + 比較多產品化功能」上還是更強。
+
+### 2026 年的核心差異
+
+|                           | **Tampermonkey**                                                             | **Violentmonkey**                                                   |
+| ------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 授權                        | **新版 proprietary**；公開 GitHub 只有 ≤2.9 舊版 source ([GitHub][1])                 | **Open Source**                                                     |
+| 定位                        | polished / compatibility-first                                               | lightweight / hacker-friendly                                       |
+| Chrome / Edge             | ✅ MV3                                                                        | ✅ MV3                                                               |
+| Firefox                   | ✅                                                                            | ✅                                                                   |
+| Safari / iOS              | **✅ 官方支援** ([Tampermonkey][2])                                               | ❌ 沒有正式 Safari 版                                                     |
+| Chromium 衍生瀏覽器            | ✅                                                                            | **✅ 很廣**，Brave/Vivaldi/Orion 等 ([Violentmonkey][3])                 |
+| Built-in editor           | 較完整，ESLint 等 ([Tampermonkey][4])                                             | 比較簡潔                                                                |
+| External editor           | ✅，2026 加入 local file tracking ([Tampermonkey][5])                            | **✅ 很成熟**，直接 track `.user.js` external edits ([Violentmonkey][6])   |
+| GitHub `@downloadURL` 更新  | ✅                                                                            | ✅，官方明確支援定期自動檢查 ([Violentmonkey][7])                                 |
+| Cloud Sync                | Google Drive / Dropbox / WebDAV / Browser Sync / 現在還有 S3 ([Tampermonkey][8]) | Google Drive / Dropbox / **OneDrive** / WebDAV ([Violentmonkey][9]) |
+| GM API                    | 很完整                                                                          | 很完整，含新舊 `GM_*` / `GM.*` ([Violentmonkey][10])                       |
+| TS / bundler tooling      | 可以自己建                                                                        | **官方直接教 TS/ESNext generator workflow** ([Violentmonkey][11])        |
+| Enterprise / provisioning | **有 OS policy provisioning**                                                 | 相對少                                                                 |
+| AI tooling                | 2026 新增 **MCP integration**                                                  | 無對應內建 feature ([Tampermonkey][5])                                   |
+
+---
+
+## 其實兩者跑 userscript 的能力非常接近
+
+普通腳本：
+
+```js
+// @match https://chatgpt.com/*
+// @grant GM_setValue
+// @grant GM_xmlhttpRequest
+```
+
+加上：
+
+```js
+GM_setValue(...)
+GM_getValue(...)
+GM_xmlhttpRequest(...)
+GM_registerMenuCommand(...)
+GM_setClipboard(...)
+unsafeWindow
+MutationObserver
+```
+
+兩邊基本都能跑。
+
+所以如果你自己寫：
+
+```text
+chatgpt-export.user.js
+github-helper.user.js
+claude-helper.user.js
+```
+
+我不會因為換到 Violentmonkey 而擔心能力少一大截。
+
+比較大的坑通常是在一些 edge case：
+
+```text
+page context
+vs
+isolated/content context
+vs
+CSP
+vs
+Manifest V3
+```
+
+Violentmonkey甚至提供：
+
+```js
+// @inject-into page
+// @inject-into content
+// @inject-into auto
+```
+
+明確控制 injection context，預設 `auto`；遇到 CSP 時可以 fallback 到 content context。([Violentmonkey][12])
+
+這其實很 developer-friendly。
+
+---
+
+# Violentmonkey 最大優點：是真的 OSS
+
+這可能是兩者最本質的差異。
+
+Tampermonkey GitHub 看起來像 OSS repo，但官方 README 已經明確寫：
+
+> repository 只有 Tampermonkey 2.9 以前的 source；之後版本是 proprietary。
+
+([GitHub][1])
+
+而 Violentmonkey 的定位直接就是：
+
+> open source userscript manager
+
+而且 extension build、source、issue、release 都是公開 project。([Violentmonkey][9])
+
+對 userscript manager 這種 extension，這個差異我覺得比普通 extension 更值得在意，因為它本來就有能力：
+
+```text
+read/modify arbitrary pages
+       +
+execute scripts
+       +
+cross-origin requests
+       +
+clipboard
+       +
+storage
+```
+
+所以如果有：
+
+```text
+兩個產品功能差不多
+
+A = proprietary
+B = actively maintained OSS
+```
+
+我會自然比較偏 B。
+
+---
+
+# 而且 Violentmonkey 的 philosophy 很符合你的用途
+
+它甚至直接寫：
+
+> built-in editor 保持簡單，鼓勵使用 external editor / IDE。
+
+([Violentmonkey][6])
+
+所以 workflow 可以直接是：
+
+```text
+Git repo
+│
+├── src/
+│   └── chatgpt-export.ts
+│
+└── dist/
+    └── chatgpt-export.user.js
+          │
+          ▼
+    Violentmonkey
+    Track external edits
+          │
+          ▼
+      ChatGPT tab
+```
+
+然後：
+
+```bash
+nvim src/chatgpt-export.ts
+
+pnpm dev
+```
+
+變成：
+
+```text
+save
+ ↓
+build
+ ↓
+dist/foo.user.js changes
+ ↓
+Violentmonkey sees change
+ ↓
+reload matching tab
+```
+
+官方 external editing 還可以直接選：
+
+> **Reload tab when changes are detected**
+
+([Violentmonkey][6])
+
+這已經接近 browser extension HMR 的簡易版本了。
+
+---
+
+# Violentmonkey 還有一個挺有意思的 developer ecosystem
+
+例如官方維護：
+
+```text
+@violentmonkey/dom
+@violentmonkey/ui
+@violentmonkey/shortcut
+generator-userscript
+```
+
+例如 SPA 的 DOM：
+
+```js
+VM.observe(document.body, () => {
+    ...
+});
+```
+
+底層幫你處理 MutationObserver。([Violentmonkey][13])
+
+快捷鍵：
+
+```js
+VM.shortcut.register(...)
+```
+
+也有現成 library。([Violentmonkey][14])
+
+還有官方 generator：
+
+```bash
+npx -p github:violentmonkey/generator-userscript \
+  -p yo \
+  yo @violentmonkey/userscript
+```
+
+可直接建立 ESNext / TypeScript build project。([Violentmonkey][11])
+
+所以它比較有：
+
+> **userscript 是一種小型 software project**
+
+的感覺。
+
+而不是：
+
+> 打開 extension editor 貼一坨 JS。
+
+這點我覺得很適合你。
+
+---
+
+# Tampermonkey 的反擊：產品成熟度確實比較高
+
+也不能簡單說 Violentmonkey 全勝。
+
+Tampermonkey 現在很多 feature 是比較「產品化」的。
+
+例如 2026 新增：
+
+```text
+local userscript file tracking
+OS policy provisioning
+S3 synchronization
+context-menu scripts
+MCP support
+```
+
+([Tampermonkey][5])
+
+尤其是這個挺有意思：
+
+```text
+Tampermonkey
+      ↕
+Tampermonkey Editors extension
+      ↕
+MCP
+      ↕
+AI tool
+```
+
+官方 5.5 已新增 MCP support，但需要額外的 Tampermonkey Editors extension 並由使用者開啟。([Tampermonkey][5])
+
+所以你如果未來想：
+
+```text
+Claude Code / AI agent
+       ↓ MCP
+Tampermonkey scripts
+```
+
+Tampermonkey 反而正在往這個方向做。
+
+這個我會特別留意。
+
+---
+
+# Tampermonkey 還有 Safari / iOS
+
+這是非常明確的一票。
+
+官方目前有：
+
+```text
+Safari macOS
+Safari iOS
+Firefox Android
+Chrome
+Edge
+Opera
+Firefox
+```
+
+([Tampermonkey][2])
+
+Violentmonkey 主要是 WebExtension 世界：
+
+```text
+Chrome
+Edge
+Firefox
+Brave
+Vivaldi
+Opera
+Orion
+...
+```
+
+([Violentmonkey][3])
+
+因此如果你未來想：
+
+> 我在 iPhone/iPad Safari 也想裝同一個 ChatGPT userscript
+
+那 Tampermonkey 會方便很多。
+
+---
+
+# Sync 我倒不會把它當決勝點
+
+因為兩邊都很好。
+
+Tampermonkey：
+
+```text
+Google Drive
+Dropbox
+WebDAV
+Browser Sync
+Amazon S3
+```
+
+([Tampermonkey][8])
+
+Violentmonkey：
+
+```text
+Google Drive
+Dropbox
+OneDrive
+WebDAV
+```
+
+而且官方刻意不依賴 browser native sync，因為 native `browser.storage.sync` 容量小，而且無法很好地 Chrome ↔ Firefox cross-browser sync。([Violentmonkey][15])
+
+但對我們剛才說的 workflow，真正重要的其實仍然是：
+
+```text
+GitHub = source of truth
+
+@downloadURL
+     ↓
+TM / VM
+```
+
+兩個都可以。
+
+所以我甚至可能**完全不 sync script code**，只 sync userscript manager 設定。
+
+---
+
+# 我會怎麼選
+
+我的分界大概是：
+
+```text
+                        Userscript manager
+                               │
+               ┌───────────────┴───────────────┐
+               │                               │
+     自己寫 / Git 管理                   消費別人的 scripts
+     developer workflow                compatibility first
+               │                               │
+               ▼                               ▼
+       Violentmonkey                    Tampermonkey
+```
+
+再加：
+
+```text
+Safari / iOS
+    │
+    └──────────────→ Tampermonkey
+
+OSS / auditable
+    │
+    └──────────────→ Violentmonkey
+
+TypeScript / external IDE
+    │
+    └──────────────→ Violentmonkey
+
+enterprise provisioning / MCP
+    │
+    └──────────────→ Tampermonkey
+```
+
+### 所以針對你，我會選 **Violentmonkey 作為 primary**
+
+因為你的目標明顯比較像：
+
+```text
+~/Projects/userscripts
+        │
+        ├── GitHub
+        ├── coding agents
+        ├── VS Code / Neovim
+        ├── TypeScript
+        ├── build
+        └── automatic distribution
+```
+
+而不是：
+
+```text
+Tampermonkey Dashboard
+→ 手動 edit JS
+```
+
+而且 **OSS + GitHub-native + external editor workflow** 都跟這種用法很合。
+
+但我不會 uninstall Tampermonkey——可以保留它作為 **compatibility / Safari / testing target**。
+
+最理想甚至是你自己的 userscript 避免依賴 manager-specific extension：
+
+```text
+           my userscript
+                │
+        standard GM APIs
+       ┌────────┴────────┐
+       ▼                 ▼
+Violentmonkey       Tampermonkey
+     ✅                  ✅
+```
+
+也就是 **開發主要用 Violentmonkey，但 CI/build 出來的 `.user.js` 同時支援 TM + VM**。這會是我最推薦的長期方案。
+
+[1]: https://github.com/Tampermonkey/tampermonkey?utm_source=chatgpt.com "GitHub - Tampermonkey/tampermonkey: Tampermonkey is the most popular userscript manager, with over 10 million users. It's available for Chrome, Microsoft Edge, Safari, Opera Next, and Firefox. · GitHub"
+[2]: https://www.tampermonkey.net/faq.php?q=Q406&utm_source=chatgpt.com "FAQ | Tampermonkey"
+[3]: https://violentmonkey.github.io/get-it/?utm_source=chatgpt.com "Get Violentmonkey - Violentmonkey"
+[4]: https://www.tampermonkey.net/?utm_source=chatgpt.com "Home | Tampermonkey"
+[5]: https://www.tampermonkey.net/changelog.php?locale=en&more=false&show=dhdg&utm_source=chatgpt.com "Changes | Tampermonkey"
+[6]: https://violentmonkey.github.io/posts/how-to-edit-scripts-with-your-favorite-editor/?utm_source=chatgpt.com "How to edit scripts with your favorite editor? - Violentmonkey"
+[7]: https://violentmonkey.github.io/api/metadata-block/?utm_source=chatgpt.com "Metadata Block - Violentmonkey"
+[8]: https://www.tampermonkey.net/faq.php?locale=zh&q=Q105&utm_source=chatgpt.com "常问问题 | Tampermonkey"
+[9]: https://violentmonkey.github.io/?utm_source=chatgpt.com "Violentmonkey"
+[10]: https://violentmonkey.github.io/api/gm/?utm_source=chatgpt.com "Privileged APIs - Violentmonkey"
+[11]: https://violentmonkey.github.io/guide/using-modern-syntax/?utm_source=chatgpt.com "Modern Syntax - Violentmonkey"
+[12]: https://violentmonkey.github.io/posts/inject-into-context/?utm_source=chatgpt.com "Inject scripts into different contexts - Violentmonkey"
+[13]: https://violentmonkey.github.io/guide/observing-dom/?utm_source=chatgpt.com "Observing DOM - Violentmonkey"
+[14]: https://violentmonkey.github.io/guide/keyboard-shortcuts/?utm_source=chatgpt.com "Keyboard Shortcuts - Violentmonkey"
+[15]: https://violentmonkey.github.io/faq/?utm_source=chatgpt.com "FAQ - Violentmonkey"
+
+```
+
+---
+
+_**Agent (claude-opus-5 2026-08-25 08:19:51Z)**_
+
+Good question — let me actually audit the repo rather than answer from memory, and verify the VM API surface against their docs.
+
+_**Agent (claude-opus-5 2026-08-25 08:19:51Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="ToolSearch"><details>
+<summary>Tool use: **ToolSearch**</summary>
+
+**Input:**
+
+- max_results: `1`
+- query: `select:WebFetch`
+
+**Result:**
+
+```
+
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:20:02Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="WebFetch"><details>
+<summary>Tool use: **WebFetch**</summary>
+ `https://violentmonkey.github.io/api/gm/`
+
+```text
+# Violentmonkey APIs Documentation
+
+## Complete GM_* / GM.* API List
+
+**GM_* APIs (Greasemonkey v3-compatible):**
+- unsafeWindow
+- GM_info
+- GM_cookie
+- GM_getValue
+- GM_getValues
+- GM_setValue
+- GM_setValues
+- GM_deleteValue
+- GM_deleteValues
+- GM_listValues
+- GM_addValueChangeListener
+- GM_removeValueChangeListener
+- GM_getResourceText
+- GM_getResourceURL
+- GM_addElement
+- GM_addStyle
+- GM_openInTab
+- GM_registerMenuCommand
+- GM_unregisterMenuCommand
+- GM_notification
+- GM_setClipboard
+- GM_xmlhttpRequest
+- GM_download
+
+**GM.* APIs (Greasemonkey v4-compatible, async variants):**
+All above functions have corresponding `GM.*` equivalents with async/Promise support.
+
+## Support Status
+
+| API | Supported |
+|-----|-----------|
+| GM_download | ✅ Yes |
+| GM_addStyle | ✅ Yes |
+| GM_addValueChangeListener | ✅ Yes |
+| GM_notification | ✅ Yes |
+| GM_openInTab | ✅ Yes |
+| GM_setClipboard | ✅ Yes |
+| GM_registerMenuCommand | ✅ Yes |
+| GM_unregisterMenuCommand | ✅ Yes |
+| GM_getResourceText | ✅ Yes |
+| GM_getResourceURL | ✅ Yes |
+
+## Function Signatures
+
+**GM_registerMenuCommand:**
+```javascript
+GM_registerMenuCommand(caption, onClick, options?)
+```
+Parameters: `caption` (string), `onClick` (function receiving event object), `options?` (object with `id`, `icon`, `title`, `autoClose` properties)
+
+**GM_unregisterMenuCommand:**
+```javascript
+GM_unregisterMenuCommand(captionOrId)
+```
+Parameters: `captionOrId` (string) - the caption or id of the command to unregister
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:20:18Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="WebFetch"><details>
+<summary>Tool use: **WebFetch**</summary>
+ `https://violentmonkey.github.io/api/metadata-block/`
+
+```text
+# Violentmonkey Metadata Block Documentation Summary
+
+## Complete Metadata Keys Listed
+The documentation covers 20 keys: @name, @namespace, @match, @exclude-match, @include, @exclude, @version, @description, @icon, @require, @resource, @run-at, @noframes, @grant, @inject-into, @downloadURL, @supportURL, @homepageURL, @unwrap, @tag, @top-level-await.
+
+## @run-at Values
+Four execution timing options are supported:
+- `document-start`: Earliest possible, before full DOM availability
+- `document-body`: After the body element appears
+- `document-end`: Default; fires with DOMContentLoaded
+- `document-idle`: After DOMContentLoaded, asynchronously
+
+## Specific Keys Status
+
+**@connect**: Not documented or required.
+
+**@noframes**: Supported. When present, "the script will execute only in top level document, but not in nested frames."
+
+**@inject-into**: Fully documented with three values:
+- `page`: Inject into webpage context
+- `content`: Inject into content script context  
+- `auto`: Default; attempts page context first, falls back to content
+
+**@sandbox**: Not mentioned.
+
+**@top-level-await**: Supported since v2.19.2. It "enables top-level `await` in your script."
+
+**@antifeature**: Not documented.
+
+## @match vs @include
+The documentation states: "It is recommended to use `@match` instead of `@include`" as the preferred matching approach.
+
+## @require and @resource
+Both support multiple declarations and external URLs. Resources are accessed via `GM_getResourceText` and `GM_getResourceURL` functions.
+
+## @updateURL/@downloadURL
+`@downloadURL` is documented for update checking. `@updateURL` is not mentioned.
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:20:38Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Audit repo for TM/VM compatibility issues
+
+```bash
+echo "=== @grant used across all scripts ==="; grep -h "^// @grant" userscripts/*/*.user.js | sort -u
+echo; echo "=== TM-only metadata keys present in scripts ==="; grep -nE "^// @(sandbox|top-level-await|antifeature|unwrap)" userscripts/*/*.user.js || echo "(none)"
+echo; echo "=== @run-at declared? ==="; grep -c "^// @run-at" userscripts/*/*.user.js
+echo; echo "=== docs claiming document-idle is the default ==="; grep -rn "預設" docs/*.md | grep -i "idle\|run-at"
+echo; echo "=== accessKey / unregister examples ==="; grep -rn "accessKey\|unregisterMenuCommand" docs/ userscripts/ shared/
+```
+
+```text
+=== @grant used across all scripts ===
+// @grant        GM_addStyle
+// @grant        GM_getValue
+// @grant        GM_registerMenuCommand
+// @grant        GM_setClipboard
+// @grant        GM_setValue
+// @grant        none
+
+=== TM-only metadata keys present in scripts ===
+(none)
+
+=== @run-at declared? ===
+userscripts/hello-userscript/hello-userscript.user.js:1
+userscripts/_template/template.user.js:1
+userscripts/page-title-tag/page-title-tag.user.js:1
+
+=== docs claiming document-idle is the default ===
+docs/03-metadata-reference.md:92:// @run-at document-idle    頁面大致載入完（預設值）
+docs/03-metadata-reference.md:101:| 一般 DOM 操作、加按鈕                    | `document-idle`（預設） |
+docs/05-spa-and-timing.md:132:// @run-at document-idle    大致載入完（預設）
+docs/05-spa-and-timing.md:139:| 一般加按鈕、抓資料                 | `document-idle`（預設）|
+docs/11-troubleshooting.md:62:2. `@run-at document-idle`（預設就是）
+
+=== accessKey / unregister examples ===
+docs/04-gm-api.md:107:GM_registerMenuCommand('Copy as Markdown', copyMarkdown, { accessKey: 'c' });
+docs/04-gm-api.md:123:GM_unregisterMenuCommand(id);   // 需要 // @grant GM_unregisterMenuCommand
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:20:44Z)**_
+
+Audit is clean on the code side. Fixing the doc inaccuracies I shipped:
+
+_**Agent (claude-opus-5 2026-08-25 08:21:01Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Fix run-at default and metadata key support claims
+
+````bash
+python3 - <<'PY'
+import pathlib
+
+# --- docs/03: run-at default differs per manager; add @inject-into ---
+p = pathlib.Path('docs/03-metadata-reference.md'); s = p.read_text()
+s = s.replace(
+"""// @run-at document-idle   頁面大致載入完（預設值）
+// @run-at context-menu     只有從右鍵選單點才執行
+```""",
+"""// @run-at document-idle   頁面大致載入完
+// @run-at context-menu     只有從右鍵選單點才執行（Tampermonkey 限定）
+```
+
+⚠️ **不寫的話，預設值兩邊不一樣**：Tampermonkey 是 `document-idle`，
+Violentmonkey 是 `document-end`。所以**一律明寫**，別靠預設值。""")
+s = s.replace(
+"| 一般 DOM 操作、加按鈕                    | `document-idle`（預設） |",
+"| 一般 DOM 操作、加按鈕                    | `document-idle` |")
+s = s.replace(
+"""| Key             | 說明                                                        |
+| --------------- | ----------------------------------------------------------- |
+| `@antifeature`  | 誠實標示腳本含廣告／追蹤／付費功能（發佈到 Greasy Fork 需要）|
+| `@sandbox`      | 指定執行環境：`raw` / `JavaScript` / `DOM`                   |
+| `@top-level-await` | 允許最外層 `await`                                        |
+| `@unwrap`       | 不要把腳本包在函式裡（很少用）                               |""",
+"""| Key             | 說明                                                        | 支援          |
+| --------------- | ----------------------------------------------------------- | ------------- |
+| `@top-level-await` | 允許最外層 `await`                                        | 兩者皆可      |
+| `@noframes`     | 見上                                                         | 兩者皆可      |
+| `@unwrap`       | 不要把腳本包在函式裡（很少用）                               | 兩者皆可      |
+| `@antifeature`  | 誠實標示腳本含廣告／追蹤／付費功能（Greasy Fork 需要）        | TM／市集      |
+| `@sandbox`      | 指定執行環境：`raw` / `JavaScript` / `DOM`                   | **TM 限定**   |
+| `@inject-into`  | 指定注入 context：`page` / `content` / `auto`（預設 `auto`） | **VM 限定**   |
+| `@exclude-match`| 用 match pattern 語法排除                                    | **VM 限定**   |
+
+`@sandbox` 和 `@inject-into` 是兩邊各自解決「腳本要跑在哪個 JS context」的答案，
+見 [06 Sandbox 與 unsafeWindow](./06-sandbox-and-unsafewindow.md)。""")
+s = s.replace(
+"""兩個通常填一樣。沒有 `@version` 的話，這兩個 key 形同虛設。""",
+"""兩個通常填一樣。沒有 `@version` 的話，這兩個 key 形同虛設。
+
+Violentmonkey 只看 `@downloadURL`（它的文件沒有 `@updateURL`），Tampermonkey 兩個都用。
+**兩個都寫**就能同時滿足。""")
+p.write_text(s)
+
+# --- docs/05 ---
+p = pathlib.Path('docs/05-spa-and-timing.md'); s = p.read_text()
+s = s.replace(
+"""// @run-at document-idle    大致載入完（預設）
+```""",
+"""// @run-at document-idle    大致載入完
+```
+
+不寫的話預設值兩邊不同（TM 是 `document-idle`，VM 是 `document-end`），所以一律明寫。""")
+s = s.replace(
+"| 一般加按鈕、抓資料                 | `document-idle`（預設）|",
+"| 一般加按鈕、抓資料                 | `document-idle`        |")
+p.write_text(s)
+
+# --- docs/11 ---
+p = pathlib.Path('docs/11-troubleshooting.md'); s = p.read_text()
+s = s.replace(
+"2. `@run-at document-idle`（預設就是）",
+"2. 明寫 `@run-at document-idle`（別靠預設，TM 與 VM 的預設值不同）")
+p.write_text(s)
+print('03/05/11 patched')
+PY
+````
+
+```text
+03/05/11 patched
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:21:18Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Fix menu command portability and document @inject-into
+
+````bash
+python3 - <<'PY'
+import pathlib
+
+# --- docs/04: portable menu command API ---
+p = pathlib.Path('docs/04-gm-api.md'); s = p.read_text()
+s = s.replace(
+"""```js
+// @grant GM_registerMenuCommand
+GM_registerMenuCommand('Export conversation', exportConversation);
+GM_registerMenuCommand('Copy as Markdown', copyMarkdown, { accessKey: 'c' });
+```""",
+"""```js
+// @grant GM_registerMenuCommand
+GM_registerMenuCommand('Export conversation', exportConversation);
+```
+
+⚠️ 第三個參數的 options 兩邊不完全一樣（`accessKey` 是 Tampermonkey 限定）。
+想跨 manager 就只用前兩個參數。""")
+s = s.replace(
+"""想移除的話留住回傳值：
+
+```js
+const id = GM_registerMenuCommand('Stop', stop);
+GM_unregisterMenuCommand(id);   // 需要 // @grant GM_unregisterMenuCommand
+```""",
+"""想移除的話，**自己指定一個 id**，不要依賴回傳值：
+
+```js
+// @grant GM_unregisterMenuCommand
+GM_registerMenuCommand('Stop', stop, { id: 'stop' });
+GM_unregisterMenuCommand('stop');
+```
+
+Tampermonkey 的 `GM_registerMenuCommand` 會回傳一個 id，Violentmonkey 則是用
+caption 或你自己給的 id 來反註冊。明確指定 id 是唯一兩邊都可靠的寫法。""")
+p.write_text(s)
+
+# --- docs/06: add @inject-into next to @sandbox ---
+p = pathlib.Path('docs/06-sandbox-and-unsafewindow.md'); s = p.read_text()
+s = s.replace(
+"""## `@sandbox` 明確指定
+
+Tampermonkey 支援直接指定：
+
+```js
+// @sandbox raw          不要 sandbox，直接在頁面 context
+// @sandbox JavaScript   標準 sandbox
+// @sandbox DOM          只保證 DOM 可用
+```
+
+需要精準控制時再用，一般不必。""",
+"""## 明確指定 context（兩邊的 key 不一樣）
+
+Tampermonkey：
+
+```js
+// @sandbox raw          不要 sandbox，直接在頁面 context
+// @sandbox JavaScript   標準 sandbox
+// @sandbox DOM          只保證 DOM 可用
+```
+
+Violentmonkey：
+
+```js
+// @inject-into auto     預設：先試 page context，被 CSP 擋就退回 content
+// @inject-into page     頁面 context（等同 unsafeWindow 的世界）
+// @inject-into content  content script context（較隔離，但不受頁面 CSP 影響）
+```
+
+`@inject-into content` 是 Violentmonkey 拿來解 CSP 問題的手段——網站的
+Content-Security-Policy 擋不到 content script。Tampermonkey 沒有等價的 key。
+
+兩個都是 manager 限定的 key，用了就等於放棄跨 manager 相容。
+**一般情況不必碰**：只要你的腳本靠 DOM 而不是頁面 internals，預設值就夠用。""")
+p.write_text(s)
+print('04/06 patched')
+PY
+grep -n "inject-into" docs/*.md | head
+````
+
+```text
+04/06 patched
+docs/03-metadata-reference.md:176:| `@inject-into`  | 指定注入 context：`page` / `content` / `auto`（預設 `auto`） | **VM 限定**   |
+docs/03-metadata-reference.md:179:`@sandbox` 和 `@inject-into` 是兩邊各自解決「腳本要跑在哪個 JS context」的答案，
+docs/06-sandbox-and-unsafewindow.md:131:// @inject-into auto     預設：先試 page context，被 CSP 擋就退回 content
+docs/06-sandbox-and-unsafewindow.md:132:// @inject-into page     頁面 context（等同 unsafeWindow 的世界）
+docs/06-sandbox-and-unsafewindow.md:133:// @inject-into content  content script context（較隔離，但不受頁面 CSP 影響）
+docs/06-sandbox-and-unsafewindow.md:136:`@inject-into content` 是 Violentmonkey 拿來解 CSP 問題的手段——網站的
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:21:20Z)**_
+
+Now rewriting docs/09 with the current facts and a real recommendation:
+
+_**Agent (claude-opus-5 2026-08-25 08:21:59Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Rewrite manager comparison doc
+
+````bash
+cat > docs/09-managers-comparison.md <<'EOF'
+# 09 · Manager 比較
+
+`userscript` 是概念本身，manager 是執行它的軟體：
+
+```text
+        userscript
+            ↑
+┌───────────────────────┐
+│ Tampermonkey (TM)     │
+│ Violentmonkey (VM)    │
+│ Greasemonkey          │
+│ Userscripts (Safari)  │
+└───────────────────────┘
+```
+
+## 結論先講
+
+**本 repo 的腳本兩邊都能跑**，開發時建議：
+
+```text
+主力開發        Violentmonkey   （OSS、external editor workflow 成熟）
+相容性驗證      Tampermonkey    （順便涵蓋 Safari / iOS）
+腳本本身        只用兩邊都有的 API，不綁任何一家
+```
+
+## 對照（2026）
+
+|                        | **Tampermonkey**                              | **Violentmonkey**                       |
+| ---------------------- | --------------------------------------------- | --------------------------------------- |
+| 授權                   | 2.9 之後轉為 proprietary，GitHub 只有舊版 source | **完全 open source（MIT）**             |
+| 定位                   | polished、相容性優先、功能多                    | 輕量、developer-friendly                |
+| Chrome / Edge / Brave / Vivaldi / Arc | ✅ MV3                       | ✅ MV3                                  |
+| Firefox                | ✅                                             | ✅                                       |
+| **Safari / iOS**       | **✅ 官方支援**                                | ❌ 沒有正式版                            |
+| 內建編輯器             | 較完整（含 ESLint）                            | 刻意保持簡單，鼓勵用外部編輯器           |
+| 外部編輯器 / 本機檔案追蹤 | ✅（較新版本加入）                            | ✅ 成熟，可設定「偵測到變更就 reload 分頁」|
+| GM API                 | 最完整                                         | 完整（含 `GM_download`、`GM_cookie`、`GM.*` async 版）|
+| Cloud Sync             | Drive / Dropbox / WebDAV / Browser Sync / S3   | Drive / Dropbox / OneDrive / WebDAV     |
+| TS / bundler 官方支援  | 自己建                                         | **官方 generator（ESNext / TypeScript）**|
+| 官方 helper libraries  | 無                                             | `@violentmonkey/dom`、`/ui`、`/shortcut`|
+| 企業 provisioning      | ✅ OS policy                                   | 較少                                     |
+| MCP integration        | ✅（5.5+，需額外的 Editors extension）          | 無                                       |
+
+## 怎麼選
+
+```text
+                    你的使用方式
+                          │
+          ┌───────────────┴───────────────┐
+          ▼                               ▼
+  自己寫、Git 管理、IDE            主要是裝別人寫的腳本
+          │                               │
+          ▼                               ▼
+   Violentmonkey                    Tampermonkey
+```
+
+再加幾條決定性因素：
+
+| 如果你…                          | 選              |
+| -------------------------------- | --------------- |
+| 想在 iPhone / iPad Safari 也用   | **Tampermonkey**（VM 沒有 Safari 版）|
+| 在意 OSS / 可稽核                | **Violentmonkey** |
+| 用 TypeScript + 外部 IDE 開發    | **Violentmonkey** |
+| 需要企業 policy 部署、或想試 MCP | **Tampermonkey** |
+| 只是想最快裝起來用               | 都行，Tampermonkey 教學最多 |
+
+**為什麼 OSS 在這裡比一般 extension 更值得在意**：userscript manager 本來就有
+「讀寫任意頁面 + 執行腳本 + 跨域請求 + 剪貼簿 + 儲存」的完整權限。
+兩個產品功能差不多時，可稽核的那個是比較自然的選擇。
+
+不過也不必二選一——**兩個都裝**，一個當主力、一個當相容性測試目標，
+成本很低。
+
+## Chromium 系瀏覽器（Arc、Brave、Vivaldi、Edge…）
+
+兩者都是標準的 MV3 WebExtension，所有 Chromium 衍生瀏覽器都能從
+Chrome Web Store 安裝，包含 **Arc**。
+
+⚠️ 但 Chrome 138 之後，MV3 的 User Scripts API 需要使用者主動開啟開發者模式。
+所以**所有** Chromium 系瀏覽器（Arc 也一樣）都要：
+
+```text
+開啟 <browser>://extensions
+  → 右上角開啟 Developer mode
+```
+
+沒開的話症狀是「腳本裝了，但完全沒有任何反應」。這是目前最常見的第一個坑。
+
+Arc 另外要注意它的 Chromium base 更新步調可能落後主線；遇到 extension 行為怪異時，
+先拿一般 Chrome 對照一次再判斷是不是腳本的問題。
+
+## 寫腳本時的相容性守則
+
+本 repo 的所有腳本都照這幾條寫：
+
+1. **明寫每一個 `// @grant`**，不要靠 manager 自動推斷
+2. **明寫 `@run-at`** —— 預設值兩邊不同（TM 是 `document-idle`，VM 是 `document-end`）
+3. **`@updateURL` 和 `@downloadURL` 兩個都寫** —— VM 只看後者
+4. **用底線版 GM API**（`GM_setValue`）而非 `GM.setValue`，避免 async 傳染
+5. **避開 manager 限定的 key**：`@sandbox`（TM）、`@inject-into`（VM）、`@antifeature`
+6. **避開 manager 限定的參數**：`GM_registerMenuCommand` 的 `accessKey`（TM 限定）；
+   要反註冊就自己指定 `{ id: '...' }`
+7. **少碰 `unsafeWindow` 與 sandbox 細節** —— 這是兩邊差異最大的地方
+8. **不要用 manager 專屬的 helper**（例如 `VM.observe`、`VM.shortcut`）；
+   它們很好用，但會把腳本綁在 Violentmonkey 上
+
+`npm run check` 會自動擋掉第 1、2、3、5 條，其餘靠 review。
+
+## 也可以考慮的其他 manager
+
+- **Greasemonkey**（Firefox）：這一切的老祖宗，但 GM API 較舊，新專案沒理由選它。
+- **Userscripts**（Safari，開源）：Safari 上 Tampermonkey 之外的選擇，GM API 支援較有限。
+
+## 下一步
+
+[10 · 常用食譜](./10-recipes.md)
+EOF
+echo ok
+````
+
+```text
+ok
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:22:06Z)**_
+
+Now enforcing the compat rules in the linter so this doesn't drift:
+
+_**Agent (claude-opus-5 2026-08-25 08:22:18Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Add cross-manager compatibility rules to the linter
+
+```bash
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path('scripts/check-meta.mjs'); s = p.read_text()
+
+s = s.replace(
+"""const REQUIRED = ['name', 'namespace', 'version', 'description', 'author', 'grant'];
+const KNOWN_GM = /\\bGM[._]([A-Za-z]\\w*)/g;""",
+"""// @run-at is required because the default differs between managers:
+// Tampermonkey defaults to document-idle, Violentmonkey to document-end.
+const REQUIRED = ['name', 'namespace', 'version', 'description', 'author', 'grant', 'run-at'];
+const KNOWN_GM = /\\bGM[._]([A-Za-z]\\w*)/g;
+
+// GM APIs documented as supported by BOTH Tampermonkey and Violentmonkey.
+// Anything outside this set ties the script to one manager.
+const PORTABLE_GM = new Set([
+  'GM_info', 'GM_cookie',
+  'GM_getValue', 'GM_getValues', 'GM_setValue', 'GM_setValues',
+  'GM_deleteValue', 'GM_deleteValues', 'GM_listValues',
+  'GM_addValueChangeListener', 'GM_removeValueChangeListener',
+  'GM_getResourceText', 'GM_getResourceURL',
+  'GM_addElement', 'GM_addStyle', 'GM_openInTab',
+  'GM_registerMenuCommand', 'GM_unregisterMenuCommand',
+  'GM_notification', 'GM_setClipboard', 'GM_xmlhttpRequest', 'GM_download',
+]);
+
+// Metadata keys that only one manager understands.
+const MANAGER_SPECIFIC_KEYS = {
+  sandbox: 'Tampermonkey',
+  'inject-into': 'Violentmonkey',
+  'exclude-match': 'Violentmonkey',
+  antifeature: 'Tampermonkey / script hosts',
+};""")
+
+s = s.replace(
+"""  const expected = rawUrlFor(s.slug);""",
+"""  // Violentmonkey only reads @downloadURL; Tampermonkey uses both. Write both.
+  const expected = rawUrlFor(s.slug);""")
+
+s = s.replace(
+"""  if (grants.has('none') && used.size > 0) {
+    errors.push(at(`declares "@grant none" but uses ${[...used].join(', ')}`));
+  }
+}""",
+"""  if (grants.has('none') && used.size > 0) {
+    errors.push(at(`declares "@grant none" but uses ${[...used].join(', ')}`));
+  }
+
+  // Cross-manager portability (see docs/09-managers-comparison.md).
+  for (const api of used) {
+    if (!PORTABLE_GM.has(api)) {
+      warnings.push(at(`${api} is not supported by both Tampermonkey and Violentmonkey`));
+    }
+  }
+  for (const [key, manager] of Object.entries(MANAGER_SPECIFIC_KEYS)) {
+    if (s.meta[key]) warnings.push(at(`@${key} is ${manager}-only — the script will not be portable`));
+  }
+}""")
+p.write_text(s)
+print('patched')
+PY
+npm run check
+```
+
+```text
+patched
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 2 userscript(s): 0 error(s), 0 warning(s).
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:22:32Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Negative-test the new compat rules
+
+```bash
+cp userscripts/page-title-tag/page-title-tag.user.js /tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/f9187add-bba2-45fc-9da7-e5ae51dfcc52/scratchpad/b.js 2>/dev/null || cp userscripts/page-title-tag/page-title-tag.user.js /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/f9187add-bba2-45fc-9da7-e5ae51dfcc52/scratchpad/b.js
+python3 - <<'PY'
+import pathlib
+p=pathlib.Path('userscripts/page-title-tag/page-title-tag.user.js'); s=p.read_text()
+s=s.replace('// @run-at       document-idle\n','')                       # drop @run-at
+s=s.replace('// @grant        none','// @grant        GM_webRequest\n// @sandbox      raw')
+s=s.replace("  applyTag();","  GM_webRequest([], () => {});\n  applyTag();",1)
+p.write_text(s)
+PY
+node scripts/check-meta.mjs; echo "exit=$?"
+cp /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/f9187add-bba2-45fc-9da7-e5ae51dfcc52/scratchpad/b.js userscripts/page-title-tag/page-title-tag.user.js
+echo "--- restored ---"; npm run verify 2>&1 | tail -4
+```
+
+```text
+warn  userscripts/page-title-tag/page-title-tag.user.js: GM_webRequest is not supported by both Tampermonkey and Violentmonkey
+warn  userscripts/page-title-tag/page-title-tag.user.js: @sandbox is Tampermonkey-only — the script will not be portable
+ERROR userscripts/page-title-tag/page-title-tag.user.js: missing @run-at
+
+Checked 2 userscript(s): 1 error(s), 2 warning(s).
+exit=1
+--- restored ---
+> tampermonkey-scripts@1.0.0 index:check
+> node scripts/build-index.mjs --check
+
+README.md script index is up to date.
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:22:52Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Update CLAUDE.md and README with compat stance
+
+```bash
+python3 - <<'PY'
+import pathlib
+
+p = pathlib.Path('CLAUDE.md'); s = p.read_text()
+s = s.replace(
+"""- 每個用到的 `GM_*` API 都要有對應的 `// @grant`。`npm run check` 會掃程式碼交叉比對。
+- 用底線版 GM API（`GM_setValue`）而非 `GM.setValue`，為了 Violentmonkey 相容性。""",
+"""**腳本必須同時支援 Tampermonkey 與 Violentmonkey**（見 `docs/09-managers-comparison.md`）：
+
+- 每個用到的 `GM_*` API 都要有對應的 `// @grant`。`npm run check` 會掃程式碼交叉比對。
+- 只用兩邊都支援的 GM API。`check` 會對照 `PORTABLE_GM` 清單並在超出時警告。
+- 用底線版 GM API（`GM_setValue`）而非 `GM.setValue`，避免 async 傳染。
+- **一定要明寫 `@run-at`**：TM 預設 `document-idle`、VM 預設 `document-end`。`check` 會強制。
+- `@updateURL` 和 `@downloadURL` 兩個都寫：VM 只讀後者。
+- 不要用 manager 限定的 key（`@sandbox`、`@inject-into`、`@exclude-match`、`@antifeature`），
+  也不要用 `GM_registerMenuCommand` 的 `accessKey`（TM 限定）。
+- 不要引入 `VM.observe` / `VM.shortcut` 之類的 Violentmonkey helper。""")
+p.write_text(s)
+
+p = pathlib.Path('README.md'); s = p.read_text()
+s = s.replace(
+"""> 點 **Install** 之前要先裝好 [Tampermonkey](https://www.tampermonkey.net/) 或
+> [Violentmonkey](https://violentmonkey.github.io/)。
+> Chrome 系瀏覽器還要到 `chrome://extensions` 開啟 **Developer mode**，
+> 否則腳本裝了不會執行。""",
+"""> 點 **Install** 之前要先裝好 [Tampermonkey](https://www.tampermonkey.net/) 或
+> [Violentmonkey](https://violentmonkey.github.io/) —— 本 repo 的腳本**兩者皆相容**，
+> `npm run check` 會強制這件事（見 [09 Manager 比較](./docs/09-managers-comparison.md)）。
+>
+> Chromium 系瀏覽器（Chrome / Edge / Brave / Vivaldi / **Arc**）還要到
+> `<browser>://extensions` 開啟 **Developer mode**，否則腳本裝了不會執行。""")
+p.write_text(s)
+print('ok')
+PY
+npm run verify 2>&1 | grep -E "Checked|up to date"
+```
+
+```text
+ok
+Checked 2 userscript(s): 0 error(s), 0 warning(s).
+README.md script index is up to date.
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:23:06Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Verify links, commit and push compat fixes
+
+```bash
+python3 - <<'PY'
+import re, pathlib, urllib.parse
+bad=[]
+for md in pathlib.Path('.').rglob('*.md'):
+    sp=str(md)
+    if any(x in sp for x in ('.git/','node_modules','.specstory','.claude')): continue
+    for m in re.finditer(r'\[[^\]]*\]\(([^)]+)\)', md.read_text()):
+        link=m.group(1)
+        if link.startswith(('http://','https://','mailto:','#')): continue
+        path,_,_=link.partition('#')
+        if path and not (md.parent/urllib.parse.unquote(path)).resolve().exists():
+            bad.append(f'{md}: {link}')
+print('\n'.join(bad) if bad else 'all relative links resolve')
+PY
+git add -A && git commit -q -F - <<'EOF'
+fix(docs): correct Tampermonkey-only claims, enforce cross-manager portability
+
+Audited the repo against Violentmonkey's documented GM API and metadata
+surface. The scripts themselves were already portable — every @grant they
+use is supported by both managers, and all three declare @run-at explicitly
+— but the docs stated several Tampermonkey behaviours as universal:
+
+- @run-at default is document-idle on TM but document-end on VM. Docs called
+  document-idle "the default" in five places. Now: always declare it.
+- GM_registerMenuCommand's accessKey option is TM-only, and unregistering by
+  register()'s return value is not portable. Use an explicit { id }.
+- @updateURL is not part of VM's metadata surface; it only reads @downloadURL.
+- @sandbox (TM) and @inject-into (VM) are each manager-specific; @inject-into
+  was missing from the docs entirely despite being VM's answer to page CSP.
+
+check-meta.mjs now enforces what it can: @run-at is required, GM APIs are
+checked against the set both managers document, and manager-specific metadata
+keys raise a portability warning.
+
+Rewrote docs/09 with the 2026 comparison, a recommendation (Violentmonkey as
+primary for this Git-managed workflow, Tampermonkey for compatibility and
+Safari/iOS), and the Chromium developer-mode requirement that applies to Arc
+and every other Chromium derivative.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011fP1QvR8e5SHPU8Ud2oyJL
+EOF
+git push -q origin main && echo "pushed" && sleep 15 && gh run list --limit 1
+```
+</details></tool-use>
