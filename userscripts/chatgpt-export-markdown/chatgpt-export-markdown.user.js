@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      1.0.0
+// @version      1.1.0
 // @description  把整段 ChatGPT 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用
 // @author       Da-Wei Lee
 // @license      MIT
@@ -36,7 +36,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
   const NS = 'cgpt-export-md';
   const LOG_PREFIX = '[chatgpt-export-markdown]';
   const log = (...args) => console.log(LOG_PREFIX, ...args);
@@ -47,6 +47,8 @@
   // ---------------------------------------------------------------- 設定
 
   const SETTINGS_KEYS = ['includeThinking', 'includeTools'];
+  const POSITION_KEY = 'buttonPosition'; // 拖曳後記住的位置：{ left, top }（viewport 座標）
+  const PANEL_WIDTH = 230;
   const settings = { includeThinking: false, includeTools: false };
 
   for (const key of SETTINGS_KEYS) {
@@ -590,7 +592,12 @@
 
   // -------------------------------------------------------------------- UI
 
+  const ROOT_CSS =
+    'position:fixed;right:16px;bottom:16px;z-index:2147483647;' +
+    'font:400 13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;';
+
   let statusEl = null;
+  let justDragged = false;
 
   function setStatus(text) {
     log(text);
@@ -630,21 +637,86 @@
     return wrapper;
   }
 
+  /** 把面板放在按鈕的哪一邊：上面塞不下就往下、右邊塞不下就往左。 */
+  function placePanel(root, panel) {
+    const rect = root.getBoundingClientRect();
+    const above = rect.top >= panel.offsetHeight + 16;
+    panel.style.top = above ? 'auto' : '100%';
+    panel.style.bottom = above ? '100%' : 'auto';
+    panel.style.marginTop = above ? '0' : '8px';
+    panel.style.marginBottom = above ? '8px' : '0';
+
+    const rightAligned = rect.right - PANEL_WIDTH >= 8;
+    panel.style.right = rightAligned ? '0' : 'auto';
+    panel.style.left = rightAligned ? 'auto' : '0';
+  }
+
+  /** 用 left/top 定位（取代預設的 right/bottom），並夾在畫面裡。 */
+  function moveTo(root, left, top) {
+    const x = Math.min(Math.max(left, 4), window.innerWidth - root.offsetWidth - 4);
+    const y = Math.min(Math.max(top, 4), window.innerHeight - root.offsetHeight - 4);
+    root.style.left = `${x}px`;
+    root.style.top = `${y}px`;
+    root.style.right = 'auto';
+    root.style.bottom = 'auto';
+  }
+
+  function resetPosition(root) {
+    GM_setValue(POSITION_KEY, null);
+    root.style.cssText = ROOT_CSS;
+  }
+
+  /**
+   * 讓按鈕可以拖到任何地方。用 pointer events（滑鼠 / 觸控同一套），
+   * 位移小於 4px 就當成「手抖的點擊」而不是拖曳，否則單純想開面板會很難按。
+   */
+  function makeDraggable(root, handle, onMoved) {
+    let drag = null;
+
+    handle.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      const rect = root.getBoundingClientRect();
+      drag = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, moved: false };
+      handle.setPointerCapture(event.pointerId);
+      event.preventDefault(); // 不要順便選到頁面的文字
+    });
+
+    handle.addEventListener('pointermove', (event) => {
+      if (!drag) return;
+      const dx = event.clientX - drag.x;
+      const dy = event.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+      drag.moved = true;
+      moveTo(root, drag.left + dx, drag.top + dy);
+    });
+
+    const end = (event) => {
+      if (!drag) return;
+      const { moved } = drag;
+      drag = null;
+      if (handle.hasPointerCapture?.(event.pointerId))
+        handle.releasePointerCapture(event.pointerId);
+      if (!moved) return;
+      const rect = root.getBoundingClientRect();
+      GM_setValue(POSITION_KEY, { left: Math.round(rect.left), top: Math.round(rect.top) });
+      onMoved();
+    };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+  }
+
   /** 掛 UI。可重複呼叫，必須 idempotent（SPA 換頁會再跑一次）。 */
   function mount() {
     if (!document.body || document.getElementById(`${NS}-root`)) return;
 
-    const root = style(
-      document.createElement('div'),
-      'position:fixed;right:16px;bottom:16px;z-index:2147483647;' +
-        'font:400 13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;'
-    );
+    const root = style(document.createElement('div'), ROOT_CSS);
     root.id = `${NS}-root`;
 
     const panel = style(
       document.createElement('div'),
-      'display:none;width:230px;margin-bottom:8px;padding:12px;border-radius:10px;' +
-        'background:#12181f;color:#e6edf3;box-shadow:0 8px 28px rgba(0,0,0,.35);'
+      `display:none;position:absolute;right:0;bottom:100%;margin-bottom:8px;width:${PANEL_WIDTH}px;` +
+        'padding:12px;border-radius:10px;background:#12181f;color:#e6edf3;' +
+        'box-shadow:0 8px 28px rgba(0,0,0,.35);'
     );
     panel.id = `${NS}-panel`;
 
@@ -678,23 +750,53 @@
 
     const toggle = style(
       document.createElement('button'),
-      'padding:8px 14px;border:0;border-radius:8px;cursor:pointer;background:#3ba3ff;color:#06131f;' +
-        'font:600 13px/1.4 inherit;box-shadow:0 4px 16px rgba(0,0,0,.25);'
+      'padding:8px 14px;border:0;border-radius:8px;cursor:grab;touch-action:none;' +
+        'background:#3ba3ff;color:#06131f;font:600 13px/1.4 inherit;' +
+        'box-shadow:0 4px 16px rgba(0,0,0,.25);'
     );
     toggle.type = 'button';
     toggle.textContent = '⇩ Export MD';
+    toggle.title = '點一下開關面板，拖曳可以搬到別的位置';
     toggle.addEventListener('click', () => {
-      panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+      if (justDragged) {
+        justDragged = false; // 拖曳結束後瀏覽器還是會補一個 click，忽略它
+        return;
+      }
+      if (panel.style.display === 'block') {
+        panel.style.display = 'none';
+      } else {
+        panel.style.display = 'block';
+        placePanel(root, panel);
+      }
+    });
+
+    makeDraggable(root, toggle, () => {
+      justDragged = true;
+      if (panel.style.display === 'block') placePanel(root, panel);
     });
 
     root.append(panel, toggle);
     document.body.appendChild(root);
+
+    // 位置要等進 DOM 才量得到寬高。
+    const saved = GM_getValue(POSITION_KEY, null);
+    if (saved && typeof saved.left === 'number') moveTo(root, saved.left, saved.top);
+
+    // 視窗縮小後按鈕可能被推到畫面外，重新夾一次。
+    window.addEventListener('resize', () => {
+      if (root.style.left === 'auto' || !root.style.left) return;
+      moveTo(root, parseFloat(root.style.left), parseFloat(root.style.top));
+      if (panel.style.display === 'block') placePanel(root, panel);
+    });
   }
 
   function openPanel() {
     mount();
+    const root = document.getElementById(`${NS}-root`);
     const panel = document.getElementById(`${NS}-panel`);
-    if (panel) panel.style.display = 'block';
+    if (!root || !panel) return;
+    panel.style.display = 'block';
+    placePanel(root, panel);
   }
 
   function registerMenu() {
@@ -714,6 +816,13 @@
       setSetting('includeThinking', !settings.includeThinking);
       openPanel();
       setStatus(`thinking / reasoning：${settings.includeThinking ? '含' : '不含'}`);
+    });
+    GM_registerMenuCommand('Reset button position', () => {
+      mount();
+      const root = document.getElementById(`${NS}-root`);
+      if (root) resetPosition(root);
+      openPanel();
+      setStatus('按鈕已放回右下角');
     });
     GM_registerMenuCommand('Toggle 工具呼叫與搜尋結果', () => {
       setSetting('includeTools', !settings.includeTools);
