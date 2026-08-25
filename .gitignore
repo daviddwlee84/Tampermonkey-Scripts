@@ -11,10 +11,10 @@ Thumbs.db
 .idea/
 
 # Local-only notes & tooling state
-.specstory/
+# .specstory/
 *.local.js
 *.local.md
 
 # Claude Code local state (settings.json itself is shared project config)
-.claude/plans/
+# .claude/plans/
 .claude/settings.local.json
