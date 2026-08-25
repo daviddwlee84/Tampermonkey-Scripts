@@ -7571,3 +7571,7435 @@ _**User (2026-08-25 14:08:03Z)**_
 https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6
 甚至Claude的也做一下？
 https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868
+
+---
+
+_**Agent (claude-opus-5 2026-08-25 14:08:25Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check exporter size and script list
+
+`wc -l userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js && ls userscripts/`
+
+```text
+     857 userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+_template
+chatgpt-export-markdown
+hello-userscript
+page-title-tag
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:08:27Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Probe both share URLs with curl
+
+`curl -sS -o /dev/null -w '%{http_code} %{content_type} %{size_download}\n' 'https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6' ; curl -sS -o /dev/null -w '%{http_code} %{content_type} %{size_download}\n' 'https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868'`
+
+```text
+curl: (35) LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to copilot.microsoft.com:443 
+000  0
+200 text/html 103147
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:08:35Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Fetch Claude share HTML and look for embedded data
+
+`cd /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad && curl -sS 'https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868' -o claude-share.html && ls -la claude-share.html && grep -o 'self.__next_f.push' claude-share.html | wc -l && grep -c 'chat_messages' claude-share.html; grep -o '"uuid"' claude-share.html | wc -l`
+
+```text
+.rw-r--r--@ 103k david 25 Aug 22:08 claude-share.html
+       0
+0
+       0
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:08:35Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js`
+
+```text
+1	// ==UserScript==
+2	// @name         ChatGPT Export Markdown
+3	// @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
+4	// @version      1.1.0
+5	// @description  把整段 ChatGPT 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用
+6	// @author       Da-Wei Lee
+7	// @license      MIT
+8	// @match        https://chatgpt.com/*
+9	// @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9ImhzbCgyNzggNjIlIDQ2JSkiLz48dGV4dCB4PSIzMiIgeT0iMzMiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJIZWx2ZXRpY2EsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNyIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9ImNlbnRyYWwiPkNFPC90ZXh0Pjwvc3ZnPg==
+10	// @run-at       document-start
+11	// @grant        unsafeWindow
+12	// @grant        GM_registerMenuCommand
+13	// @grant        GM_setClipboard
+14	// @grant        GM_setValue
+15	// @grant        GM_getValue
+16	// @updateURL    https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+17	// @downloadURL  https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+18	// ==/UserScript==
+19	
+20	/**
+21	 * 把一整段 ChatGPT 對話匯成 Markdown，格式仿 SpecStory 的 chat history
+22	 * （`_**User (ts)**_` / `---` / `_**Assistant (model)**_`），目的是貼給 coding agent。
+23	 *
+24	 * 為什麼不 scrape DOM（這支腳本最重要的設計決定）：
+25	 * ChatGPT 的訊息列表是 virtualized 的。實測一段 44 則的對話，DOM 裡同時只存在 4 個
+26	 * `[data-message-author-role]`。所以常見的「clone DOM → innerText」做法先天就殘缺，
+27	 * 而且 markdown 是從已渲染的 HTML 反推回來的，code fence / 表格都可能失真。
+28	 *
+29	 * 這裡改抓 ChatGPT 自己的對話 JSON —— 裡面是**模型原本吐出的 raw markdown**。
+30	 * 取得順序見 resolveConversation()，四層 fallback。
+31	 *
+32	 * 代價：靠的是 app internals（`__reactRouterContext`）與私有 API，ChatGPT 改版就可能失效。
+33	 * docs/06-sandbox-and-unsafewindow.md 把這列為最脆弱的一層 —— 這裡明知故犯，
+34	 * 因為更穩的那層（DOM）根本拿不到完整資料。壞掉時寧可明白報錯，也不要吐出殘缺的 transcript。
+35	 */
+36	(function () {
+37	  'use strict';
+38	
+39	  const VERSION = '1.1.0';
+40	  const NS = 'cgpt-export-md';
+41	  const LOG_PREFIX = '[chatgpt-export-markdown]';
+42	  const log = (...args) => console.log(LOG_PREFIX, ...args);
+43	
+44	  // 有任何 @grant 就會被 sandbox，頁面的全域要走 unsafeWindow 才看得到。
+45	  const pageWin = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+46	
+47	  // ---------------------------------------------------------------- 設定
+48	
+49	  const SETTINGS_KEYS = ['includeThinking', 'includeTools'];
+50	  const POSITION_KEY = 'buttonPosition'; // 拖曳後記住的位置：{ left, top }（viewport 座標）
+51	  const PANEL_WIDTH = 230;
+52	  const settings = { includeThinking: false, includeTools: false };
+53	
+54	  for (const key of SETTINGS_KEYS) {
+55	    settings[key] = GM_getValue(key, settings[key]) === true;
+56	  }
+57	
+58	  function setSetting(key, value) {
+59	    settings[key] = value === true;
+60	    GM_setValue(key, settings[key]);
+61	  }
+62	
+63	  // ------------------------------------------------- 來源 1：攔截網站自己的請求
+64	
+65	  /** conversation_id -> 對話 JSON。document-start 才來得及攔到。 */
+66	  const captured = new Map();
+67	
+68	  function looksLikeConversation(value) {
+69	    return (
+70	      !!value &&
+71	      typeof value === 'object' &&
+72	      !!value.mapping &&
+73	      typeof value.mapping === 'object' &&
+74	      (Array.isArray(value.linear_conversation) || typeof value.current_node === 'string')
+75	    );
+76	  }
+77	
+78	  function rememberPayload(payload) {
+79	    const data = looksLikeConversation(payload?.data) ? payload.data : payload;
+80	    if (!looksLikeConversation(data)) return;
+81	    const id = data.conversation_id || data.id;
+82	    captured.set(id || `anonymous-${captured.size}`, data);
+83	    log('captured conversation payload:', id || '(no id)');
+84	  }
+85	
+86	  function installNetworkCapture() {
+87	    const originalFetch = pageWin.fetch;
+88	    if (typeof originalFetch !== 'function' || originalFetch.__cgptExportPatched) return;
+89	
+90	    const patched = function (...args) {
+91	      const promise = originalFetch.apply(this, args);
+92	      return promise.then((response) => {
+93	        try {
+94	          const input = args[0];
+95	          const url = typeof input === 'string' ? input : input?.url || '';
+96	          // body 只能讀一次，一定要 clone，否則網站自己就讀不到了。
+97	          if (response.ok && /\/backend-api\/(conversation|share)\//.test(url)) {
+98	            response
+99	              .clone()
+100	              .json()
+101	              .then(rememberPayload)
+102	              .catch(() => {});
+103	          }
+104	        } catch {
+105	          /* 攔截失敗不能影響網站本身 */
+106	        }
+107	        return response; // 一定要把原本的 response 還回去
+108	      });
+109	    };
+110	    patched.__cgptExportPatched = true;
+111	    pageWin.fetch = patched;
+112	  }
+113	
+114	  // ------------------------------------------- 來源 2：頁面的 React Router state
+115	
+116	  /**
+117	   * share 頁把整份對話塞在
+118	   * `__reactRouterContext.state.loaderData['routes/share.$shareId.($action)'].serverResponse.data`。
+119	   * route key 會隨改版變動，所以這裡用「找形狀」而不是 hard-code key。
+120	   */
+121	  function scanForConversation(root, maxDepth = 6) {
+122	    const seen = new Set();
+123	    const walk = (node, depth) => {
+124	      if (!node || typeof node !== 'object' || depth > maxDepth || seen.has(node)) return null;
+125	      seen.add(node);
+126	      if (looksLikeConversation(node)) return node;
+127	      for (const value of Object.values(node)) {
+128	        const hit = walk(value, depth + 1);
+129	        if (hit) return hit;
+130	      }
+131	      return null;
+132	    };
+133	    return walk(root, 0);
+134	  }
+135	
+136	  function fromRouterState(win = pageWin) {
+137	    try {
+138	      const loaderData = win.__reactRouterContext?.state?.loaderData;
+139	      return loaderData ? scanForConversation(loaderData) : null;
+140	    } catch {
+141	      return null;
+142	    }
+143	  }
+144	
+145	  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+146	
+147	  /** loaderData 是 hydration 過程中才填進去的，剛載入就按按鈕會撲空 —— 給它一點時間。 */
+148	  async function waitForRouterState({ timeout = 3_000, interval = 150 } = {}) {
+149	    const deadline = Date.now() + timeout;
+150	    for (;;) {
+151	      const state = fromRouterState();
+152	      if (state) return state;
+153	      if (Date.now() >= deadline) return null;
+154	      await delay(interval);
+155	    }
+156	  }
+157	
+158	  // ------------------------------------------------------- 來源 3：backend API
+159	
+160	  async function fromBackendApi(convId, shareId) {
+161	    let authorization = null;
+162	    try {
+163	      const session = await fetch('/api/auth/session', { credentials: 'include' });
+164	      if (session.ok) {
+165	        const json = await session.json();
+166	        if (json?.accessToken) authorization = `Bearer ${json.accessToken}`;
+167	      }
+168	    } catch {
+169	      /* 未登入或被擋，往下試沒有 token 的請求 */
+170	    }
+171	
+172	    const paths = [];
+173	    if (convId) paths.push(`/backend-api/conversation/${convId}`);
+174	    if (shareId) paths.push(`/backend-api/share/${shareId}`);
+175	
+176	    for (const path of paths) {
+177	      try {
+178	        const headers = { accept: 'application/json' };
+179	        if (authorization) headers.authorization = authorization;
+180	        const res = await fetch(path, { credentials: 'include', headers });
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:08:42Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Inspect fetched Claude share HTML
+
+`cd /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad && head -c 600 claude-share.html; echo; echo '--- grep ---'; grep -o 'cf-\|challenge\|Just a moment' claude-share.html | sort | uniq -c | head`
+
+```text
+<!doctype html><html data-build-id="0784c1c40d" data-git-hash="0784c1c40d5169a75e309fb2243b0a8793b8fc7e" data-build-timestamp="1787664375" data-version="1.0.0" data-env="" data-color-version="v2" lang="en" data-theme="claude" data-mode="system" data-density="comfortable" class="cds-root h-screen antialiased scroll-smooth"><head data-ion-ip-country="JP" data-ion-clean-url-hop="" data-ion-public-viewer-early-fetch="on"><meta property="og:title" content="Claude"><meta name="twitter:title" content="Claude"><meta name="description" content="Shared via Claude, an AI assistant from Anthropic"><meta p
+--- grep ---
+   2 challenge
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:08:43Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js`
+
+```text
+180	        const res = await fetch(path, { credentials: 'include', headers });
+181	        if (!res.ok) continue;
+182	        const json = await res.json();
+183	        const data = looksLikeConversation(json?.data) ? json.data : json;
+184	        if (looksLikeConversation(data)) return data;
+185	      } catch {
+186	        /* 換下一個 */
+187	      }
+188	    }
+189	    return null;
+190	  }
+191	
+192	  // -------------------------------------------------- 來源 4：同源隱藏 iframe
+193	
+194	  /**
+195	   * 貼任意 public share URL 用的。chatgpt.com 的 CSP 是 `frame-ancestors 'self' …`，
+196	   * 所以同源 iframe 框得起來，載入後直接讀它的 router state。
+197	   */
+198	  function fromShareIframe(shareId, { timeout = 30_000 } = {}) {
+199	    return new Promise((resolve, reject) => {
+200	      const frame = document.createElement('iframe');
+201	      frame.id = `${NS}-loader`;
+202	      frame.setAttribute('aria-hidden', 'true');
+203	      frame.style.cssText =
+204	        'position:fixed;left:-10000px;top:0;width:1200px;height:900px;opacity:0;pointer-events:none;border:0';
+205	      frame.src = `/share/${shareId}`;
+206	
+207	      let poll = 0;
+208	      const timer = setTimeout(() => {
+209	        finish(null, new Error('讀取 share 頁逾時（連結可能已取消公開）'));
+210	      }, timeout);
+211	
+212	      function finish(data, error) {
+213	        clearInterval(poll);
+214	        clearTimeout(timer);
+215	        frame.remove();
+216	        if (error) reject(error);
+217	        else resolve(data);
+218	      }
+219	
+220	      frame.addEventListener('load', () => {
+221	        poll = setInterval(() => {
+222	          let data = null;
+223	          try {
+224	            data = fromRouterState(frame.contentWindow);
+225	          } catch (err) {
+226	            finish(null, err);
+227	            return;
+228	          }
+229	          // iframe 一移除，裡面的物件就跟著沒了 —— 先深拷貝再收工。
+230	          if (data) finish(JSON.parse(JSON.stringify(data)));
+231	        }, 250);
+232	      });
+233	
+234	      document.body.appendChild(frame);
+235	    });
+236	  }
+237	
+238	  // ------------------------------------------------------------ 來源總調度
+239	
+240	  function currentIds() {
+241	    const chat = location.pathname.match(/\/c\/([0-9a-zA-Z-]+)/);
+242	    const share = location.pathname.match(/^\/share\/([0-9a-zA-Z-]+)/);
+243	    return { convId: chat?.[1] || null, shareId: share?.[1] || null };
+244	  }
+245	
+246	  function shareIdFromUrl(input) {
+247	    const match = String(input).match(/\/share\/([0-9a-zA-Z-]+)/);
+248	    return match ? match[1] : null;
+249	  }
+250	
+251	  async function resolveConversation(ids) {
+252	    const { convId, shareId } = ids;
+253	
+254	    if (convId && captured.has(convId)) {
+255	      return { data: captured.get(convId), source: 'network-capture' };
+256	    }
+257	
+258	    if (!shareId || shareId === currentIds().shareId) {
+259	      const state = await waitForRouterState();
+260	      if (state) return { data: state, source: 'router-state' };
+261	    }
+262	
+263	    if (convId || shareId) {
+264	      const api = await fromBackendApi(convId, shareId);
+265	      if (api) return { data: api, source: 'backend-api' };
+266	    }
+267	
+268	    if (shareId) {
+269	      const framed = await fromShareIframe(shareId).catch((err) => {
+270	        log('iframe fallback failed:', err.message);
+271	        return null;
+272	      });
+273	      if (framed) return { data: framed, source: 'share-iframe' };
+274	    }
+275	
+276	    if (!convId && !shareId && captured.size === 1) {
+277	      return { data: [...captured.values()][0], source: 'network-capture' };
+278	    }
+279	
+280	    throw new Error('抓不到對話資料。重新整理頁面後再試一次（share 連結請確認仍是公開的）。');
+281	  }
+282	
+283	  // ------------------------------------------------------------ 轉成 Markdown
+284	
+285	  const SKIP_CONTENT_TYPES = new Set([
+286	    'model_editable_context',
+287	    'user_editable_context',
+288	    'system_error',
+289	  ]);
+290	  const THINKING_CONTENT_TYPES = new Set(['thoughts', 'reasoning_recap']);
+291	  // citation 是私有區 unicode sentinel：\uE200cite\uE202turn0search1\uE201
+292	  // （寫成 escape 而不是直接放字元，那些是看不見的私有區字碼，很容易被編輯器吃掉）
+293	  const CITATION_SENTINEL = /\uE200[\s\S]*?\uE201/g;
+294	
+295	  /** 取出目前選中的那條 branch（編輯／重生過的分支自動被排除）。 */
+296	  function buildThread(data) {
+297	    if (Array.isArray(data.linear_conversation) && data.linear_conversation.length > 0) {
+298	      return data.linear_conversation.map((node) => node.message).filter(Boolean);
+299	    }
+300	    // /backend-api/conversation 只回 mapping + current_node，得自己往上走。
+301	    const mapping = data.mapping || {};
+302	    const thread = [];
+303	    const guard = new Set();
+304	    let id = data.current_node;
+305	    while (id && mapping[id] && !guard.has(id)) {
+306	      guard.add(id);
+307	      if (mapping[id].message) thread.push(mapping[id].message);
+308	      id = mapping[id].parent;
+309	    }
+310	    return thread.reverse();
+311	  }
+312	
+313	  /** 這串判斷是照 ChatGPT UI 自己的判準寫的。 */
+314	  function visibleMessages(messages, opts) {
+315	    return messages.filter((message) => {
+316	      if (message.metadata?.is_visually_hidden_from_conversation) return false;
+317	
+318	      const role = message.author?.role;
+319	      if (role === 'system') return false;
+320	
+321	      const contentType = message.content?.content_type;
+322	      if (SKIP_CONTENT_TYPES.has(contentType)) return false;
+323	      if (THINKING_CONTENT_TYPES.has(contentType)) return opts.includeThinking;
+324	
+325	      const isToolTraffic = role === 'tool' || (message.recipient && message.recipient !== 'all');
+326	      if (isToolTraffic) return opts.includeTools;
+327	
+328	      return true;
+329	    });
+330	  }
+331	
+332	  /** fence 要比內文裡最長的一串 backtick 還長，否則 code block 會被自己的內容截斷。 */
+333	  function fence(body, lang = '') {
+334	    const longest = (String(body).match(/`+/g) || []).reduce(
+335	      (max, run) => Math.max(max, run.length),
+336	      0
+337	    );
+338	    const ticks = '`'.repeat(Math.max(3, longest + 1));
+339	    return `${ticks}${lang}\n${String(body).replace(/\n$/, '')}\n${ticks}`;
+340	  }
+341	
+342	  function partToText(part) {
+343	    if (typeof part === 'string') return part;
+344	    if (!part || typeof part !== 'object') return '';
+345	    if (part.content_type === 'image_asset_pointer')
+346	      return `![image](${part.asset_pointer || 'image'})`;
+347	    if (typeof part.text === 'string') return part.text;
+348	    return fence(JSON.stringify(part, null, 2), 'json');
+349	  }
+350	
+351	  function textOf(message) {
+352	    const content = message.content || {};
+353	    const parts = Array.isArray(content.parts)
+354	      ? content.parts.map(partToText).filter(Boolean)
+355	      : null;
+356	
+357	    switch (content.content_type) {
+358	      case 'text':
+359	      case 'multimodal_text':
+360	        return parts ? parts.join('\n\n') : '';
+361	      case 'code': {
+362	        const lang = content.language && content.language !== 'unknown' ? content.language : '';
+363	        return fence(content.text ?? (parts ? parts.join('\n') : ''), lang);
+364	      }
+365	      case 'execution_output':
+366	        return fence(content.text ?? '', 'text');
+367	      case 'thoughts':
+368	        return (content.thoughts || [])
+369	          .map((t) => [t.summary && `**${t.summary}**`, t.content].filter(Boolean).join('\n\n'))
+370	          .join('\n\n');
+371	      case 'reasoning_recap':
+372	        return String(content.content ?? content.text ?? '');
+373	      case 'tether_browsing_display':
+374	      case 'tether_quote':
+375	        return String(content.result ?? content.text ?? '');
+376	      default:
+377	        // 未知型態（Deep Research、canvas 之類的新東西）不靜默丟掉，寧可留 JSON。
+378	        if (parts && parts.length > 0) return parts.join('\n\n');
+379	        if (typeof content.text === 'string') return content.text;
+380	        return fence(JSON.stringify(content, null, 2), 'json');
+381	    }
+382	  }
+383	
+384	  /**
+385	   * 把 sentinel 換成 content_references 提供的現成 markdown 連結。
+386	   *
+387	   * 這裡只換「那一段」而不是全文 replace，是踩過坑的：`sources_footnote` 型的
+388	   * ref 的 matched_text 是**一個半形空白**、alt 是空字串。全文 split/join 會把整篇
+389	   * 文章的空白全部刪光（中英混排看起來就像整段黏在一起）。
+390	   */
+391	  function applyCitations(text, message) {
+392	    const refs = (message.metadata?.content_references || []).filter(
+393	      (ref) => typeof ref.matched_text === 'string' && ref.matched_text.trim() !== ''
+394	    );
+395	    let out = text;
+396	    // 由後往前換，前面那些 start_idx 才不會被前一次替換推掉。
+397	    for (const ref of [...refs].sort((a, b) => (b.start_idx ?? -1) - (a.start_idx ?? -1))) {
+398	      const alt = ref.alt || '';
+399	      const { start_idx: start, end_idx: end } = ref;
+400	      if (
+401	        Number.isInteger(start) &&
+402	        Number.isInteger(end) &&
+403	        out.slice(start, end) === ref.matched_text
+404	      ) {
+405	        out = out.slice(0, start) + alt + out.slice(end);
+406	        continue;
+407	      }
+408	      const at = out.indexOf(ref.matched_text); // index 對不上時退而求其次，只換第一個
+409	      if (at >= 0) out = out.slice(0, at) + alt + out.slice(at + ref.matched_text.length);
+410	    }
+411	    // 有些 sentinel（例如 inline url 型）不會出現在 content_references 裡，掃掉。
+412	    return out.replace(CITATION_SENTINEL, '');
+413	  }
+414	
+415	  function pad(n) {
+416	    return String(Math.floor(Math.abs(n))).padStart(2, '0');
+417	  }
+418	
+419	  /** 對齊 .specstory/history/ 的寫法：UTC 的 `YYYY-MM-DD HH:mm:ssZ`。 */
+420	  function formatUtc(epochSeconds) {
+421	    if (!epochSeconds) return '';
+422	    const d = new Date(epochSeconds * 1000);
+423	    return (
+424	      `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
+425	      `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}Z`
+426	    );
+427	  }
+428	
+429	  function localIso(date = new Date()) {
+430	    const offset = -date.getTimezoneOffset();
+431	    const sign = offset >= 0 ? '+' : '-';
+432	    return (
+433	      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T` +
+434	      `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}` +
+435	      `${sign}${pad(offset / 60)}:${pad(offset % 60)}`
+436	    );
+437	  }
+438	
+439	  function roleOf(message) {
+440	    const role = message.author?.role;
+441	    if (role === 'user') return 'User';
+442	    if (role === 'tool') return `Tool (${message.author?.name || 'tool'})`;
+443	    if (message.recipient && message.recipient !== 'all') return `Assistant → ${message.recipient}`;
+444	    return 'Assistant';
+445	  }
+446	
+447	  /**
+448	   * 連續同 role 的訊息要合併。一輪 assistant 常被拆成「開場白 → 搜尋 → 正文」好幾則，
+449	   * 不合併的話 transcript 會出現一堆只有一行的 Assistant 區塊。
+450	   */
+451	  function toSections(messages) {
+452	    const sections = [];
+453	    for (const message of messages) {
+454	      const body = applyCitations(textOf(message), message).trim();
+455	      if (!body) continue;
+456	
+457	      const role = roleOf(message);
+458	      const model = role === 'Assistant' ? message.metadata?.model_slug || '' : '';
+459	      const previous = sections[sections.length - 1];
+460	      if (previous && previous.role === role) {
+461	        previous.body += `\n\n${body}`;
+462	        if (!previous.model) previous.model = model;
+463	        continue;
+464	      }
+465	      sections.push({ role, model, body, time: message.create_time });
+466	    }
+467	    return sections;
+468	  }
+469	
+470	  function yaml(value) {
+471	    return JSON.stringify(String(value ?? '')); // JSON 字串剛好是合法的 YAML double-quoted scalar
+472	  }
+473	
+474	  const HANDOFF_HEADER = [
+475	    '# Prior ChatGPT Context',
+476	    '',
+477	    'The following is a prior discussion between the user and ChatGPT.',
+478	    '',
+479	    '## Instructions for the coding agent',
+480	    '',
+481	    '- Treat established decisions as existing project decisions.',
+482	    '- Do not reopen settled design questions unless implementation reveals a conflict.',
+483	    "- Preserve the user's stated constraints.",
+484	    '- Consult the original conversation below when necessary.',
+485	    '',
+486	    '---',
+487	    '',
+488	    '## Conversation',
+489	  ].join('\n');
+490	
+491	  function render(data, opts, ctx) {
+492	    const sections = toSections(visibleMessages(buildThread(data), opts));
+493	    if (sections.length === 0) throw new Error('這個對話沒有可匯出的訊息。');
+494	
+495	    const title = data.title || 'ChatGPT conversation';
+496	    const frontMatter = [
+497	      '---',
+498	      'source: chatgpt',
+499	      `title: ${yaml(title)}`,
+500	      `url: ${yaml(ctx.url)}`,
+501	      `conversation_id: ${yaml(data.conversation_id || data.id || '')}`,
+502	      `model: ${yaml(data.default_model_slug || '')}`,
+503	      `created_at: ${yaml(formatUtc(data.create_time))}`,
+504	      `exported_at: ${yaml(localIso())}`,
+505	      `messages: ${sections.length}`,
+506	      `include_thinking: ${opts.includeThinking}`,
+507	      `include_tools: ${opts.includeTools}`,
+508	      `exporter: ${yaml(`chatgpt-export-markdown v${VERSION}`)}`,
+509	      '---',
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:09:16Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Probe Claude and Copilot share pages with Playwright
+
+```bash
+node --input-type=module -e "$(cat <<'EOF'
+import { chromium } from 'playwright';
+const targets = [
+  ['claude', 'https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868'],
+  ['copilot', 'https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6'],
+];
+const browser = await chromium.launch({ headless: true });
+for (const [name, url] of targets) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const hits = [];
+  page.on('response', async (res) => {
+    try {
+      const ct = res.headers()['content-type'] || '';
+      if (!/json|event-stream/.test(ct)) return;
+      const body = await res.text();
+      hits.push({ url: res.url().slice(0, 130), status: res.status(), len: body.length, head: body.slice(0, 160).replace(/\s+/g, ' ') });
+    } catch {}
+  });
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(9000);
+  } catch (e) { console.log(name, 'goto error', e.message); }
+  const info = await page.evaluate(() => ({
+    title: document.title,
+    url: location.href,
+    globals: Object.keys(window).filter((k) => /^(__|_)/.test(k) || /next|react|router|store|state|conv|chat|copilot|sydney/i.test(k)).slice(0, 60),
+    nextF: typeof window.__next_f !== 'undefined' ? window.__next_f.length : null,
+    bodyLen: document.body.innerText.length,
+    scriptJson: [...document.querySelectorAll('script[type*="json"]')].map((s) => ({ id: s.id, type: s.type, len: s.textContent.length })),
+  }));
+  console.log('=====', name, JSON.stringify(info, null, 1));
+  console.log('--- network json hits:');
+  for (const h of hits) console.log(' ', h.status, h.len, h.url, '|', h.head);
+  await page.close();
+}
+await browser.close();
+EOF
+)"
+```
+
+```text
+Exit code 1
+===== claude {
+ "title": "Just a moment...",
+ "url": "https://claude.ai/api/challenge_redirect?to=https%3A%2F%2Fclaude.ai%2Fshare%2Ffc04b1a4-0476-4782-b1eb-5aabfcbe1868",
+ "globals": [
+  "oncontentvisibilityautostatechange",
+  "oncontextrestored",
+  "onpopstate",
+  "cookieStore",
+  "_cf_chl_opt"
+ ],
+ "nextF": null,
+ "bodyLen": 257,
+ "scriptJson": []
+}
+--- network json hits:
+copilot goto error page.goto: net::ERR_CONNECTION_CLOSED at https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6
+Call log:
+  - navigating to "https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6", waiting until "domcontentloaded"**
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.evaluate: Execution context was destroyed, most likely because of a navigation
+    at /Users/david/Documents/Program/Tampermonkey-Scripts/[eval1]:22:27 {
+  log: [],
+  name: 'Error'
+}
+
+Node.js v24.13.1
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:10:01Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Probe share pages in headed Chrome
+
+```bash
+node --input-type=module -e "$(cat <<'EOF'
+import { chromium } from 'playwright';
+const targets = [
+  ['claude', 'https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868'],
+  ['copilot', 'https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6'],
+];
+let browser;
+try { browser = await chromium.launch({ headless: false, channel: 'chrome' }); }
+catch (e) { console.log('no chrome channel:', e.message.split('\n')[0]); browser = await chromium.launch({ headless: false }); }
+for (const [name, url] of targets) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const hits = [];
+  page.on('response', async (res) => {
+    try {
+      const ct = res.headers()['content-type'] || '';
+      if (!/json|event-stream/.test(ct)) return;
+      const body = await res.text();
+      hits.push([res.status(), body.length, res.url().slice(0, 140), body.slice(0, 150).replace(/\s+/g, ' ')]);
+    } catch {}
+  });
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForTimeout(12000);
+  } catch (e) { console.log(name, 'goto error', e.message.split('\n')[0]); }
+  let info = {};
+  try {
+    info = await page.evaluate(() => ({
+      title: document.title,
+      url: location.href,
+      globals: Object.keys(window).filter((k) => /^(__|_)/.test(k)).slice(0, 60),
+      nextF: typeof window.__next_f !== 'undefined' ? window.__next_f.length : null,
+      bodyLen: document.body.innerText.length,
+      bodyHead: document.body.innerText.slice(0, 200).replace(/\s+/g, ' '),
+      scriptJson: [...document.querySelectorAll('script[type*="json"]')].map((s) => ({ id: s.id, type: s.type, len: s.textContent.length })),
+    }));
+  } catch (e) { info = { err: e.message.split('\n')[0] }; }
+  console.log('=====', name, JSON.stringify(info, null, 1));
+  console.log('--- network json/sse hits:');
+  for (const h of hits) console.log(' ', h.join(' | '));
+  await page.close();
+}
+await browser.close();
+EOF
+)"
+```
+
+```text
+===== claude {
+ "title": "Claude",
+ "url": "https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868",
+ "globals": [
+  "__PRELOADED_IDB_CACHE__",
+  "__PRELOADED_CONV_RECORD__",
+  "__BOOTSTRAP_PRELOAD__",
+  "__PUBLIC_VIEWER_PRELOAD__",
+  "__entryStylesheetGuard",
+  "__zod_globalConfig",
+  "__zod_globalRegistry",
+  "__TSR_ROUTER__",
+  "__antChunkLoadCtx",
+  "_sift",
+  "__SEGMENT_INSPECTOR__",
+  "__CLIENT_HEALTH__"
+ ],
+ "nextF": null,
+ "bodyLen": 3136,
+ "bodyHead": "This is a copy of a chat between Claude and QIU ZHIKANG. Content may include unverified or unsafe content that do not represent the views of Anthropic. Shared snapshot may contain attachments and data",
+ "scriptJson": [
+  {
+   "id": "static-composer-translations",
+   "type": "application/json",
+   "len": 1242
+  },
+  {
+   "id": "",
+   "type": "application/ld+json",
+   "len": 679
+  }
+ ]
+}
+--- network json/sse hits:
+  200 | 6175 | https://claude.ai/api/chat_snapshots/fc04b1a4-0476-4782-b1eb-5aabfcbe1868?rendering_mode=messages&render_all_tools=true | {"uuid":"fc04b1a4-0476-4782-b1eb-5aabfcbe1868","conversation_uuid":"e2381eda-4c8b-4918-b821-774df3fa5610","created_at":"2026-08-23T12:34:14.501416Z","
+  200 | 6306 | https://claude.ai/edge-api/bootstrap?statsig_hashing_algorithm=djb2&growthbook_format=sdk&cache_bust=1&include_system_prompts=false | {"account":null,"statsig":{"user":{},"values":{},"values_hash":""},"growthbook":{"features":{"55060375":{"defaultValue":false},"101108654":{"defaultVa
+  200 | 68583 | https://a-cdn.anthropic.com/v1/projects/LKJN8LsLERHEOXkw487o7qCTFOrGPimI/settings | {"_lastModified":"2026-08-22T02:19:17.613Z","integrations":{"Iterable (Actions)":{"versionSettings":{"componentTypes":[]},"consentSettings":{"categori
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"dea8cf27-8c0e-42c9-b622-4788f61af213"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"07525ca3-fddb-428c-a2df-fea3a0038c72"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"8fe5ec41-c9c5-463b-8dca-da798ec34c6e"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"72586183-476d-41cb-94f4-9367ab563729"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"221ea691-2e5a-4fb2-94e3-c592d0dd29b2"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"0a251eb7-eefd-4ed2-a40b-55665cc86c98"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"48906c97-5118-404d-8c16-c56abf6ef303"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"0f5c1eee-4933-4426-ba42-d4e294714e9a"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"264544aa-6e98-42d7-b30d-aa795d93bc1d"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"513f4ec6-a122-4451-a4f4-f16b8f87aaff"}
+  200 | 2 | https://claude.ai/edge-api/client-health/check?platform=web&bundle=1787664375&locale=en-US | {}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"b2d64094-755d-484e-aada-60475c1ea3a3"}
+  200 | 68583 | https://a-cdn.anthropic.com/v1/projects/LKJN8LsLERHEOXkw487o7qCTFOrGPimI/settings | {"_lastModified":"2026-08-22T02:19:17.613Z","integrations":{"Iterable (Actions)":{"versionSettings":{"componentTypes":[]},"consentSettings":{"categori
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"f7f28f0d-4be2-459a-a4f0-935011aa2480"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"2812e1ce-ba0a-4073-8824-270a1ec0fafd"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"52ea6e31-e416-4b80-a16b-13c35f2c33db"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"baed6d2b-2fc2-4633-b328-4d35ecc9c436"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"3a087fd9-0133-452a-8a75-56f42c352931"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"baa9cca8-e22b-4a34-b500-8a6da755aac8"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"5b51e19b-d58c-49ad-9b81-a93246d14db5"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"c290476d-e162-475b-8813-9e3bce495b30"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"3cd17707-e440-435a-9a22-5004e28a4be5"}
+  202 | 53 | https://browser-intake-us5-datadoghq.com/api/v2/rum?ddsource=browser&dd-api-key=pub71869dceb5b70dba6123af9ca357d1f9&dd-evp-origin-version=7. | {"request_id":"52c3554a-bcca-4a7f-9786-45e2ff819075"}
+  200 | 21 | https://a-api.anthropic.com/v1/b | { "success": true }
+copilot goto error page.goto: net::ERR_CONNECTION_CLOSED at https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6
+===== copilot {
+ "err": "page.evaluate: Execution context was destroyed, most likely because of a navigation"
+}
+--- network json/sse hits:
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:10:17Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Diagnose copilot.microsoft.com connectivity
+
+`dig +short copilot.microsoft.com | head; echo '--- curl verbose:'; curl -sv --max-time 20 'https://copilot.microsoft.com/' -o /dev/null 2>&1 | tail -20; echo '--- plain bing:'; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 20 https://www.bing.com/ ; echo '--- www.microsoft.com:'; curl -sS -o /dev/null -w '%{http_code}\n' --max-time 20 https://www.microsoft.com/`
+
+```text
+copilot-copilot-msft-com.trafficmanager.net.
+copilot-microsoft-com.dual-a-0034.a-msedge.net.
+dual-a-0034.a-msedge.net.
+204.79.197.237
+13.107.21.237
+--- curl verbose:
+* Connected to 127.0.0.1 (127.0.0.1) port 7897
+* CONNECT tunnel: HTTP/1.1 negotiated
+* allocate connect buffer
+* Establish HTTP proxy tunnel to copilot.microsoft.com:443
+> CONNECT copilot.microsoft.com:443 HTTP/1.1
+> Host: copilot.microsoft.com:443
+> User-Agent: curl/8.7.1
+> Proxy-Connection: Keep-Alive
+> 
+< HTTP/1.1 200 Connection established
+< 
+* CONNECT phase completed
+* CONNECT tunnel established, response 200
+* ALPN: curl offers h2,http/1.1
+* (304) (OUT), TLS handshake, Client hello (1):
+} [326 bytes data]
+*  CAfile: /etc/ssl/cert.pem
+*  CApath: none
+* LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to copilot.microsoft.com:443 
+* Closing connection
+--- plain bing:
+200
+--- www.microsoft.com:
+200
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:10:42Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Dump Claude share snapshot JSON and page globals
+
+```bash
+node --input-type=module -e "$(cat <<'EOF'
+import { chromium } from 'playwright';
+import { writeFileSync } from 'node:fs';
+const OUT = '/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad';
+const browser = await chromium.launch({ headless: false, channel: 'chrome' });
+const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+let snapshot = null;
+page.on('response', async (res) => {
+  if (res.url().includes('/api/chat_snapshots/')) { try { snapshot = await res.text(); } catch {} }
+});
+await page.goto('https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.waitForTimeout(10000);
+if (snapshot) writeFileSync(OUT + '/claude-snapshot.json', snapshot);
+const g = await page.evaluate(() => {
+  const shape = (v, d = 0) => {
+    if (v === null) return 'null';
+    if (Array.isArray(v)) return '[' + (v.length ? (d < 3 ? shape(v[0], d + 1) : '…') + ' x' + v.length : '') + ']';
+    if (typeof v === 'object') return d < 3 ? '{' + Object.keys(v).slice(0, 25).join(',') + '}' : '{…}';
+    return typeof v;
+  };
+  const out = {};
+  for (const k of ['__PRELOADED_CONV_RECORD__', '__PUBLIC_VIEWER_PRELOAD__', '__BOOTSTRAP_PRELOAD__', '__PRELOADED_IDB_CACHE__']) {
+    try { out[k] = shape(window[k]); } catch (e) { out[k] = 'err ' + e.message; }
+  }
+  out.tsrKeys = window.__TSR_ROUTER__ ? Object.keys(window.__TSR_ROUTER__).slice(0, 30) : null;
+  out.domMessages = document.querySelectorAll('[data-testid], [data-test-render-count]').length;
+  out.msgNodes = document.querySelectorAll('.font-claude-response, [data-testid=\"user-message\"]').length;
+  // does a same-origin fetch of the snapshot API work from page JS?
+  return out;
+});
+console.log(JSON.stringify(g, null, 1));
+const refetch = await page.evaluate(async () => {
+  try {
+    const r = await fetch('/api/chat_snapshots/fc04b1a4-0476-4782-b1eb-5aabfcbe1868?rendering_mode=messages&render_all_tools=true', { credentials: 'include', headers: { accept: 'application/json' } });
+    const t = await r.text();
+    return { status: r.status, len: t.length, head: t.slice(0, 120) };
+  } catch (e) { return { err: e.message }; }
+});
+console.log('page-context refetch:', JSON.stringify(refetch));
+console.log('snapshot bytes:', snapshot ? snapshot.length : 'none');
+await browser.close();
+EOF
+)"
+```
+
+```text
+{
+ "__PRELOADED_CONV_RECORD__": "undefined",
+ "__PUBLIC_VIEWER_PRELOAD__": "{arm,responses}",
+ "__BOOTSTRAP_PRELOAD__": "{promise,path,sessionMarker,outcome}",
+ "__PRELOADED_IDB_CACHE__": "undefined",
+ "tsrKeys": [
+  "tempLocationKey",
+  "_scroll",
+  "shouldViewTransition",
+  "isViewTransitionTypesSupported",
+  "subscribers",
+  "routeBranchCache",
+  "startTransition",
+  "update",
+  "updateLatestLocation",
+  "buildRouteTree",
+  "subscribe",
+  "emit",
+  "parseLocation",
+  "resolvePathWithBase",
+  "matchRoutes",
+  "getMatchedRoutes",
+  "cancelMatch",
+  "cancelMatches",
+  "buildLocation",
+  "commitLocation",
+  "buildAndCommitLocation",
+  "navigate",
+  "beforeLoad",
+  "load",
+  "startViewTransition",
+  "updateMatch",
+  "getMatch",
+  "invalidate",
+  "getParsedLocationHref",
+  "resolveRedirect"
+ ],
+ "domMessages": 14,
+ "msgNodes": 4
+}
+page-context refetch: {"status":403,"len":6629,"head":"<!DOCTYPE html><html lang=\"en-US\"><head><title>Just a moment...</title><meta http-equiv=\"Content-Type\" content=\"text/htm"}
+snapshot bytes: 6175
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:11:04Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Inspect Claude snapshot JSON shape
+
+```bash
+cd /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad && node -e "
+const d=JSON.parse(require('fs').readFileSync('claude-snapshot.json','utf8'));
+const shape=(v,dep=0)=>{if(v===null)return'null';if(Array.isArray(v))return v.length?'['+shape(v[0],dep+1)+' x'+v.length+']':'[]';if(typeof v==='object')return'{'+Object.entries(v).map(([k,x])=>k+':'+(dep<4?shape(x,dep+1):'…')).join(', ')+'}';return typeof v==='string'?JSON.stringify(v.slice(0,60)):typeof v;};
+console.log(Object.keys(d));
+console.log(shape(d));
+" 2>&1 | head -40
+```
+
+```text
+[
+  'uuid',
+  'conversation_uuid',
+  'created_at',
+  'updated_at',
+  'snapshot_name',
+  'created_by',
+  'creator',
+  'project_uuid',
+  'chat_messages',
+  'up_to_date',
+  'is_public'
+]
+{uuid:"fc04b1a4-0476-4782-b1eb-5aabfcbe1868", conversation_uuid:"e2381eda-4c8b-4918-b821-774df3fa5610", created_at:"2026-08-23T12:34:14.501416Z", updated_at:"2026-08-23T12:34:14.501416Z", snapshot_name:"量化投资 vs 定投指数的选择", created_by:"QIU ZHIKANG", creator:{uuid:"a9d49646-a0ca-4570-9da5-d9034581fad6", full_name:"QIU ZHIKANG"}, project_uuid:null, chat_messages:[{uuid:"01a02e92-56af-7863-8c24-7783ff3294ae", text:"", content:[{start_timestamp:…, stop_timestamp:…, flags:…, type:…, text:…, citations:…} x1], sender:"human", index:number, created_at:"2026-08-23T12:22:18.902047Z", updated_at:"2026-08-23T12:22:18.902047Z", input_mode:null, truncated:boolean, stop_reason:null, compaction_summary:null, attachments:[], files:[], parent_message_uuid:"00000000-0000-4000-8000-000000000000", image_count:number, file_count:number} x4], up_to_date:boolean, is_public:boolean}
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:11:12Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Dump Claude snapshot message/block details
+
+```bash
+cd /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad && node -e "
+const d=JSON.parse(require('fs').readFileSync('claude-snapshot.json','utf8'));
+for(const m of d.chat_messages){
+  console.log('---', m.sender, 'idx',m.index,'parent',m.parent_message_uuid.slice(0,8),'uuid',m.uuid.slice(0,8),'text.len',(m.text||'').length,'stop',m.stop_reason);
+  for(const c of m.content){ console.log('   block:', c.type, Object.keys(c).join(','), '| len', (c.text||'').length, '| cites', (c.citations||[]).length); }
+}
+console.log('=== first assistant block sample ===');
+const a=d.chat_messages.find(m=>m.sender==='assistant');
+console.log(JSON.stringify(a.content[0]).slice(0,700));
+console.log('=== human text sample ===');
+console.log(JSON.stringify(d.chat_messages[0].content[0]).slice(0,400));
+"
+```
+
+```text
+--- human idx 0 parent 00000000 uuid 01a02e92 text.len 0 stop null
+   block: text start_timestamp,stop_timestamp,flags,type,text,citations | len 65 | cites 0
+--- assistant idx 1 parent 01a02e92 uuid 01a02e92 text.len 0 stop end_turn
+   block: tool_use start_timestamp,stop_timestamp,flags,type,id,name,input,message,integration_name,integration_icon_url,tool_identifier,icon_name,context,display_content,approval_options,approval_key,approval_key_legacy,is_mcp_app,hidden_in_chat,mcp_server_url,tool_origin | len 0 | cites 0
+   block: tool_result start_timestamp,stop_timestamp,flags,type,tool_use_id,name,content,is_error,structured_content,meta,message,integration_name,mcp_server_url,integration_icon_url,icon_name,display_content,hidden_in_chat,tool_origin | len 0 | cites 0
+   block: text start_timestamp,stop_timestamp,flags,type,text,citations | len 1350 | cites 0
+--- human idx 2 parent 01a02e92 uuid 01a02e9a text.len 0 stop null
+   block: text start_timestamp,stop_timestamp,flags,type,text,citations | len 26 | cites 0
+--- assistant idx 3 parent 01a02e9a uuid 01a02e9a text.len 0 stop end_turn
+   block: text start_timestamp,stop_timestamp,flags,type,text,citations | len 1107 | cites 0
+=== first assistant block sample ===
+{"start_timestamp":"2026-08-23T12:22:20.017058Z","stop_timestamp":"2026-08-23T12:22:20.544497Z","flags":null,"type":"tool_use","id":"toolu_01HoejTqEw1wkmLLuin6dDN2","name":"memory_read","input":null,"message":null,"integration_name":"Memory","integration_icon_url":null,"tool_identifier":null,"icon_name":"bookText","context":null,"display_content":null,"approval_options":null,"approval_key":null,"approval_key_legacy":null,"is_mcp_app":null,"hidden_in_chat":null,"mcp_server_url":null,"tool_origin":"first_party"}
+=== human text sample ===
+{"start_timestamp":"2026-08-23T12:22:18.901869Z","stop_timestamp":"2026-08-23T12:22:18.901869Z","flags":null,"type":"text","text":"我是一个机器学习工程师，我对投资理财非常重视，我想了解下我有没有必要去进行量化投资作为我的“睡后”收入呢？还是说就定投美股指数即可","citations":[]}
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:11:53Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Capture Claude API headers, CSP, and in-page preload
+
+```bash
+node --input-type=module -e "$(cat <<'EOF'
+import { chromium } from 'playwright';
+const browser = await chromium.launch({ headless: false, channel: 'chrome' });
+const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+let reqHeaders = null, docHeaders = null;
+page.on('request', (r) => { if (r.url().includes('/api/chat_snapshots/')) reqHeaders = r.headers(); });
+page.on('response', (r) => { if (r.url().includes('/share/fc04b1a4')) docHeaders = r.headers(); });
+await page.goto('https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.waitForTimeout(9000);
+console.log('SNAPSHOT REQUEST HEADERS:', JSON.stringify(reqHeaders, null, 1));
+console.log('DOC CSP:', docHeaders?.['content-security-policy']?.slice(0, 400));
+console.log('DOC XFO:', docHeaders?.['x-frame-options']);
+const pre = await page.evaluate(async () => {
+  const p = window.__PUBLIC_VIEWER_PRELOAD__;
+  const out = { keys: p ? Object.keys(p) : null };
+  if (p?.responses) {
+    out.responsesType = Array.isArray(p.responses) ? 'array' : typeof p.responses;
+    try {
+      const entries = Array.isArray(p.responses) ? p.responses.entries() : Object.entries(p.responses);
+      out.entries = [];
+      for (const [k, v] of entries) {
+        let desc = Object.prototype.toString.call(v);
+        let sample = null;
+        if (v && typeof v.then === 'function') { try { const r = await v; desc = 'promise->' + Object.prototype.toString.call(r); sample = r && r.status ? { status: r.status, url: r.url } : Object.keys(r || {}).slice(0,10); } catch (e) { desc = 'promise rejected ' + e.message; } }
+        else if (v && typeof v === 'object') sample = Object.keys(v).slice(0, 12);
+        out.entries.push({ k: String(k).slice(0, 90), desc, sample });
+      }
+    } catch (e) { out.err = e.message; }
+  }
+  out.arm = typeof p?.arm;
+  return out;
+});
+console.log('PRELOAD:', JSON.stringify(pre, null, 1));
+// retry the API fetch with the same headers the app used
+const retry = await page.evaluate(async (h) => {
+  const tries = [];
+  for (const [label, init] of [
+    ['bare', {}],
+    ['app-headers', { headers: { accept: '*/*', 'anthropic-client-platform': 'web_claude_ai' } }],
+  ]) {
+    try {
+      const r = await fetch('/api/chat_snapshots/fc04b1a4-0476-4782-b1eb-5aabfcbe1868?rendering_mode=messages&render_all_tools=true', { credentials: 'include', ...init });
+      const t = await r.text();
+      tries.push({ label, status: r.status, len: t.length, head: t.slice(0, 80) });
+    } catch (e) { tries.push({ label, err: e.message }); }
+  }
+  return tries;
+}, reqHeaders);
+console.log('REFETCH:', JSON.stringify(retry, null, 1));
+await browser.close();
+EOF
+)"
+```
+
+```text
+SNAPSHOT REQUEST HEADERS: {
+ "sec-ch-ua-platform": "\"macOS\"",
+ "referer": "https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868",
+ "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+ "sec-ch-ua": "\"Not=A?Brand\";v=\"99\", \"Google Chrome\";v=\"151\", \"Chromium\";v=\"151\"",
+ "sec-ch-ua-mobile": "?0"
+}
+DOC CSP: script-src 'nonce-UyNyY0b2StjLpG/fbdtjXA==' 'strict-dynamic' 'sha256-0kmDpTZTxAMANy7AUPWOnO7CzpsHu4K4HKg6DY4jFjA=' 'sha256-Csxj2gV0BbtSUfztj8KE8czLWUHFz9aW1xNbdHB3U6E=' 'sha256-eD/3IsBL7uAmv255aCK1NPytUd93wg8Mh5fBzIsYYrM=' 'sha256-K+mfCF6qHamUNTUh8TuRY8OVaDY0U/Es+P2ZgN+mVyI=' 'sha256-fPP4eeC4jdHyXciTd+oe3PArJ7AQ+jlMMtie6uCaaJI=' 'sha256-2i7bx0ZXKNQi3RMV0SjkS+jjuSyqCudaVt+UrfPNUw0=' 'sha256-g9F6h1y
+DOC XFO: undefined
+PRELOAD: {
+ "keys": [
+  "arm",
+  "responses"
+ ],
+ "responsesType": "object",
+ "entries": [
+  {
+   "k": "/api/chat_snapshots/fc04b1a4-0476-4782-b1eb-5aabfcbe1868?rendering_mode=messages&render_al",
+   "desc": "[object Undefined]",
+   "sample": null
+  }
+ ],
+ "arm": "string"
+}
+REFETCH: [
+ {
+  "label": "bare",
+  "status": 403,
+  "len": 6629,
+  "head": "<!DOCTYPE html><html lang=\"en-US\"><head><title>Just a moment...</title><meta htt"
+ },
+ {
+  "label": "app-headers",
+  "status": 403,
+  "len": 6650,
+  "head": "<!DOCTYPE html><html lang=\"en-US\"><head><title>Just a moment...</title><meta htt"
+ }
+]
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:13:03Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Test Claude iframe, CSP frame-ancestors, cross-page API fetch
+
+```bash
+node --input-type=module -e "$(cat <<'EOF'
+import { chromium } from 'playwright';
+const SHARE = 'fc04b1a4-0476-4782-b1eb-5aabfcbe1868';
+const browser = await chromium.launch({ headless: false, channel: 'chrome' });
+const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+const api = [];
+page.on('response', async (r) => {
+  if (r.url().includes('/api/chat_snapshots/')) {
+    const f = r.frame();
+    api.push({ status: r.status(), len: (await r.text().catch(() => '')).length, frame: f === page.mainFrame() ? 'main' : 'iframe', url: r.url().slice(0, 90) });
+  }
+});
+// 1) land on the share page (passes CF), grab full CSP
+let csp;
+page.on('response', (r) => { if (r.url().includes('/share/' + SHARE) && r.request().resourceType() === 'document') csp = r.headers()['content-security-policy']; });
+await page.goto('https://claude.ai/share/' + SHARE, { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.waitForTimeout(8000);
+console.log('frame-ancestors:', /frame-ancestors[^;]*/.exec(csp || '')?.[0] ?? '(none)');
+console.log('after load, api requests:', JSON.stringify(api));
+
+// 2) iframe the same share page from within it; does the iframe's own early fetch succeed?
+const framed = await page.evaluate(async (id) => {
+  const f = document.createElement('iframe');
+  f.style.cssText = 'position:fixed;left:-9999px;width:1000px;height:800px';
+  f.src = '/share/' + id;
+  document.body.appendChild(f);
+  await new Promise((res) => { f.addEventListener('load', res); setTimeout(res, 20000); });
+  await new Promise((r) => setTimeout(r, 6000));
+  let inner = null;
+  try {
+    const w = f.contentWindow;
+    inner = {
+      href: w.location.href,
+      preloadKeys: w.__PUBLIC_VIEWER_PRELOAD__ ? Object.keys(w.__PUBLIC_VIEWER_PRELOAD__.responses || {}) : null,
+      title: w.document.title,
+      textLen: w.document.body.innerText.length,
+    };
+  } catch (e) { inner = { err: e.message }; }
+  return inner;
+}, SHARE);
+console.log('IFRAME:', JSON.stringify(framed));
+console.log('api requests now:', JSON.stringify(api, null, 1));
+
+// 3) from a different claude.ai page, can a plain fetch of the share API succeed (first time)?
+const p2 = await browser.newPage();
+await p2.goto('https://claude.ai/', { waitUntil: 'domcontentloaded', timeout: 60000 }).catch((e) => console.log('root goto:', e.message.split('\n')[0]));
+await p2.waitForTimeout(6000);
+console.log('root url:', p2.url(), '| title:', await p2.title());
+const direct = await p2.evaluate(async (id) => {
+  try {
+    const r = await fetch('/api/chat_snapshots/' + id + '?rendering_mode=messages&render_all_tools=true', { credentials: 'include' });
+    const t = await r.text();
+    return { status: r.status, len: t.length, head: t.slice(0, 70) };
+  } catch (e) { return { err: e.message }; }
+}, SHARE);
+console.log('DIRECT FETCH FROM OTHER PAGE:', JSON.stringify(direct));
+await browser.close();
+EOF
+)"
+```
+
+```text
+frame-ancestors: frame-ancestors 'self'
+after load, api requests: [{"status":200,"len":6175,"frame":"main","url":"https://claude.ai/api/chat_snapshots/fc04b1a4-0476-4782-b1eb-5aabfcbe1868?rendering_mode=m"}]
+IFRAME: {"href":"https://claude.ai/api/challenge_redirect?to=https%3A%2F%2Fclaude.ai%2Fshare%2Ffc04b1a4-0476-4782-b1eb-5aabfcbe1868","preloadKeys":null,"title":"Just a moment...","textLen":257}
+api requests now: [
+ {
+  "status": 200,
+  "len": 6175,
+  "frame": "main",
+  "url": "https://claude.ai/api/chat_snapshots/fc04b1a4-0476-4782-b1eb-5aabfcbe1868?rendering_mode=m"
+ },
+ {
+  "status": 403,
+  "len": 6373,
+  "frame": "iframe",
+  "url": "https://claude.ai/api/chat_snapshots/fc04b1a4-0476-4782-b1eb-5aabfcbe1868?rendering_mode=m"
+ },
+ {
+  "status": 403,
+  "len": 7013,
+  "frame": "iframe",
+  "url": "https://claude.ai/api/chat_snapshots/fc04b1a4-0476-4782-b1eb-5aabfcbe1868?rendering_mode=m"
+ }
+]
+root url: https://claude.ai/login | title: Sign in - Claude
+DIRECT FETCH FROM OTHER PAGE: {"status":403,"len":6586,"head":"<!DOCTYPE html><html lang=\"en-US\"><head><title>Just a moment...</title"}
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:13:25Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Try Copilot share URL bypassing local proxy
+
+`curl -sS --noproxy '*' --max-time 25 -o /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad/copilot.html -w 'direct: %{http_code} %{size_download}\n' 'https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6' 2>&1 | tail -3; echo "env: ${https_proxy:-none} ${HTTPS_PROXY:-none}"`
+
+```text
+curl: (35) Recv failure: Connection reset by peer
+direct: 000 0
+env: none http://127.0.0.1:7897
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:13:47Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Scan Claude share page memory for snapshot data
+
+```bash
+node --input-type=module -e "$(cat <<'EOF'
+import { chromium } from 'playwright';
+const browser = await chromium.launch({ headless: false, channel: 'chrome' });
+const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+await page.goto('https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.waitForTimeout(9000);
+const found = await page.evaluate(() => {
+  const looks = (v) => v && typeof v === 'object' && Array.isArray(v.chat_messages);
+  const seen = new WeakSet();
+  const paths = [];
+  const walk = (node, path, depth) => {
+    if (!node || typeof node !== 'object' || depth > 8 || seen.has(node)) return;
+    seen.add(node);
+    if (looks(node)) { paths.push({ path, n: node.chat_messages.length, name: node.snapshot_name }); return; }
+    for (const k of Object.keys(node)) {
+      let v; try { v = node[k]; } catch { continue; }
+      walk(v, path + '.' + k, depth + 1);
+    }
+  };
+  const roots = ['__TSR_ROUTER__', '__PUBLIC_VIEWER_PRELOAD__', '__PRELOADED_IDB_CACHE__'];
+  for (const r of roots) { try { walk(window[r], r, 0); } catch {} }
+  // also scan all window globals shallowly
+  for (const k of Object.keys(window)) {
+    if (roots.includes(k)) continue;
+    let v; try { v = window[k]; } catch { continue; }
+    if (v && typeof v === 'object') walk(v, 'window.' + k, 6);
+  }
+  const r = window.__TSR_ROUTER__;
+  return {
+    paths,
+    routerStateKeys: r && r.state ? Object.keys(r.state) : null,
+    matches: r && r.state && r.state.matches ? r.state.matches.map((m) => ({ id: m.routeId, loader: m.loaderData ? Object.keys(m.loaderData) : null, ctx: m.context ? Object.keys(m.context).slice(0,8) : null })) : null,
+    domUserMsgs: document.querySelectorAll('[data-testid=\"user-message\"]').length,
+    domResponses: document.querySelectorAll('.font-claude-response').length,
+  };
+});
+console.log(JSON.stringify(found, null, 1).slice(0, 3000));
+await browser.close();
+EOF
+)"
+```
+
+```text
+Exit code 1
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.evaluate: SecurityError: Failed to read a named property 'chat_messages' from 'Window': Blocked a frame with origin "https://claude.ai" from accessing a cross-origin frame.
+    at walk (eval at evaluate (:311:30), <anonymous>:8:9)
+    at walk (eval at evaluate (:311:30), <anonymous>:11:7)
+    at walk (eval at evaluate (:311:30), <anonymous>:11:7)
+    at eval (eval at evaluate (:311:30), <anonymous>:20:37)
+    at UtilityScript.evaluate (<anonymous>:313:16)
+    at UtilityScript.<anonymous> (<anonymous>:1:44)
+    at /Users/david/Documents/Program/Tampermonkey-Scripts/[eval1]:6:26 {
+  log: []
+}
+
+Node.js v24.13.1
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:14:15Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Rescan Claude page memory safely
+
+```bash
+node --input-type=module -e "$(cat <<'EOF'
+import { chromium } from 'playwright';
+const browser = await chromium.launch({ headless: false, channel: 'chrome' });
+const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+await page.goto('https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.waitForTimeout(9000);
+const found = await page.evaluate(() => {
+  const looks = (v) => { try { return v && typeof v === 'object' && Array.isArray(v.chat_messages); } catch { return false; } };
+  const seen = new WeakSet();
+  const paths = [];
+  const walk = (node, path, depth) => {
+    try {
+      if (!node || typeof node !== 'object' || depth > 8 || seen.has(node)) return;
+      seen.add(node);
+      if (looks(node)) { paths.push({ path, n: node.chat_messages.length, name: node.snapshot_name }); return; }
+      for (const k of Object.keys(node)) {
+        let v; try { v = node[k]; } catch { continue; }
+        walk(v, path + '.' + k, depth + 1);
+      }
+    } catch {}
+  };
+  for (const r of ['__TSR_ROUTER__', '__PUBLIC_VIEWER_PRELOAD__', '__PRELOADED_IDB_CACHE__', '__BOOTSTRAP_PRELOAD__']) {
+    try { walk(window[r], r, 0); } catch {}
+  }
+  const r = window.__TSR_ROUTER__;
+  let matches = null;
+  try {
+    matches = r?.state?.matches?.map((m) => ({ id: m.routeId, loader: m.loaderData ? Object.keys(m.loaderData) : null, params: m.params }));
+  } catch (e) { matches = 'err ' + e.message; }
+  return {
+    paths,
+    matches,
+    domUser: document.querySelectorAll('[data-testid="user-message"]').length,
+    domResp: document.querySelectorAll('.font-claude-response').length,
+    hasIDB: typeof indexedDB !== 'undefined',
+  };
+});
+console.log(JSON.stringify(found, null, 1).slice(0, 4000));
+// look at IndexedDB databases too
+const idb = await page.evaluate(async () => {
+  try { const dbs = await indexedDB.databases(); return dbs.map((d) => d.name + '@' + d.version); } catch (e) { return 'err ' + e.message; }
+});
+console.log('IDB:', JSON.stringify(idb));
+await browser.close();
+EOF
+)"
+```
+
+```text
+{
+ "paths": [],
+ "matches": [
+  {
+   "id": "__root__",
+   "loader": null,
+   "params": {
+    "snapshot_uuid": "fc04b1a4-0476-4782-b1eb-5aabfcbe1868"
+   }
+  },
+  {
+   "id": "/share",
+   "loader": null,
+   "params": {
+    "snapshot_uuid": "fc04b1a4-0476-4782-b1eb-5aabfcbe1868"
+   }
+  },
+  {
+   "id": "/share/$snapshot_uuid",
+   "loader": null,
+   "params": {
+    "snapshot_uuid": "fc04b1a4-0476-4782-b1eb-5aabfcbe1868"
+   }
+  }
+ ],
+ "domUser": 2,
+ "domResp": 2,
+ "hasIDB": true
+}
+IDB: ["keyval-store@1"]
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:14:31Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="ToolSearch"><details>
+<summary>Tool use: **ToolSearch**</summary>
+
+**Input:**
+
+- max_results: `2`
+- query: `select:WebFetch,WebSearch`
+
+**Result:**
+
+```
+
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:14:38Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="WebFetch"><details>
+<summary>Tool use: **WebFetch**</summary>
+ `https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6`
+
+```text
+Socket is closed
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:14:44Z)**_
+
+<tool-use data-tool-type="search" data-tool-name="WebSearch"><details>
+<summary>Tool use: **WebSearch**</summary>
+ `copilot.microsoft.com shares API endpoint export conversation userscript "/c/api/"`
+
+```text
+Web search results for query: "copilot.microsoft.com shares API endpoint export conversation userscript "/c/api/""
+
+Links: [{"title":"Export content with Copilot - Microsoft Teams | Microsoft Learn","url":"https://learn.microsoft.com/en-us/microsoftteams/export-teams-content-copilot"},{"title":"Copilot Conversation Exporter","url":"https://greasyfork.org/en/scripts/532612-copilot-conversation-exporter"},{"title":"GitHub - ganyuke/copilot-exporter: View, bulk delete, and export your Microsoft 365 Copilot Chat conversations into raw JSON, readable Markdown, or ChatGPT's conversation.json format. · GitHub","url":"https://github.com/ganyuke/copilot-exporter"},{"title":"How to fetch Microsoft copilot chats - Microsoft Q&A","url":"https://learn.microsoft.com/en-sg/answers/questions/5596321/how-to-fetch-microsoft-copilot-chats"},{"title":"Introducing Microsoft 365 Copilot APIs - Microsoft 365 Developer Blog","url":"https://devblogs.microsoft.com/microsoft365dev/microsoft-365-copilot-apis/"},{"title":"Use the Microsoft 365 Copilot Chat API to chat with Microsoft 365 Copilot. | Microsoft Learn","url":"https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/api/ai-services/chat/copilotroot-post-conversations"},{"title":"Microsoft Copilot API: What the Official APIs Return vs Scraping","url":"https://cloro.dev/blog/microsoft-copilot-api/"},{"title":"How to Export or Share Microsoft Copilot Chats","url":"https://www.itechguides.com/how-to-export-or-share-microsoft-copilot-conversations/"}]
+
+Based on the search results, here's what I found regarding your query about Copilot conversation export APIs and userscripts:
+
+## Userscript Solutions
+
+There are userscripts available that can export Microsoft Copilot conversations to Markdown or JSON (optionally includes AI Thoughts when present). When you navigate to copilot.microsoft.com with one of these scripts installed, you'll see an Export button in the bottom-right corner. The script uses Copilot's official API endpoints to retrieve conversation data.
+
+One popular example is the "Copilot Conversation Exporter" available on Greasyfork, which requires a userscript manager extension like Tampermonkey.
+
+## Official API Endpoints
+
+For the Microsoft Graph API endpoints, all Copilot APIs are accessible via REST endpoints under the Microsoft Graph namespace "/copilot/". The Copilot Activity Export API allows you to export Copilot interactions data, which includes the user prompt to Copilot and the Copilot response back to the user.
+
+## Limitations
+
+It's worth noting that the consumer Microsoft Copilot documentation does not document a general user-facing command to export or download a complete conversation as a PDF, JSON, Markdown, or other transcript file, which is why many users turn to userscripts as an alternative solution.
+
+
+REMINDER: You MUST include the sources above in your response to the user using markdown hyperlinks.
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:14:56Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Fetch Greasyfork Copilot exporter to learn endpoints
+
+`cd /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad && curl -sSL --max-time 40 'https://update.greasyfork.org/scripts/532612/Copilot%20Conversation%20Exporter.user.js' -o copilot-exporter.user.js -w '%{http_code} %{size_download}\n' && head -40 copilot-exporter.user.js && echo '--- endpoints ---' && grep -oE '["`'"'"'][^"`'"'"']*(/c/api|/api/|https?://[^"`'"'"']+)[^"`'"'"']*' copilot-exporter.user.js | sort -u | head -40`
+
+```text
+200 18360
+// ==UserScript==
+// @name         Copilot Conversation Exporter
+// @namespace    https://github.com/NoahTheGinger/Userscripts/
+// @version      2.0.0
+// @description  Export Microsoft Copilot conversations to Markdown or JSON (optionally includes AI Thoughts when present)
+// @author       NoahTheGinger
+// @match        https://copilot.microsoft.com/*
+// @grant        none
+// @run-at       document-start
+// @license      MIT
+// @downloadURL https://update.greasyfork.org/scripts/532612/Copilot%20Conversation%20Exporter.user.js
+// @updateURL https://update.greasyfork.org/scripts/532612/Copilot%20Conversation%20Exporter.meta.js
+// ==/UserScript==
+
+(function () {
+  'use strict';
+
+  // ==========
+  // Config
+  // ==========
+  const ORIGIN = new URL(location.href).origin; // https://copilot.microsoft.com
+  const API_BASE = `${ORIGIN}/c/api`;
+  const API_VERSION = '2'; // history endpoint supports ?api-version=2
+
+  // ==========
+  // Auth capturing (best-effort)
+  // ==========
+  let capturedAuthToken = null;
+
+  function tryCaptureAuthFromHeaders(headersLike) {
+    try {
+      if (!headersLike) return;
+      const headers = headersLike instanceof Headers ? headersLike : new Headers(headersLike);
+      const auth = headers.get('Authorization') || headers.get('authorization');
+      if (auth && auth.startsWith('Bearer ')) {
+        capturedAuthToken = auth.replace(/^Bearer\s+/, '');
+      }
+    } catch {}
+  }
+
+--- endpoints ---
+`${ORIGIN}/c/api
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:15:01Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Extract Copilot API usage details
+
+`cd /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad && grep -nE 'API_BASE|conversations|history|fetch\(|WebSocket|share|messages|author|content' copilot-exporter.user.js | head -60`
+
+```text
+5:// @description  Export Microsoft Copilot conversations to Markdown or JSON (optionally includes AI Thoughts when present)
+6:// @author       NoahTheGinger
+22:  const API_BASE = `${ORIGIN}/c/api`;
+23:  const API_VERSION = '2'; // history endpoint supports ?api-version=2
+34:      const auth = headers.get('Authorization') || headers.get('authorization');
+66:        if (typeof name === 'string' && name.toLowerCase() === 'authorization' && value && value.startsWith('Bearer ')) {
+81:  function downloadFile(filename, mimeType, content) {
+82:    const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
+117:      await fetch(`${API_BASE}/start`, {
+145:    const res = await fetch(url, opts);
+163:    const url = `${API_BASE}/conversations/${encodeURIComponent(chatId)}/history?api-version=${API_VERSION}`;
+175:    const url = `${API_BASE}/conversations${API_VERSION ? `?api-version=${API_VERSION}` : ''}`;
+197:  // Transform Copilot history -> Markdown
+199:  function transformAuthor(author) {
+200:    // In history JSON: author: { type: "ai" | "human" }
+201:    if (!author || !author.type) return 'Unknown';
+202:    return author.type === 'ai' ? 'Assistant' : author.type === 'human' ? 'User' : author.type;
+253:          // Reasoning content (include only if present)
+293:    // Ensure the messages are in chronological order
+304:      const authorLabel = transformAuthor(msg.author);
+305:      const { body, thoughts } = partsToMarkdown(msg.content);
+316:      if (authorLabel === 'Assistant') {
+326:          lines.push(`#### ${authorLabel}:`);
+337:      lines.push(`#### ${authorLabel}:`);
+339:      // (No “Thoughts” section for non‑assistant messages)
+359:      console.log('[Copilot Exporter] Fetching history...');
+360:      const history = await fetchConversationHistory(chatId);
+368:        results: Array.isArray(history?.results) ? history.results : []
+391:      console.log('[Copilot Exporter] Fetching history (JSON)...');
+392:      const history = await fetchConversationHistory(chatId);
+397:      const jsonContent = JSON.stringify(history, null, 2);
+419:      display: flex; align-items: center; justify-content: center;
+435:      <div style="display:flex; gap:12px; justify-content:flex-end;">
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:15:14Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read Copilot exporter core logic
+
+`cd /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad && sed -n '100,200p' copilot-exporter.user.js; echo '=== parts ==='; sed -n '200,300p' copilot-exporter.user.js`
+
+```text
+  function getCurrentTimestamp() {
+    return new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+  }
+
+  function getChatIdFromUrl() {
+    // Expected: https://copilot.microsoft.com/chats/{chatId}
+    const m = location.pathname.match(/^\/chats\/([A-Za-z0-9_-]+)/i);
+    return m ? m[1] : null;
+  }
+
+  function getUILanguage() {
+    return document.documentElement.getAttribute('lang') || navigator.language || 'en-US';
+  }
+
+  async function ensureSession() {
+    // Lightly poke the start endpoint (this sometimes ensures cookies/session are initialized)
+    try {
+      await fetch(`${API_BASE}/start`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+    } catch {}
+  }
+
+  async function fetchJSON(url, options = {}) {
+    const opts = {
+      method: 'GET',
+      credentials: 'include',
+      headers: {},
+      ...options
+    };
+
+    opts.headers = new Headers(opts.headers);
+
+    // Prefer captured Authorization token if available
+    if (capturedAuthToken && !opts.headers.has('Authorization')) {
+      opts.headers.set('Authorization', `Bearer ${capturedAuthToken}`);
+    }
+
+    // Send UI language if available (consistent with site)
+    const lang = getUILanguage();
+    if (!opts.headers.has('x-search-uilang') && lang) {
+      opts.headers.set('x-search-uilang', lang.toLowerCase());
+    }
+
+    const res = await fetch(url, opts);
+    if (!res.ok) {
+      let detail = res.statusText || '';
+      try {
+        const data = await res.json();
+        detail = data?.error || data?.message || JSON.stringify(data) || detail;
+      } catch {}
+      throw new Error(`Request failed (${res.status}): ${detail}`);
+    }
+    return res.json();
+  }
+
+  async function fetchConversationHistory(chatId) {
+    if (!chatId) throw new Error('No chat ID found in URL');
+
+    // Warm session first (harmless if already warm)
+    await ensureSession();
+
+    const url = `${API_BASE}/conversations/${encodeURIComponent(chatId)}/history?api-version=${API_VERSION}`;
+
+    try {
+      return await fetchJSON(url);
+    } catch (err) {
+      // Retry after warming session again (in case of race/expiry)
+      await ensureSession();
+      return await fetchJSON(url);
+    }
+  }
+
+  async function fetchConversationsList() {
+    const url = `${API_BASE}/conversations${API_VERSION ? `?api-version=${API_VERSION}` : ''}`;
+    try {
+      return await fetchJSON(url);
+    } catch {
+      return null;
+    }
+  }
+
+  async function lookupConversationTitle(chatId) {
+    if (!chatId) return 'Copilot Conversation';
+    const list = await fetchConversationsList();
+    // Expected shape: maybe { results: [ { id, title, ... }, ... ] } or just an array
+    try {
+      const items = Array.isArray(list?.results) ? list.results : (Array.isArray(list) ? list : []);
+      const found = items.find(x => x?.id === chatId);
+      return found?.title || 'Copilot Conversation';
+    } catch {
+      return 'Copilot Conversation';
+    }
+  }
+
+  // ==========
+  // Transform Copilot history -> Markdown
+  // ==========
+  function transformAuthor(author) {
+    // In history JSON: author: { type: "ai" | "human" }
+=== parts ===
+    // In history JSON: author: { type: "ai" | "human" }
+    if (!author || !author.type) return 'Unknown';
+    return author.type === 'ai' ? 'Assistant' : author.type === 'human' ? 'User' : author.type;
+  }
+
+  function sortByCreatedAtAsc(results) {
+    try {
+      return [...results].sort((a, b) => {
+        const at = new Date(a.createdAt).getTime() || 0;
+        const bt = new Date(b.createdAt).getTime() || 0;
+        return at - bt;
+      });
+    } catch {
+      return results;
+    }
+  }
+
+  function partsToMarkdown(parts) {
+    if (!Array.isArray(parts)) return { body: '', thoughts: '' };
+
+    const textBlocks = [];
+    const imageBlocks = [];
+    const citations = [];
+    const thoughtsBlocks = [];
+
+    for (const part of parts) {
+      switch (part?.type) {
+        case 'text':
+          if (typeof part.text === 'string' && part.text.trim()) {
+            textBlocks.push(part.text);
+          }
+          break;
+        case 'image': {
+          // Embed image, optionally include prompt as a caption line
+          if (part.url) {
+            const alt = 'image';
+            imageBlocks.push(`![${alt}](${part.url})`);
+            if (part.prompt && String(part.prompt).trim()) {
+              imageBlocks.push(`*Prompt: ${part.prompt}*`);
+            }
+          }
+          break;
+        }
+        case 'citation':
+          // Collect for optional "Sources" listing; avoid exact duplicates
+          if (part.url) {
+            const key = `${part.title || part.url}::${part.url}`;
+            if (!citations.some(c => c._k === key)) {
+              citations.push({ _k: key, title: part.title || part.url, url: part.url });
+            }
+          }
+          break;
+        case 'chainOfThought':
+          // Reasoning content (include only if present)
+          if (typeof part.text === 'string' && part.text.trim()) {
+            thoughtsBlocks.push(part.text);
+          }
+          if (part.screenshotUrl) {
+            thoughtsBlocks.push(`![screenshot](${part.screenshotUrl})`);
+          }
+          break;
+        default:
+          // Ignore unsupported part types silently
+          break;
+      }
+    }
+
+    const sections = [];
+
+    if (textBlocks.length) {
+      sections.push(textBlocks.join('\n\n'));
+    }
+
+    if (imageBlocks.length) {
+      sections.push(imageBlocks.join('\n\n'));
+    }
+
+    // If you prefer to show citations, uncomment the block below to include a sources list:
+    // if (citations.length) {
+    //   const list = citations.map(c => `- [${c.title}](${c.url})`).join('\n');
+    //   sections.push(`#### Sources\n${list}`);
+    // }
+
+    const body = sections.filter(Boolean).join('\n\n');
+    const thoughts = thoughtsBlocks.length ? thoughtsBlocks.join('\n\n') : '';
+
+    return { body, thoughts };
+  }
+
+    // ----------------------------------------------------------
+    //  Updated markdown conversion – thoughts come first
+    // ----------------------------------------------------------
+  function conversationToMarkdown({ title, results }) {
+    // Ensure the messages are in chronological order
+    const sorted = sortByCreatedAtAsc(results || []);
+
+    const lines = [];
+
+    // Title
+    lines.push(`# ${title || 'Copilot Conversation'}`);
+    lines.push(''); // blank line after title
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:15:36Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Inspect shared/ conventions and @require usage
+
+`ls shared/ && sed -n '1,60p' shared/README.md && echo '=== dom.js exports ===' && grep -n '^function\|^const\|^ \* ' shared/dom.js | head -40 && echo '=== who uses @require ===' && grep -rn '@require' userscripts/ | head`
+
+```text
+dom.js
+README.md
+# shared/
+
+給多支腳本共用的工具函式，用 `@require` 引入：
+
+```js
+// @require https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/dom.js
+```
+
+`@require` 進來的檔案會直接在腳本 scope 執行，所以裡面用的是**全域函式宣告**，
+不是 ES module。
+
+## 目前有什麼
+
+[`dom.js`](./dom.js)
+
+| 函式                    | 用途                                      |
+| ----------------------- | ----------------------------------------- |
+| `waitForElement()`      | 等 selector 出現，有逾時保護              |
+| `onUrlChange()`         | SPA 換頁偵測                              |
+| `debounce()`            | 包住 MutationObserver callback            |
+| `markOnce()`            | 用 dataset 標記處理過的節點，避免重複執行  |
+| `addFloatingButton()`   | 右下角浮動按鈕                            |
+| `downloadText()`        | 不需 `@grant` 的檔案下載                  |
+
+## ⚠️ 先考慮直接複製
+
+`@require` 有兩個實際代價：
+
+1. **更新不同步**：`dom.js` 改了之後，各腳本的 `@version` 不會變，
+   使用者不會收到更新通知；manager 對 `@require` 的快取也不保證馬上失效。
+2. **多一個網路相依**：raw.githubusercontent.com 掛了，腳本就跑不起來。
+
+所以：**兩三個小函式，直接複製進腳本裡通常更省事。**
+`shared/` 適合的是「好幾支腳本都要、而且邏輯夠複雜到不想複製」的東西。
+
+判斷標準大致是：同一段 code 出現在三支以上的腳本，才值得搬進來。
+
+背景見 [`docs/07-dev-workflow.md`](../docs/07-dev-workflow.md#共用程式碼)。
+=== dom.js exports ===
+3: * 共用 DOM 工具，給 userscript 用 `@require` 引入：
+5: *   // @require https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/dom.js
+7: * 注意這不是 ES module —— `@require` 進來的檔案會直接在腳本的 scope 執行，
+8: * 所以這裡用的是全域函式宣告。
+10: * 先讀 shared/README.md：多數情況直接把需要的函式複製到腳本裡更省事。
+14:function waitForElement(selector, { timeout = 10_000, root = document.documentElement } = {}) {
+37:function onUrlChange(callback) {
+50:function debounce(fn, ms = 200) {
+59:function markOnce(element, key) {
+66:function addFloatingButton({ id, label, onClick, offset = 16 }) {
+86:function downloadText(filename, text, mime = 'text/markdown;charset=utf-8') {
+=== who uses @require ===
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:15:36Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js`
+
+```text
+509	      '---',
+510	    ].join('\n');
+511	
+512	    const body = sections
+513	      .map((section) => {
+514	        const label = [section.model, formatUtc(section.time)].filter(Boolean).join(', ');
+515	        return `_**${section.role}${label ? ` (${label})` : ''}**_\n\n${section.body}`;
+516	      })
+517	      .join('\n\n---\n\n');
+518	
+519	    const heading = opts.handoff ? HANDOFF_HEADER : `# ${title}`;
+520	    return `${frontMatter}\n\n${heading}\n\n<!-- Generated by chatgpt-export-markdown v${VERSION} -->\n\n${body}\n`;
+521	  }
+522	
+523	  function filenameFor(data, extension) {
+524	    const slug =
+525	      String(data.title || 'conversation')
+526	        .replace(/[\\/:*?"<>|]+/g, '')
+527	        .trim()
+528	        .replace(/\s+/g, '-')
+529	        .slice(0, 60) || 'conversation';
+530	    const now = new Date();
+531	    const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+532	    return `chatgpt-${slug}-${stamp}.${extension}`;
+533	  }
+534	
+535	  /** 不需要任何 @grant 的下載（同 shared/dom.js 的 downloadText）。 */
+536	  function downloadText(filename, text, mime) {
+537	    const url = URL.createObjectURL(new Blob([text], { type: mime }));
+538	    const a = document.createElement('a');
+539	    a.href = url;
+540	    a.download = filename;
+541	    a.click();
+542	    URL.revokeObjectURL(url);
+543	  }
+544	
+545	  // ------------------------------------------------------------------ 動作
+546	
+547	  async function doExport({ mode, to, ids }) {
+548	    setStatus('讀取對話…');
+549	    try {
+550	      const target = ids || currentIds();
+551	      const { data, source } = await resolveConversation(target);
+552	      const url = target.shareId ? `${location.origin}/share/${target.shareId}` : location.href;
+553	
+554	      const text =
+555	        mode === 'json'
+556	          ? JSON.stringify(data, null, 2)
+557	          : render(data, { ...settings, handoff: mode === 'handoff' }, { url });
+558	
+559	      if (to === 'clipboard') {
+560	        GM_setClipboard(text, 'text');
+561	        setStatus(`已複製 ${text.length.toLocaleString()} 字（來源：${source}）`);
+562	      } else {
+563	        downloadText(
+564	          filenameFor(data, mode === 'json' ? 'json' : 'md'),
+565	          text,
+566	          mode === 'json' ? 'application/json;charset=utf-8' : 'text/markdown;charset=utf-8'
+567	        );
+568	        setStatus(`已下載（來源：${source}）`);
+569	      }
+570	      log('exported', { mode, to, source, length: text.length });
+571	    } catch (error) {
+572	      setStatus(`失敗：${error.message}`);
+573	      log('export failed:', error);
+574	    }
+575	  }
+576	
+577	  function exportFromShareUrl(raw) {
+578	    const shareId = shareIdFromUrl(raw);
+579	    if (!shareId) {
+580	      setStatus('這不像 share URL（要有 /share/<id>）。');
+581	      return;
+582	    }
+583	    doExport({ mode: 'transcript', to: 'clipboard', ids: { convId: null, shareId } });
+584	  }
+585	
+586	  const ACTIONS = [
+587	    { label: 'Copy Markdown', run: () => doExport({ mode: 'transcript', to: 'clipboard' }) },
+588	    { label: 'Copy Agent Handoff', run: () => doExport({ mode: 'handoff', to: 'clipboard' }) },
+589	    { label: 'Download .md', run: () => doExport({ mode: 'transcript', to: 'file' }) },
+590	    { label: 'Download .json', run: () => doExport({ mode: 'json', to: 'file' }) },
+591	  ];
+592	
+593	  // -------------------------------------------------------------------- UI
+594	
+595	  const ROOT_CSS =
+596	    'position:fixed;right:16px;bottom:16px;z-index:2147483647;' +
+597	    'font:400 13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;';
+598	
+599	  let statusEl = null;
+600	  let justDragged = false;
+601	
+602	  function setStatus(text) {
+603	    log(text);
+604	    if (statusEl) statusEl.textContent = text;
+605	  }
+606	
+607	  function style(el, css) {
+608	    el.style.cssText = css;
+609	    return el;
+610	  }
+611	
+612	  function makeButton(label, onClick) {
+613	    const button = document.createElement('button');
+614	    button.type = 'button';
+615	    button.textContent = label;
+616	    button.addEventListener('click', onClick);
+617	    return style(
+618	      button,
+619	      'display:block;width:100%;margin:0 0 6px;padding:7px 10px;border:0;border-radius:7px;' +
+620	        'cursor:pointer;background:#3ba3ff;color:#06131f;font:600 13px/1.4 inherit;text-align:left;'
+621	    );
+622	  }
+623	
+624	  function makeToggle(key, label) {
+625	    const wrapper = style(
+626	      document.createElement('label'),
+627	      'display:flex;align-items:center;gap:6px;margin:0 0 4px;font:400 12px/1.4 inherit;cursor:pointer;'
+628	    );
+629	    const box = document.createElement('input');
+630	    box.type = 'checkbox';
+631	    box.checked = settings[key];
+632	    box.addEventListener('change', () => {
+633	      setSetting(key, box.checked);
+634	      setStatus(`${label}：${box.checked ? '含' : '不含'}`);
+635	    });
+636	    wrapper.append(box, document.createTextNode(label));
+637	    return wrapper;
+638	  }
+639	
+640	  /** 把面板放在按鈕的哪一邊：上面塞不下就往下、右邊塞不下就往左。 */
+641	  function placePanel(root, panel) {
+642	    const rect = root.getBoundingClientRect();
+643	    const above = rect.top >= panel.offsetHeight + 16;
+644	    panel.style.top = above ? 'auto' : '100%';
+645	    panel.style.bottom = above ? '100%' : 'auto';
+646	    panel.style.marginTop = above ? '0' : '8px';
+647	    panel.style.marginBottom = above ? '8px' : '0';
+648	
+649	    const rightAligned = rect.right - PANEL_WIDTH >= 8;
+650	    panel.style.right = rightAligned ? '0' : 'auto';
+651	    panel.style.left = rightAligned ? 'auto' : '0';
+652	  }
+653	
+654	  /** 用 left/top 定位（取代預設的 right/bottom），並夾在畫面裡。 */
+655	  function moveTo(root, left, top) {
+656	    const x = Math.min(Math.max(left, 4), window.innerWidth - root.offsetWidth - 4);
+657	    const y = Math.min(Math.max(top, 4), window.innerHeight - root.offsetHeight - 4);
+658	    root.style.left = `${x}px`;
+659	    root.style.top = `${y}px`;
+660	    root.style.right = 'auto';
+661	    root.style.bottom = 'auto';
+662	  }
+663	
+664	  function resetPosition(root) {
+665	    GM_setValue(POSITION_KEY, null);
+666	    root.style.cssText = ROOT_CSS;
+667	  }
+668	
+669	  /**
+670	   * 讓按鈕可以拖到任何地方。用 pointer events（滑鼠 / 觸控同一套），
+671	   * 位移小於 4px 就當成「手抖的點擊」而不是拖曳，否則單純想開面板會很難按。
+672	   */
+673	  function makeDraggable(root, handle, onMoved) {
+674	    let drag = null;
+675	
+676	    handle.addEventListener('pointerdown', (event) => {
+677	      if (event.button !== 0) return;
+678	      const rect = root.getBoundingClientRect();
+679	      drag = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, moved: false };
+680	      handle.setPointerCapture(event.pointerId);
+681	      event.preventDefault(); // 不要順便選到頁面的文字
+682	    });
+683	
+684	    handle.addEventListener('pointermove', (event) => {
+685	      if (!drag) return;
+686	      const dx = event.clientX - drag.x;
+687	      const dy = event.clientY - drag.y;
+688	      if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+689	      drag.moved = true;
+690	      moveTo(root, drag.left + dx, drag.top + dy);
+691	    });
+692	
+693	    const end = (event) => {
+694	      if (!drag) return;
+695	      const { moved } = drag;
+696	      drag = null;
+697	      if (handle.hasPointerCapture?.(event.pointerId))
+698	        handle.releasePointerCapture(event.pointerId);
+699	      if (!moved) return;
+700	      const rect = root.getBoundingClientRect();
+701	      GM_setValue(POSITION_KEY, { left: Math.round(rect.left), top: Math.round(rect.top) });
+702	      onMoved();
+703	    };
+704	    handle.addEventListener('pointerup', end);
+705	    handle.addEventListener('pointercancel', end);
+706	  }
+707	
+708	  /** 掛 UI。可重複呼叫，必須 idempotent（SPA 換頁會再跑一次）。 */
+709	  function mount() {
+710	    if (!document.body || document.getElementById(`${NS}-root`)) return;
+711	
+712	    const root = style(document.createElement('div'), ROOT_CSS);
+713	    root.id = `${NS}-root`;
+714	
+715	    const panel = style(
+716	      document.createElement('div'),
+717	      `display:none;position:absolute;right:0;bottom:100%;margin-bottom:8px;width:${PANEL_WIDTH}px;` +
+718	        'padding:12px;border-radius:10px;background:#12181f;color:#e6edf3;' +
+719	        'box-shadow:0 8px 28px rgba(0,0,0,.35);'
+720	    );
+721	    panel.id = `${NS}-panel`;
+722	
+723	    for (const action of ACTIONS) panel.appendChild(makeButton(action.label, action.run));
+724	
+725	    panel.appendChild(
+726	      style(document.createElement('hr'), 'margin:10px 0;border:0;border-top:1px solid #2a3441;')
+727	    );
+728	    panel.appendChild(makeToggle('includeThinking', '含 thinking / reasoning'));
+729	    panel.appendChild(makeToggle('includeTools', '含工具呼叫與搜尋結果'));
+730	
+731	    const input = style(
+732	      document.createElement('input'),
+733	      'width:100%;box-sizing:border-box;margin:10px 0 6px;padding:6px 8px;border-radius:6px;' +
+734	        'border:1px solid #2a3441;background:#0b0f14;color:#e6edf3;font:400 12px/1.4 inherit;'
+735	    );
+736	    input.type = 'text';
+737	    input.placeholder = '貼上任意 share URL…';
+738	    input.addEventListener('keydown', (event) => {
+739	      if (event.key === 'Enter') exportFromShareUrl(input.value);
+740	    });
+741	    panel.appendChild(input);
+742	    panel.appendChild(makeButton('Copy from share URL', () => exportFromShareUrl(input.value)));
+743	
+744	    statusEl = style(
+745	      document.createElement('div'),
+746	      'margin-top:8px;color:#8b98a5;font:400 11px/1.5 inherit;word-break:break-word;'
+747	    );
+748	    statusEl.textContent = '就緒';
+749	    panel.appendChild(statusEl);
+750	
+751	    const toggle = style(
+752	      document.createElement('button'),
+753	      'padding:8px 14px;border:0;border-radius:8px;cursor:grab;touch-action:none;' +
+754	        'background:#3ba3ff;color:#06131f;font:600 13px/1.4 inherit;' +
+755	        'box-shadow:0 4px 16px rgba(0,0,0,.25);'
+756	    );
+757	    toggle.type = 'button';
+758	    toggle.textContent = '⇩ Export MD';
+759	    toggle.title = '點一下開關面板，拖曳可以搬到別的位置';
+760	    toggle.addEventListener('click', () => {
+761	      if (justDragged) {
+762	        justDragged = false; // 拖曳結束後瀏覽器還是會補一個 click，忽略它
+763	        return;
+764	      }
+765	      if (panel.style.display === 'block') {
+766	        panel.style.display = 'none';
+767	      } else {
+768	        panel.style.display = 'block';
+769	        placePanel(root, panel);
+770	      }
+771	    });
+772	
+773	    makeDraggable(root, toggle, () => {
+774	      justDragged = true;
+775	      if (panel.style.display === 'block') placePanel(root, panel);
+776	    });
+777	
+778	    root.append(panel, toggle);
+779	    document.body.appendChild(root);
+780	
+781	    // 位置要等進 DOM 才量得到寬高。
+782	    const saved = GM_getValue(POSITION_KEY, null);
+783	    if (saved && typeof saved.left === 'number') moveTo(root, saved.left, saved.top);
+784	
+785	    // 視窗縮小後按鈕可能被推到畫面外，重新夾一次。
+786	    window.addEventListener('resize', () => {
+787	      if (root.style.left === 'auto' || !root.style.left) return;
+788	      moveTo(root, parseFloat(root.style.left), parseFloat(root.style.top));
+789	      if (panel.style.display === 'block') placePanel(root, panel);
+790	    });
+791	  }
+792	
+793	  function openPanel() {
+794	    mount();
+795	    const root = document.getElementById(`${NS}-root`);
+796	    const panel = document.getElementById(`${NS}-panel`);
+797	    if (!root || !panel) return;
+798	    panel.style.display = 'block';
+799	    placePanel(root, panel);
+800	  }
+801	
+802	  function registerMenu() {
+803	    for (const action of ACTIONS) {
+804	      // 不要用 accessKey —— 那是 Tampermonkey 限定的。
+805	      GM_registerMenuCommand(action.label, () => {
+806	        openPanel();
+807	        action.run();
+808	      });
+809	    }
+810	    GM_registerMenuCommand('Export from share URL…', () => {
+811	      openPanel();
+812	      const raw = prompt('貼上 ChatGPT share URL：');
+813	      if (raw) exportFromShareUrl(raw);
+814	    });
+815	    GM_registerMenuCommand('Toggle thinking / reasoning', () => {
+816	      setSetting('includeThinking', !settings.includeThinking);
+817	      openPanel();
+818	      setStatus(`thinking / reasoning：${settings.includeThinking ? '含' : '不含'}`);
+819	    });
+820	    GM_registerMenuCommand('Reset button position', () => {
+821	      mount();
+822	      const root = document.getElementById(`${NS}-root`);
+823	      if (root) resetPosition(root);
+824	      openPanel();
+825	      setStatus('按鈕已放回右下角');
+826	    });
+827	    GM_registerMenuCommand('Toggle 工具呼叫與搜尋結果', () => {
+828	      setSetting('includeTools', !settings.includeTools);
+829	      openPanel();
+830	      setStatus(`工具呼叫：${settings.includeTools ? '含' : '不含'}`);
+831	    });
+832	  }
+833	
+834	  // ----------------------------------------------------------------- 啟動
+835	
+836	  installNetworkCapture(); // 必須在網站發出請求之前，所以 @run-at document-start
+837	  registerMenu();
+838	
+839	  function start() {
+840	    mount();
+841	
+842	    // SPA 換對話不會 reload，只要確保 UI 還在（抓資料完全不碰 DOM，不需要重建狀態）。
+843	    let lastUrl = location.href;
+844	    new MutationObserver(() => {
+845	      if (location.href === lastUrl) return;
+846	      lastUrl = location.href;
+847	      mount();
+848	    }).observe(document.documentElement, { childList: true, subtree: true });
+849	  }
+850	
+851	  // document-start 時 <body>（有時連 <html>）都還沒有，所以 UI 與 observer 等到 DOM 就緒再掛。
+852	  if (document.readyState === 'loading') {
+853	    document.addEventListener('DOMContentLoaded', start, { once: true });
+854	  } else {
+855	    start();
+856	  }
+857	})();
+858
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:16:18Z)**_
+
+I probed both sites before planning. Findings first, then two decisions I need from you.
+
+**Claude (claude.ai) — fully researched, viable:**
+- Share page fires exactly one request: `GET /api/chat_snapshots/<id>?rendering_mode=messages&render_all_tools=true` → clean JSON: `chat_messages[]` with `sender: human|assistant`, `content[]` blocks (`text` + `citations[]`, `thinking`, `tool_use`, `tool_result`), `parent_message_uuid`, `snapshot_name`. Much tidier than ChatGPT's `mapping`.
+- **But**: any *repeat* fetch of that endpoint gets a Cloudflare 403 ("Just a moment"), including from an iframe and from another claude.ai tab. Only the page's own first in-document fetch passes. Nothing usable is left on `window` afterwards (`__TSR_ROUTER__` has no loader data, React Query lives in closures).
+- ⇒ the ChatGPT script's tier-2/3/4 (router state / API refetch / hidden iframe) **do not transfer**. For Claude it's fetch-interception-at-document-start or nothing.
+
+**Copilot — I cannot reach it at all from this machine:** `curl` and headed Chrome both fail (`SSL_ERROR_SYSCALL` / `ERR_CONNECTION_CLOSED`), with and without your local proxy; bing.com and microsoft.com are fine. So I have no first-hand data on `/shares/<id>`. What I do know, from a public exporter's source: live chats live at `/chats/<id>` and `GET /c/api/conversations/<id>/history?api-version=2` returns `{results:[{author:{type:'ai'|'human'}, content:[{type:'text'|'image'|'citation'|'chainOfThought'}]}]}`. The share endpoint is unknown.
+
+_**Agent (claude-opus-5 2026-08-25 14:36:38Z)**_
+
+<tool-use data-tool-type="generic" data-tool-name="AskUserQuestion"><details>
+<summary>Tool use: **AskUserQuestion**</summary>
+**Copilot 我這邊連不上（直連與 proxy 都被切斷），沒辦法實測 /shares/<id> 的資料來源。要怎麼推進？**
+
+Options:
+- **盲寫＋你實機驗證** - 用「攔截所有 JSON 回應、找形狀」的設計，不預先綁死 share endpoint，另外掃頁面 global 當備援。腳本會把命中的 URL 印到 console，你裝上去跑一次把 log 回貼，我再補精準的 fallback。風險：第一版可能要來回一兩次。
+- **你先跑 probe 再寫** - 我給你一段 console snippet（或叫你在 share 頁按 F12 看 Network），你把 endpoint 與 JSON 結構回貼，我拿到真實樣本才動工。比較慢但第一版就會準。
+- **這次只做 Claude** - Copilot 先擱著（留一份研究筆記在 plan 裡），等你哪天方便再說。
+
+**三支 exporter 會共用約 350 行的 render / 浮動按鈕 / 拖曳 / 選單程式碼。怎麼放？**
+
+Options:
+- **各自複製（推薦）** - claude-export-markdown、copilot-export-markdown 各自獨立、零外部相依，符合 repo 的「一支腳本一個檔案」。缺點是同樣的 UI 程式碼會有三份。理由：npm run preview 不會解析 @require，搬進 shared/ 等於這幾支腳本沒辦法用 harness 測。
+- **搬進 shared/ 用 @require** - DRY，符合 shared/README 說的「三支以上才值得搬」。代價：要順便改 scripts/preview.mjs 讓它能載入 @require，而且 shared/ 改動不會觸發各腳本的版本更新。
+- **合併成一支多站腳本** - 一支 ai-chat-export-markdown 同時 @match 三個網域，用 adapter 表分流。最 DRY，但會取代掉你已經裝好的 chatgpt-export-markdown，而且違反 @match 開最小範圍的慣例。
+
+**Claude 因為 Cloudflare 擋，沒辦法在原地讀「貼上的任意 share URL」。要保留這個功能嗎？**
+
+Options:
+- **開新分頁自動匯出** - 貼上 URL → GM_openInTab 開該 share 頁 → 腳本在新分頁自動匯出到剪貼簿（用 GM storage 傳一次性旗標）。功能等價，只是多一個分頁閃過。
+- **不做這個功能** - Claude 版只支援「在目前這頁匯出」，面板不放輸入框。最單純，也不會有「按了沒反應」的疑惑。
+
+
+**Answer:** 現在看看能不能連上了？, 搬進 shared/ 用 @require, 開新分頁自動匯出". Read the answers carefully — they may request clarification, changes, or that you not proceed — and follow what they actually say.
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:36:46Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Retry Copilot connectivity
+
+`curl -sS --max-time 25 -o /dev/null -w 'via-proxy: %{http_code} %{size_download}\n' 'https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6' 2>&1 | tail -2; curl -sS --noproxy '*' --max-time 25 -o /dev/null -w 'direct: %{http_code} %{size_download}\n' 'https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6' 2>&1 | tail -2`
+
+```text
+via-proxy: 200 39918
+curl: (35) Recv failure: Connection reset by peer
+direct: 000 0
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:37:20Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Probe Copilot share page through proxy
+
+```bash
+node --input-type=module -e "$(cat <<'EOF'
+import { chromium } from 'playwright';
+import { writeFileSync } from 'node:fs';
+const OUT = '/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad';
+const browser = await chromium.launch({ headless: false, channel: 'chrome', proxy: { server: 'http://127.0.0.1:7897' } });
+const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+const hits = [];
+page.on('response', async (r) => {
+  try {
+    const ct = r.headers()['content-type'] || '';
+    if (!/json|event-stream/.test(ct)) return;
+    const body = await r.text();
+    hits.push({ status: r.status(), len: body.length, url: r.url(), body });
+  } catch {}
+});
+await page.goto('https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.waitForTimeout(12000);
+console.log('URL:', page.url(), '| title:', await page.title());
+for (const h of hits) console.log(' JSON', h.status, h.len, h.url.slice(0, 120), '|', h.body.slice(0, 120).replace(/\s+/g, ' '));
+const big = hits.filter((h) => h.len > 500).sort((a, b) => b.len - a.len)[0];
+if (big) writeFileSync(OUT + '/copilot-api.json', JSON.stringify({ url: big.url, body: big.body }, null, 1));
+const info = await page.evaluate(() => ({
+  globals: Object.keys(window).filter((k) => /^(__|_)/.test(k) || /copilot|conv|chat|state|store|next/i.test(k)).slice(0, 40),
+  scriptJson: [...document.querySelectorAll('script')].map((s) => ({ id: s.id, type: s.type, len: s.textContent.length })).filter((s) => s.len > 400).slice(0, 15),
+  bodyLen: document.body.innerText.length,
+  bodyHead: document.body.innerText.slice(0, 300).replace(/\s+/g, ' '),
+}));
+console.log(JSON.stringify(info, null, 1));
+writeFileSync(OUT + '/copilot-share.html', await page.content());
+await browser.close();
+EOF
+)"
+```
+
+```text
+URL: https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6 | title: Microsoft Copilot: Your AI companion
+ JSON 200 17300 https://copilot.microsoft.com/c/api/start?features=anonymous-block-page&setflight=anonymous-block-page | {"currentConversationId":"UzHDgnLYPD29rjid3QG2J","isNewUser":true,"allowBeta":false,"remainingTurns":1000,"features":["a
+ JSON 200 2 https://o4508134825000960.ingest.us.sentry.io/api/4508799962644480/envelope/?sentry_version=7&sentry_key=323dd84fb4f632c | {}
+ JSON 200 153 https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=0 | {"acc":1,"webResult":{"msfpc":"GUID=ef4c5bacd6df41cf9ffc07987476d165&HASH=ef4c&LV=202608&V=4&LU=1787668631348","mc1":"ef
+ JSON 200 153 https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=0 | {"acc":9,"webResult":{"msfpc":"GUID=374864931fe447d29857bdf54a5e8c32&HASH=3748&LV=202608&V=4&LU=1787668631348","mc1":"37
+ JSON 200 154 https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=0 | {"acc":12,"webResult":{"msfpc":"GUID=374864931fe447d29857bdf54a5e8c32&HASH=3748&LV=202608&V=4&LU=1787668631348","mc1":"3
+ JSON 200 153 https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=0 | {"acc":1,"webResult":{"msfpc":"GUID=374864931fe447d29857bdf54a5e8c32&HASH=3748&LV=202608&V=4&LU=1787668631348","mc1":"37
+ JSON 200 449 https://api.sprig.com/sdk/1/environments/vxUR7VmFjQst/config | {"border":"#272320","outstandingTransactionLimit":50,"disableTracking":true,"metricThresholds":[],"metricsReportingInter
+ JSON 200 153 https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=0 | {"acc":2,"webResult":{"msfpc":"GUID=374864931fe447d29857bdf54a5e8c32&HASH=3748&LV=202608&V=4&LU=1787668631348","mc1":"37
+{
+ "globals": [
+  "oncontentvisibilityautostatechange",
+  "oncontextrestored",
+  "onpopstate",
+  "cookieStore",
+  "copilotTrustedTypesPolicy",
+  "__TSR_ROUTER__",
+  "__tsUtils$gblCfg",
+  "__dynProto$Gbl",
+  "__TSR_ROUTER_CONTEXT__",
+  "__SENTRY__",
+  "_sentryClientToLogBufferMap",
+  "_spanToFlagBufferMap",
+  "__clr"
+ ],
+ "scriptJson": [
+  {
+   "id": "",
+   "type": "",
+   "len": 1718
+  },
+  {
+   "id": "__i18n-data__",
+   "type": "application/json",
+   "len": 1427
+  }
+ ],
+ "bodyLen": 438,
+ "bodyHead": "Sign in to Copilot Upload files, use Voice without limits, and make Copilot yours with memory across conversations. Sign in with Microsoft Sign in with Apple Sign in with Google This site runs Microsoft Clarity for behavioral insights. By using this site, you consent to the collection and use of y"
+}
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:37:50Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Probe Copilot share API endpoints anonymously
+
+```bash
+node --input-type=module -e "$(cat <<'EOF'
+import { chromium } from 'playwright';
+const ID = 'Yc41Xon3iEp3yY86rFCw6';
+const browser = await chromium.launch({ headless: false, channel: 'chrome', proxy: { server: 'http://127.0.0.1:7897' } });
+const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+await page.goto('https://copilot.microsoft.com/shares/' + ID, { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.waitForTimeout(8000);
+const tries = await page.evaluate(async (id) => {
+  const paths = [
+    `/c/api/shares/${id}`,
+    `/c/api/shares/${id}?api-version=2`,
+    `/c/api/conversations/${id}/history?api-version=2`,
+    `/c/api/share/${id}`,
+    `/c/api/conversations/${id}?api-version=2`,
+  ];
+  const out = [];
+  for (const p of paths) {
+    try {
+      const r = await fetch(p, { credentials: 'include', headers: { accept: 'application/json' } });
+      const t = await r.text();
+      out.push({ p, status: r.status, len: t.length, head: t.slice(0, 200).replace(/\s+/g, ' ') });
+    } catch (e) { out.push({ p, err: e.message }); }
+  }
+  return out;
+}, ID);
+console.log(JSON.stringify(tries, null, 1));
+await browser.close();
+EOF
+)"
+```
+
+```text
+[
+ {
+  "p": "/c/api/shares/Yc41Xon3iEp3yY86rFCw6",
+  "status": 401,
+  "len": 0,
+  "head": ""
+ },
+ {
+  "p": "/c/api/shares/Yc41Xon3iEp3yY86rFCw6?api-version=2",
+  "status": 401,
+  "len": 0,
+  "head": ""
+ },
+ {
+  "p": "/c/api/conversations/Yc41Xon3iEp3yY86rFCw6/history?api-version=2",
+  "status": 403,
+  "len": 0,
+  "head": ""
+ },
+ {
+  "p": "/c/api/share/Yc41Xon3iEp3yY86rFCw6",
+  "status": 401,
+  "len": 0,
+  "head": ""
+ },
+ {
+  "p": "/c/api/conversations/Yc41Xon3iEp3yY86rFCw6?api-version=2",
+  "status": 460,
+  "len": 0,
+  "head": ""
+ }
+]
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:38:59Z)**_
+
+Copilot is reachable now through the proxy — I re-probed it. Results:
+
+- The share page loads but renders a **"Sign in to Copilot" block page** anonymously (`/c/api/start?features=anonymous-block-page`), so no conversation JSON without a session.
+- Endpoint probe from page context: `/c/api/shares/<id>` → **401** (exists, needs auth), `/c/api/conversations/<id>/history?api-version=2` → 403, `/c/api/share/<id>` → 401. So `/c/api/shares/<shareId>` is almost certainly the right door — it just needs your signed-in cookies, which the script will have.
+
+The response *shape* of that endpoint is the one thing I still can't see, so the design captures by shape rather than assuming it.
+
+_**Agent (claude-opus-5 2026-08-25 14:41:00Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Write"><details>
+<summary>Tool use: **Write**</summary>
+
+````markdown
+# Claude / Copilot 對話匯出 Markdown（＋把共用碼搬進 shared/）
+
+## Context
+
+`chatgpt-export-markdown` 已經上線（v1.1.0，可拖曳的浮動按鈕、SpecStory 風格 transcript、
+Agent Handoff、raw JSON）。使用者現在要**同一套東西給 claude.ai 與 copilot.microsoft.com**：
+
+- <https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868>
+- <https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6>
+
+目的一樣：把整段對話變成能直接貼給 coding agent 的 Markdown。
+
+有了第三支 exporter，`shared/README.md` 自己訂的門檻（「同一段 code 出現在三支以上的腳本，
+才值得搬進來」）剛好成立 → 這次順便把 render / 浮動 UI 搬進 `shared/`，三支都改用 `@require`。
+
+### 實測到的事實（決定了兩支新腳本的架構）
+
+用 headed Chrome（Playwright）對兩個 share 連結實測：
+
+**claude.ai**
+
+1. share 頁只打一次 API：`GET /api/chat_snapshots/<id>?rendering_mode=messages&render_all_tools=true`
+   → 乾淨的 JSON：`chat_messages[]`，每則有 `sender: human|assistant`、`content[]`
+   （block `type`：`text`（帶 `citations[]`）/ `thinking` / `tool_use` / `tool_result`）、
+   `parent_message_uuid`、`index`、`created_at`，外層有 `snapshot_name`、`conversation_uuid`。
+   比 ChatGPT 的 `mapping` 乾淨很多。
+2. **同一個 endpoint 再打第二次一律 Cloudflare 403（"Just a moment"）** —— 從同頁 `fetch`、
+   從別的 claude.ai 分頁 `fetch`、從同源 iframe 載入 share 頁，全部被擋。
+   只有「頁面自己在文件載入時發的那一次」會過。
+3. 頁面上**沒有留下**可讀的副本：`__TSR_ROUTER__`（TanStack Router）的 match 沒有 loaderData，
+   `__PUBLIC_VIEWER_PRELOAD__.responses[url]` 在 hydration 後就被清成 undefined，
+   React Query 的 cache 關在 module closure 裡。深掃 window 找 `chat_messages` 形狀：0 命中。
+4. ⇒ **ChatGPT 那支的 tier 2/3/4（router state / 自己重打 API / 隱藏 iframe）在 Claude 全部不能用。**
+   Claude 只剩一條路：`@run-at document-start` 攔截 `fetch`，接住頁面自己那一次成功的回應。
+5. CSP 是 `frame-ancestors 'self'`（iframe 框得起來），但框進去的 share 頁會被導去
+   `/api/challenge_redirect` → 所以「貼任意 share URL 就地讀取」在 Claude 做不到。
+
+**copilot.microsoft.com**
+
+6. 這台機器一度完全連不上（直連 `Connection reset`、proxy `SSL_ERROR_SYSCALL`）；換節點後
+   proxy 可通、直連仍不通。**做這件事時要先確認 copilot.microsoft.com 連得上**。
+7. 匿名開 `/shares/<id>` 會拿到「Sign in to Copilot」擋頁（`/c/api/start?features=anonymous-block-page`），
+   看不到對話內容 → share 內容需要登入 session。
+8. 從頁面 context 打各種 endpoint 的結果：
+   `/c/api/shares/<id>` → **401**（存在，需要 auth）、
+   `/c/api/conversations/<id>/history?api-version=2` → 403、
+   `/c/api/conversations/<id>?api-version=2` → 460。
+   ⇒ share 的門幾乎確定是 `/c/api/shares/<shareId>`，使用者登入後就有；
+   **但它的回應 JSON 長怎樣我看不到**（401 沒有 body）。
+9. 已知的 live chat 那條（來自公開的 Greasyfork exporter，只取用 API 事實、不抄它的程式碼）：
+   頁面 `/chats/<chatId>` ＋ `GET /c/api/conversations/<chatId>/history?api-version=2`
+   → `{ results: [{ author: { type: 'ai' | 'human' }, content: [ {type:'text'|'image'|'citation'|'chainOfThought'} ], createdAt }] }`，
+   authorization 是 `Bearer <token>`（從網站自己的請求上攔）。
+
+### 使用者已確認的取捨
+
+- 共用碼**搬進 `shared/` 用 `@require`**（連帶要讓 `npm run preview` 看得懂 `@require`）
+- Claude 的「貼任意 share URL」→ **GM_openInTab 開新分頁自動匯出**（就地讀取被 CF 擋死）
+- Copilot 因為第 8 點的未知，採「**攔到什麼算什麼 + 找形狀**」的寫法，不預先把 endpoint 與
+  欄位名綁死；第一版裝上去後由使用者回報 console log 再收斂
+
+---
+
+## 要做的事
+
+### 0. 先把手上的東西收乾淨
+
+工作區還有沒 commit 的 `chatgpt-export-markdown` v1.1.0（可拖曳按鈕）。
+先補 README 的拖曳說明再 commit，不要跟這次的重構混在同一個 commit：
+
+> 按鈕**可以直接拖到畫面上任何位置**（滑鼠、觸控都行），位置會記住；面板會自動判斷該往上還是往下開。
+> 想放回右下角就用選單的 `Reset button position`。
+
+### 1. `shared/` 兩個新模組
+
+`@require` 進來的檔案在腳本 scope 直接執行（不是 ES module），所以一律用全域函式宣告，
+寫法照 `shared/dom.js`。
+
+**`shared/chat-export.js`** —— 純轉換，不碰 DOM、不碰 GM：
+
+| 函式 | 用途 |
+| --- | --- |
+| `fence(body, lang)` | backtick-run 感知的 code fence（照搬 chatgpt 版，那個 bug 已經踩過） |
+| `formatUtc(msOrIso)` / `localIso()` / `pad()` | 時間格式，對齊 `.specstory/history/` 的 `YYYY-MM-DD HH:mm:ssZ` |
+| `renderTranscript(doc, opts)` | 吃**正規化後的 doc**，吐 SpecStory 風格 markdown（frontmatter → `# title` → `_**Role (model, ts)**_` 用 `---` 串） |
+| `HANDOFF_HEADER` / `renderHandoff(doc, opts)` | Agent Handoff 變體（前綴文字改成吃 `doc.source` 的名字） |
+| `mergeSections(sections)` | 連續同 role 合併 |
+| `filenameFor(doc, ext)` | `<source>-<title slug>-<YYYYMMDD-HHmm>.<ext>` |
+| `downloadText(name, text, mime)` | 不需 `@grant` 的 blob 下載 |
+
+**正規化的 doc 形狀**（每支腳本的 adapter 負責產出，這是整個重構的介面）：
+
+```js
+{
+  source: 'claude',            // frontmatter 的 source，也用在檔名與 handoff 標題
+  title: '量化投资 vs 定投指数的选择',
+  url: 'https://claude.ai/share/…',
+  ids: { conversation_id: '…', share_id: '…' },   // 有什麼寫什麼
+  model: '',                   // 沒有就空字串
+  createdAt: '2026-08-23T12:34:14Z',
+  sections: [{ role: 'User' | 'Assistant' | 'Tool (name)', model, time, body }],
+}
+```
+
+**`shared/export-ui.js`** —— 浮動按鈕 + 面板 + 拖曳，從 chatgpt 版整段搬過來：
+`createExportPanel({ ns, buttonLabel, actions, toggles, shareInput, storage })`。
+
+- **GM API 不在這個模組裡呼叫**，storage 用注入的 `{ get, set }`。
+  理由：`scripts/check-meta.mjs` 只掃腳本本體來交叉比對 `@grant`，
+  GM 呼叫留在各腳本裡，`npm run check` 才驗得到。
+- 回傳 `{ mount, openPanel, setStatus, resetPosition }`，讓各腳本接選單指令。
+- 拖曳邏輯（pointer events、4px 門檻、`justDragged` 吃掉拖曳後那個 click、
+  `placePanel` 自動翻上下左右、resize 重新夾回畫面）原封不動照搬，不要重寫。
+
+同步更新 `shared/README.md` 的表格與那段「先考慮直接複製」的判準說明
+（現在剛好是「三支以上」的例子，寫清楚為什麼這次搬了）。
+
+### 2. `scripts/preview.mjs`：支援 `@require`
+
+現在 harness 只 `addScriptTag` 腳本本身，`@require` 的內容不會被載入 → 一改成 `@require`，
+這三支腳本就完全沒辦法用 preview 測。所以：
+
+- 讀 metadata 的 `require` 陣列，依序注入到主腳本**之前**
+- URL 若是本 repo 的 raw base（`rawUrlFor` 用的那個前綴），**改讀本機檔案**，
+  這樣測到的是工作區沒 commit 的版本；其他 URL 就照原樣 `fetch`（失敗要明確報錯，不要靜默）
+- console 印出每個 require 是從 local 還是 remote 來的
+
+`scripts/check-meta.mjs` 加一條檢查：指向本 repo 的 `@require` 必須對得到存在的本機檔案
+（打錯路徑會讓腳本裝上去直接壞掉，這是 check 抓得到的事）。
+
+CLAUDE.md 的「測試腳本」段與 `docs/13-playwright-vs-userscript.md` 補一句
+「`@require` 會被解析，本 repo 的走本機檔案」。
+
+### 3. `userscripts/claude-export-markdown/`
+
+```bash
+npm run new -- claude-export-markdown "Claude Export Markdown" "https://claude.ai/*" \
+  "把整段 Claude 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用"
+```
+
+metadata：`@run-at document-start`（**非有不可**，晚一步就攔不到那唯一一次成功的請求）、
+`@grant unsafeWindow / GM_registerMenuCommand / GM_setClipboard / GM_setValue / GM_getValue /
+GM_deleteValue / GM_openInTab`（全在 `PORTABLE_GM` 內）、兩個 `@require` 指到 `shared/`。
+
+**取得資料（只有兩層，而且要讓失敗講人話）：**
+
+1. `installNetworkCapture()`：patch `pageWin.fetch`，`response.clone().json()`，
+   URL 命中 `/\/api\/(chat_snapshots|organizations\/[^/]+\/chat_conversations)\//` 就存進
+   `Map<id, data>`。**一定要把原本的 response 還回去。**
+2. fallback：自己打同一個 URL（登入中的 `/chat/<uuid>` 這條大概率會過；share 那條實測會被
+   CF 403）。403 時的錯誤訊息必須是可行動的：
+   「Claude 只放行頁面自己的第一次請求 —— 請**重新整理這一頁**再按一次。」
+   **不要寫 DOM fallback**（理由同 chatgpt 版：寧可明白失敗，也不要吐殘缺的 transcript）。
+
+**normalize（adapter）：**
+
+- 取 thread：預設照 `index` 排序；`chat_messages` 有分支（同一個 `parent_message_uuid`
+  出現多次）時，從最後一則沿 `parent_message_uuid` 往上走再 reverse，只留目前這條。
+- `sender: human → User`、`assistant → Assistant`。
+- block `type`：
+  - `text` → 原文（**這就是模型吐出來的 raw markdown**），`citations[]` 非空時在段末補
+    一份去重的 `- [title](url)` 來源清單（Claude 的 citation 是 index 區間，不是 ChatGPT 那種
+    PUA sentinel，所以不需要 `applyCitations` 那套；實際欄位名要在拿到帶搜尋的樣本後確認，
+    先寫成「有 `url` 就用，`title` 缺就拿 url 當標題」）
+  - `thinking` → 受 `includeThinking` 控制（欄位優先序 `thinking` → `text` → `summaries[].summary`）
+  - `tool_use` / `tool_result` → 受 `includeTools` 控制；`name` 當標題，`input` /
+    `content` / `structured_content` 包 JSON fence
+  - 未知 type → JSON fence，**不要靜默丟掉**
+- `attachments[]` / `files[]` 有東西時列出檔名。
+- frontmatter：`source: claude`、`title: snapshot_name`、`url`、`conversation_uuid`、
+  `snapshot_uuid`、`created_at`、`exported_at`、`messages`、兩個 include 開關、`exporter`。
+
+**貼 share URL → 開新分頁自動匯出：**
+
+- 面板輸入框 / 選單 `Export from share URL…` 收到 URL → 取 `/share/<id>` →
+  `GM_setValue('pendingExport', { shareId, mode, expires: Date.now() + 120_000 })` →
+  `GM_openInTab(url, { active: true })`
+- 腳本啟動時：若目前就在 `/share/<id>` 且 pending 的 `shareId` 對得上、也還沒過期 →
+  先 `GM_deleteValue`（**一次性，先消耗再執行**，免得失敗時每次開頁都重跑），
+  等攔截到資料後自動 copy 並在面板顯示結果。
+
+### 4. `userscripts/copilot-export-markdown/`
+
+```bash
+npm run new -- copilot-export-markdown "Copilot Export Markdown" "https://copilot.microsoft.com/*" \
+  "把整段 Microsoft Copilot 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用"
+```
+
+metadata 同 Claude 版（`document-start` + 同一組 grant + 兩個 `@require`）。
+
+**取得資料 —— 因為 `/c/api/shares/<id>` 的回應形狀還沒看過，這裡刻意寫成「不綁死」：**
+
+1. `installNetworkCapture()`：同時 patch `fetch` **與 `XMLHttpRequest`**（Copilot 兩種都可能用），
+   URL 命中 `/\/c\/api\/(shares|conversations)\//` 就把 JSON 存起來，
+   順便把請求上的 `Authorization: Bearer …` 記下來給第 2 層用。
+2. fallback 直接打：在 `/shares/<id>` 打 `/c/api/shares/<id>`；在 `/chats/<id>` 打
+   `/c/api/conversations/<id>/history?api-version=2`；打之前先 `POST /c/api/start`
+   暖 session（公開 exporter 的做法，401 時值得再試一次）。帶 `credentials: 'include'`
+   ＋（有攔到的話）`Authorization`。
+3. **形狀辨識**（關鍵）：不假設 top-level key 是 `results`，而是深掃 JSON 找
+   「元素同時有 `author`（或 `sender`）與陣列 `content` 的陣列」，取最長的那個當訊息列表。
+   這樣 `/c/api/shares/<id>` 不管包成 `{results}`、`{messages}` 還是 `{conversation:{…}}` 都吃得到。
+4. 匯出成功時 `console.log` 印出**命中的 URL 與 top-level keys**，
+   README 也寫明「如果失敗，請把 console 這行與 Copy raw JSON 的內容回報」——
+   這是把第 8 點那個未知收斂掉的手段。
+
+**normalize：** `author.type: 'human' → User`、`'ai' → Assistant`；依 `createdAt` 排序；
+part `type`：`text` → 原文、`image` → `![image](url)`（有 `prompt` 就補一行斜體 caption）、
+`citation` → 收集成段末來源清單、`chainOfThought` → 受 `includeThinking` 控制、
+其他 → JSON fence（受 `includeTools` 控制，避免預設輸出被雜訊淹掉）。
+
+### 5. `chatgpt-export-markdown` 改用 shared/
+
+刪掉本體裡的 render / UI / 拖曳段落，改成兩個 `@require` ＋ 一個把 ChatGPT JSON 轉成
+正規化 doc 的 adapter（`buildThread` / `visibleMessages` / `textOf` / `applyCitations`
+留在腳本裡，那些是 ChatGPT 專屬的）。`@version` → 1.2.0。
+
+**不要動它現有的四層 fallback**，那是實測過的；這次只搬共用碼。
+
+### 6. 兩份 README ＋ 索引
+
+各自照 `userscripts/chatgpt-export-markdown/README.md` 的結構寫，並且**誠實寫下已知限制**：
+
+- Claude：只吃頁面自己那一次請求，**沒攔到就要重新整理**；同源 iframe 與跨頁 fetch 被 CF 擋
+  （所以貼 URL 是開新分頁）；靠 app 的私有 API，改版就可能壞。
+- Copilot：share 內容需要登入；`/c/api/shares/<id>` 的欄位是靠形狀辨識吃進來的，
+  遇到沒見過的形狀請回報 console log ＋ raw JSON。
+- 兩支都只匯出目前這條 branch；`@require` 讓腳本多一個 raw.githubusercontent.com 的網路相依。
+
+最後跑 `npm run index` 重新產生根 README 的腳本清單表格（**不要手改表格內容**）。
+
+---
+
+## 驗證
+
+```bash
+npm run check      # metadata、@grant 交叉比對、新增的 @require 本機解析檢查
+npm run verify     # = check + index:check，等同 CI
+npx prettier --check .
+
+# harness 冒煙測（確認 @require 有被載入、腳本能跑、選單有註冊、沒有 pageerror）
+npm run preview -- claude-export-markdown "https://claude.ai/login"
+npm run preview -- copilot-export-markdown "https://copilot.microsoft.com/"
+npm run preview -- chatgpt-export-markdown \
+  "https://chatgpt.com/share/6a8d5801-10d8-83ec-b5e7-9d8dc54d48c6" \
+  --menu "Copy Markdown" --wait 20000     # 重構後的回歸測，輸出要跟 v1.1.0 一致
+```
+
+harness 是 `document-idle` 注入，**攔截那層在 preview 裡測不到**（`docs/13` 已寫明）——
+所以 Claude / Copilot 的 preview 只能證明「腳本載得起來、UI 掛得上」。
+
+### 必須由使用者實機驗證（harness 沒有登入 session）
+
+1. claude.ai `/share/<id>`：Copy Markdown 有沒有東西、來源顯示 `network-capture`
+2. claude.ai 登入中的 `/chat/<uuid>`：同上，切換對話（SPA 導航）後再按一次是不是新的那個
+3. claude.ai 貼 share URL → 是否開新分頁並自動複製
+4. copilot.microsoft.com 登入後 `/shares/<id>` 與 `/chats/<id>` 各一次；
+   **把 console 那行「命中的 URL 與 top-level keys」回報**，必要時附 Copy raw JSON 的結果
+5. Tampermonkey 與 Violentmonkey 各跑一次（sandbox 行為不同，`unsafeWindow` 與 `@require` 都是風險點）
+6. 改到的三支腳本都記得 `@version` 有加（TM 只認版本號）
+
+## 不做的事
+
+- 不寫 DOM scrape fallback（Claude / Copilot 都一樣：寧可明白失敗）
+- 不合併成一支多站腳本（維持一支腳本一個 slug、`@match` 最小範圍）
+- 不新增 `docs/NN-*.md`；只在 CLAUDE.md 與 `docs/13` 補 `@require` 那一句
+- 不 push（要不要推到 GitHub 由使用者決定）
+
+````
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/.claude/plans/specstory-local-codex-chat-history-mark-shimmering-eagle.md has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:41:03Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="ToolSearch"><details>
+<summary>Tool use: **ToolSearch**</summary>
+
+**Input:**
+
+- max_results: `1`
+- query: `select:ExitPlanMode`
+
+**Result:**
+
+```
+
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:57:11Z)**_
+
+<tool-use data-tool-type="generic" data-tool-name="ExitPlanMode"><details>
+<summary>Tool use: **ExitPlanMode**</summary>
+
+```text
+User has approved your plan. You can now start coding. Start with updating your todo list if applicable
+
+Your plan has been saved to: /Users/david/Documents/Program/Tampermonkey-Scripts/.claude/plans/specstory-local-codex-chat-history-mark-shimmering-eagle.md
+You can refer back to it if needed during implementation.
+
+## Approved Plan:
+# Claude / Copilot 對話匯出 Markdown（＋把共用碼搬進 shared/）
+
+## Context
+
+`chatgpt-export-markdown` 已經上線（v1.1.0，可拖曳的浮動按鈕、SpecStory 風格 transcript、
+Agent Handoff、raw JSON）。使用者現在要**同一套東西給 claude.ai 與 copilot.microsoft.com**：
+
+- <https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868>
+- <https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6>
+
+目的一樣：把整段對話變成能直接貼給 coding agent 的 Markdown。
+
+有了第三支 exporter，`shared/README.md` 自己訂的門檻（「同一段 code 出現在三支以上的腳本，
+才值得搬進來」）剛好成立 → 這次順便把 render / 浮動 UI 搬進 `shared/`，三支都改用 `@require`。
+
+### 實測到的事實（決定了兩支新腳本的架構）
+
+用 headed Chrome（Playwright）對兩個 share 連結實測：
+
+**claude.ai**
+
+1. share 頁只打一次 API：`GET /api/chat_snapshots/<id>?rendering_mode=messages&render_all_tools=true`
+   → 乾淨的 JSON：`chat_messages[]`，每則有 `sender: human|assistant`、`content[]`
+   （block `type`：`text`（帶 `citations[]`）/ `thinking` / `tool_use` / `tool_result`）、
+   `parent_message_uuid`、`index`、`created_at`，外層有 `snapshot_name`、`conversation_uuid`。
+   比 ChatGPT 的 `mapping` 乾淨很多。
+2. **同一個 endpoint 再打第二次一律 Cloudflare 403（"Just a moment"）** —— 從同頁 `fetch`、
+   從別的 claude.ai 分頁 `fetch`、從同源 iframe 載入 share 頁，全部被擋。
+   只有「頁面自己在文件載入時發的那一次」會過。
+3. 頁面上**沒有留下**可讀的副本：`__TSR_ROUTER__`（TanStack Router）的 match 沒有 loaderData，
+   `__PUBLIC_VIEWER_PRELOAD__.responses[url]` 在 hydration 後就被清成 undefined，
+   React Query 的 cache 關在 module closure 裡。深掃 window 找 `chat_messages` 形狀：0 命中。
+4. ⇒ **ChatGPT 那支的 tier 2/3/4（router state / 自己重打 API / 隱藏 iframe）在 Claude 全部不能用。**
+   Claude 只剩一條路：`@run-at document-start` 攔截 `fetch`，接住頁面自己那一次成功的回應。
+5. CSP 是 `frame-ancestors 'self'`（iframe 框得起來），但框進去的 share 頁會被導去
+   `/api/challenge_redirect` → 所以「貼任意 share URL 就地讀取」在 Claude 做不到。
+
+**copilot.microsoft.com**
+
+6. 這台機器一度完全連不上（直連 `Connection reset`、proxy `SSL_ERROR_SYSCALL`）；換節點後
+   proxy 可通、直連仍不通。**做這件事時要先確認 copilot.microsoft.com 連得上**。
+7. 匿名開 `/shares/<id>` 會拿到「Sign in to Copilot」擋頁（`/c/api/start?features=anonymous-block-page`），
+   看不到對話內容 → share 內容需要登入 session。
+8. 從頁面 context 打各種 endpoint 的結果：
+   `/c/api/shares/<id>` → **401**（存在，需要 auth）、
+   `/c/api/conversations/<id>/history?api-version=2` → 403、
+   `/c/api/conversations/<id>?api-version=2` → 460。
+   ⇒ share 的門幾乎確定是 `/c/api/shares/<shareId>`，使用者登入後就有；
+   **但它的回應 JSON 長怎樣我看不到**（401 沒有 body）。
+9. 已知的 live chat 那條（來自公開的 Greasyfork exporter，只取用 API 事實、不抄它的程式碼）：
+   頁面 `/chats/<chatId>` ＋ `GET /c/api/conversations/<chatId>/history?api-version=2`
+   → `{ results: [{ author: { type: 'ai' | 'human' }, content: [ {type:'text'|'image'|'citation'|'chainOfThought'} ], createdAt }] }`，
+   authorization 是 `Bearer <token>`（從網站自己的請求上攔）。
+
+### 使用者已確認的取捨
+
+- 共用碼**搬進 `shared/` 用 `@require`**（連帶要讓 `npm run preview` 看得懂 `@require`）
+- Claude 的「貼任意 share URL」→ **GM_openInTab 開新分頁自動匯出**（就地讀取被 CF 擋死）
+- Copilot 因為第 8 點的未知，採「**攔到什麼算什麼 + 找形狀**」的寫法，不預先把 endpoint 與
+  欄位名綁死；第一版裝上去後由使用者回報 console log 再收斂
+
+---
+
+## 要做的事
+
+### 0. 先把手上的東西收乾淨
+
+工作區還有沒 commit 的 `chatgpt-export-markdown` v1.1.0（可拖曳按鈕）。
+先補 README 的拖曳說明再 commit，不要跟這次的重構混在同一個 commit：
+
+> 按鈕**可以直接拖到畫面上任何位置**（滑鼠、觸控都行），位置會記住；面板會自動判斷該往上還是往下開。
+> 想放回右下角就用選單的 `Reset button position`。
+
+### 1. `shared/` 兩個新模組
+
+`@require` 進來的檔案在腳本 scope 直接執行（不是 ES module），所以一律用全域函式宣告，
+寫法照 `shared/dom.js`。
+
+**`shared/chat-export.js`** —— 純轉換，不碰 DOM、不碰 GM：
+
+| 函式 | 用途 |
+| --- | --- |
+| `fence(body, lang)` | backtick-run 感知的 code fence（照搬 chatgpt 版，那個 bug 已經踩過） |
+| `formatUtc(msOrIso)` / `localIso()` / `pad()` | 時間格式，對齊 `.specstory/history/` 的 `YYYY-MM-DD HH:mm:ssZ` |
+| `renderTranscript(doc, opts)` | 吃**正規化後的 doc**，吐 SpecStory 風格 markdown（frontmatter → `# title` → `_**Role (model, ts)**_` 用 `---` 串） |
+| `HANDOFF_HEADER` / `renderHandoff(doc, opts)` | Agent Handoff 變體（前綴文字改成吃 `doc.source` 的名字） |
+| `mergeSections(sections)` | 連續同 role 合併 |
+| `filenameFor(doc, ext)` | `<source>-<title slug>-<YYYYMMDD-HHmm>.<ext>` |
+| `downloadText(name, text, mime)` | 不需 `@grant` 的 blob 下載 |
+
+**正規化的 doc 形狀**（每支腳本的 adapter 負責產出，這是整個重構的介面）：
+
+```js
+{
+  source: 'claude',            // frontmatter 的 source，也用在檔名與 handoff 標題
+  title: '量化投资 vs 定投指数的选择',
+  url: 'https://claude.ai/share/…',
+  ids: { conversation_id: '…', share_id: '…' },   // 有什麼寫什麼
+  model: '',                   // 沒有就空字串
+  createdAt: '2026-08-23T12:34:14Z',
+  sections: [{ role: 'User' | 'Assistant' | 'Tool (name)', model, time, body }],
+}
+```
+
+**`shared/export-ui.js`** —— 浮動按鈕 + 面板 + 拖曳，從 chatgpt 版整段搬過來：
+`createExportPanel({ ns, buttonLabel, actions, toggles, shareInput, storage })`。
+
+- **GM API 不在這個模組裡呼叫**，storage 用注入的 `{ get, set }`。
+  理由：`scripts/check-meta.mjs` 只掃腳本本體來交叉比對 `@grant`，
+  GM 呼叫留在各腳本裡，`npm run check` 才驗得到。
+- 回傳 `{ mount, openPanel, setStatus, resetPosition }`，讓各腳本接選單指令。
+- 拖曳邏輯（pointer events、4px 門檻、`justDragged` 吃掉拖曳後那個 click、
+  `placePanel` 自動翻上下左右、resize 重新夾回畫面）原封不動照搬，不要重寫。
+
+同步更新 `shared/README.md` 的表格與那段「先考慮直接複製」的判準說明
+（現在剛好是「三支以上」的例子，寫清楚為什麼這次搬了）。
+
+### 2. `scripts/preview.mjs`：支援 `@require`
+
+現在 harness 只 `addScriptTag` 腳本本身，`@require` 的內容不會被載入 → 一改成 `@require`，
+這三支腳本就完全沒辦法用 preview 測。所以：
+
+- 讀 metadata 的 `require` 陣列，依序注入到主腳本**之前**
+- URL 若是本 repo 的 raw base（`rawUrlFor` 用的那個前綴），**改讀本機檔案**，
+  這樣測到的是工作區沒 commit 的版本；其他 URL 就照原樣 `fetch`（失敗要明確報錯，不要靜默）
+- console 印出每個 require 是從 local 還是 remote 來的
+
+`scripts/check-meta.mjs` 加一條檢查：指向本 repo 的 `@require` 必須對得到存在的本機檔案
+（打錯路徑會讓腳本裝上去直接壞掉，這是 check 抓得到的事）。
+
+CLAUDE.md 的「測試腳本」段與 `docs/13-playwright-vs-userscript.md` 補一句
+「`@require` 會被解析，本 repo 的走本機檔案」。
+
+### 3. `userscripts/claude-export-markdown/`
+
+```bash
+npm run new -- claude-export-markdown "Claude Export Markdown" "https://claude.ai/*" \
+  "把整段 Claude 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用"
+```
+
+metadata：`@run-at document-start`（**非有不可**，晚一步就攔不到那唯一一次成功的請求）、
+`@grant unsafeWindow / GM_registerMenuCommand / GM_setClipboard / GM_setValue / GM_getValue /
+GM_deleteValue / GM_openInTab`（全在 `PORTABLE_GM` 內）、兩個 `@require` 指到 `shared/`。
+
+**取得資料（只有兩層，而且要讓失敗講人話）：**
+
+1. `installNetworkCapture()`：patch `pageWin.fetch`，`response.clone().json()`，
+   URL 命中 `/\/api\/(chat_snapshots|organizations\/[^/]+\/chat_conversations)\//` 就存進
+   `Map<id, data>`。**一定要把原本的 response 還回去。**
+2. fallback：自己打同一個 URL（登入中的 `/chat/<uuid>` 這條大概率會過；share 那條實測會被
+   CF 403）。403 時的錯誤訊息必須是可行動的：
+   「Claude 只放行頁面自己的第一次請求 —— 請**重新整理這一頁**再按一次。」
+   **不要寫 DOM fallback**（理由同 chatgpt 版：寧可明白失敗，也不要吐殘缺的 transcript）。
+
+**normalize（adapter）：**
+
+- 取 thread：預設照 `index` 排序；`chat_messages` 有分支（同一個 `parent_message_uuid`
+  出現多次）時，從最後一則沿 `parent_message_uuid` 往上走再 reverse，只留目前這條。
+- `sender: human → User`、`assistant → Assistant`。
+- block `type`：
+  - `text` → 原文（**這就是模型吐出來的 raw markdown**），`citations[]` 非空時在段末補
+    一份去重的 `- [title](url)` 來源清單（Claude 的 citation 是 index 區間，不是 ChatGPT 那種
+    PUA sentinel，所以不需要 `applyCitations` 那套；實際欄位名要在拿到帶搜尋的樣本後確認，
+    先寫成「有 `url` 就用，`title` 缺就拿 url 當標題」）
+  - `thinking` → 受 `includeThinking` 控制（欄位優先序 `thinking` → `text` → `summaries[].summary`）
+  - `tool_use` / `tool_result` → 受 `includeTools` 控制；`name` 當標題，`input` /
+    `content` / `structured_content` 包 JSON fence
+  - 未知 type → JSON fence，**不要靜默丟掉**
+- `attachments[]` / `files[]` 有東西時列出檔名。
+- frontmatter：`source: claude`、`title: snapshot_name`、`url`、`conversation_uuid`、
+  `snapshot_uuid`、`created_at`、`exported_at`、`messages`、兩個 include 開關、`exporter`。
+
+**貼 share URL → 開新分頁自動匯出：**
+
+- 面板輸入框 / 選單 `Export from share URL…` 收到 URL → 取 `/share/<id>` →
+  `GM_setValue('pendingExport', { shareId, mode, expires: Date.now() + 120_000 })` →
+  `GM_openInTab(url, { active: true })`
+- 腳本啟動時：若目前就在 `/share/<id>` 且 pending 的 `shareId` 對得上、也還沒過期 →
+  先 `GM_deleteValue`（**一次性，先消耗再執行**，免得失敗時每次開頁都重跑），
+  等攔截到資料後自動 copy 並在面板顯示結果。
+
+### 4. `userscripts/copilot-export-markdown/`
+
+```bash
+npm run new -- copilot-export-markdown "Copilot Export Markdown" "https://copilot.microsoft.com/*" \
+  "把整段 Microsoft Copilot 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用"
+```
+
+metadata 同 Claude 版（`document-start` + 同一組 grant + 兩個 `@require`）。
+
+**取得資料 —— 因為 `/c/api/shares/<id>` 的回應形狀還沒看過，這裡刻意寫成「不綁死」：**
+
+1. `installNetworkCapture()`：同時 patch `fetch` **與 `XMLHttpRequest`**（Copilot 兩種都可能用），
+   URL 命中 `/\/c\/api\/(shares|conversations)\//` 就把 JSON 存起來，
+   順便把請求上的 `Authorization: Bearer …` 記下來給第 2 層用。
+2. fallback 直接打：在 `/shares/<id>` 打 `/c/api/shares/<id>`；在 `/chats/<id>` 打
+   `/c/api/conversations/<id>/history?api-version=2`；打之前先 `POST /c/api/start`
+   暖 session（公開 exporter 的做法，401 時值得再試一次）。帶 `credentials: 'include'`
+   ＋（有攔到的話）`Authorization`。
+3. **形狀辨識**（關鍵）：不假設 top-level key 是 `results`，而是深掃 JSON 找
+   「元素同時有 `author`（或 `sender`）與陣列 `content` 的陣列」，取最長的那個當訊息列表。
+   這樣 `/c/api/shares/<id>` 不管包成 `{results}`、`{messages}` 還是 `{conversation:{…}}` 都吃得到。
+4. 匯出成功時 `console.log` 印出**命中的 URL 與 top-level keys**，
+   README 也寫明「如果失敗，請把 console 這行與 Copy raw JSON 的內容回報」——
+   這是把第 8 點那個未知收斂掉的手段。
+
+**normalize：** `author.type: 'human' → User`、`'ai' → Assistant`；依 `createdAt` 排序；
+part `type`：`text` → 原文、`image` → `![image](url)`（有 `prompt` 就補一行斜體 caption）、
+`citation` → 收集成段末來源清單、`chainOfThought` → 受 `includeThinking` 控制、
+其他 → JSON fence（受 `includeTools` 控制，避免預設輸出被雜訊淹掉）。
+
+### 5. `chatgpt-export-markdown` 改用 shared/
+
+刪掉本體裡的 render / UI / 拖曳段落，改成兩個 `@require` ＋ 一個把 ChatGPT JSON 轉成
+正規化 doc 的 adapter（`buildThread` / `visibleMessages` / `textOf` / `applyCitations`
+留在腳本裡，那些是 ChatGPT 專屬的）。`@version` → 1.2.0。
+
+**不要動它現有的四層 fallback**，那是實測過的；這次只搬共用碼。
+
+### 6. 兩份 README ＋ 索引
+
+各自照 `userscripts/chatgpt-export-markdown/README.md` 的結構寫，並且**誠實寫下已知限制**：
+
+- Claude：只吃頁面自己那一次請求，**沒攔到就要重新整理**；同源 iframe 與跨頁 fetch 被 CF 擋
+  （所以貼 URL 是開新分頁）；靠 app 的私有 API，改版就可能壞。
+- Copilot：share 內容需要登入；`/c/api/shares/<id>` 的欄位是靠形狀辨識吃進來的，
+  遇到沒見過的形狀請回報 console log ＋ raw JSON。
+- 兩支都只匯出目前這條 branch；`@require` 讓腳本多一個 raw.githubusercontent.com 的網路相依。
+
+最後跑 `npm run index` 重新產生根 README 的腳本清單表格（**不要手改表格內容**）。
+
+---
+
+## 驗證
+
+```bash
+npm run check      # metadata、@grant 交叉比對、新增的 @require 本機解析檢查
+npm run verify     # = check + index:check，等同 CI
+npx prettier --check .
+
+# harness 冒煙測（確認 @require 有被載入、腳本能跑、選單有註冊、沒有 pageerror）
+npm run preview -- claude-export-markdown "https://claude.ai/login"
+npm run preview -- copilot-export-markdown "https://copilot.microsoft.com/"
+npm run preview -- chatgpt-export-markdown \
+  "https://chatgpt.com/share/6a8d5801-10d8-83ec-b5e7-9d8dc54d48c6" \
+  --menu "Copy Markdown" --wait 20000     # 重構後的回歸測，輸出要跟 v1.1.0 一致
+```
+
+harness 是 `document-idle` 注入，**攔截那層在 preview 裡測不到**（`docs/13` 已寫明）——
+所以 Claude / Copilot 的 preview 只能證明「腳本載得起來、UI 掛得上」。
+
+### 必須由使用者實機驗證（harness 沒有登入 session）
+
+1. claude.ai `/share/<id>`：Copy Markdown 有沒有東西、來源顯示 `network-capture`
+2. claude.ai 登入中的 `/chat/<uuid>`：同上，切換對話（SPA 導航）後再按一次是不是新的那個
+3. claude.ai 貼 share URL → 是否開新分頁並自動複製
+4. copilot.microsoft.com 登入後 `/shares/<id>` 與 `/chats/<id>` 各一次；
+   **把 console 那行「命中的 URL 與 top-level keys」回報**，必要時附 Copy raw JSON 的結果
+5. Tampermonkey 與 Violentmonkey 各跑一次（sandbox 行為不同，`unsafeWindow` 與 `@require` 都是風險點）
+6. 改到的三支腳本都記得 `@version` 有加（TM 只認版本號）
+
+## 不做的事
+
+- 不寫 DOM scrape fallback（Claude / Copilot 都一樣：寧可明白失敗）
+- 不合併成一支多站腳本（維持一支腳本一個 slug、`@match` 最小範圍）
+- 不新增 `docs/NN-*.md`；只在 CLAUDE.md 與 `docs/13` 補 `@require` 那一句
+- 不 push（要不要推到 GitHub 由使用者決定）
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:57:16Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read ChatGPT exporter README
+
+`cat userscripts/chatgpt-export-markdown/README.md`
+
+```text
+# ChatGPT Export Markdown
+
+把一整段 ChatGPT 對話匯成 Markdown，格式仿 SpecStory 的 chat history，
+目的是**貼給 coding agent**（Claude Code / Codex / Cursor…）當作前情提要。
+
+- **生效網站**：`https://chatgpt.com/*`
+- **安裝**：[點這裡安裝](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js)（需先裝好 Tampermonkey / Violentmonkey）
+- **原始碼**：[`chatgpt-export-markdown.user.js`](./chatgpt-export-markdown.user.js)
+
+## 它做了什麼
+
+右下角一顆 **⇩ Export MD**，點開有四個動作：
+
+| 動作 | 輸出 |
+| --- | --- |
+| Copy Markdown | 完整 transcript（YAML frontmatter + `_**User**_` / `_**Assistant**_`）進剪貼簿 |
+| Copy Agent Handoff | 同上，但前面多一段給 agent 的指示（把已定案的決策當既有前提、不要重開已解決的問題） |
+| Download .md | 同 transcript，存成 `chatgpt-<標題>-<時間>.md` |
+| Download .json | 原始對話 JSON，之後要重新 render / 建索引用 |
+
+外加兩個開關（預設關，會記住）：**含 thinking / reasoning**、**含工具呼叫與搜尋結果**。
+預設輸出就是最乾淨的問答本文。
+
+按鈕**可以直接拖到畫面上任何位置**（滑鼠、觸控都行），位置會記住；
+面板會自動判斷該往上還是往下開。想放回右下角就用選單的 `Reset button position`。
+
+同樣的動作在 manager 的選單裡也各有一個，另外多一個 `Export from share URL…`：
+貼上**任何** public share URL 就能匯出，不必先切過去那一頁。
+
+典型用法：
+
+```bash
+pbpaste > /tmp/chat-context.md
+claude
+# > Read @/tmp/chat-context.md first. Treat the decisions there as project context.
+```
+
+## 為什麼不是「抓 DOM 轉 Markdown」就好
+
+網路上的 console snippet 幾乎都長這樣：
+
+```js
+document.querySelectorAll('[data-message-author-role]'); // ← 這條路是死的
+```
+
+實測一段 **44 則**訊息的對話，DOM 裡同時只存在 **4 個** `[data-message-author-role]`——
+ChatGPT 的訊息列表是 virtualized 的，捲過去的訊息會被回收。
+所以 DOM 那條路先天就殘缺，而且 Markdown 是從已渲染的 HTML 反推回來的，
+code fence、表格、citation 都可能失真。
+
+這支腳本改抓 ChatGPT 自己的對話 JSON——裡面是**模型原本吐出的 raw markdown**。
+取得順序（第一個成功的就用）：
+
+| # | 來源 | 適用 |
+| --- | --- | --- |
+| 1 | `document-start` 時攔下網站自己發的 `/backend-api/conversation/<id>` 回應 | 登入中的 `/c/<id>` |
+| 2 | 掃 `window.__reactRouterContext.state.loaderData` 找對話物件 | `/share/<id>` |
+| 3 | 自己打 `/backend-api/conversation/<id>`（token 取自 `/api/auth/session`） | 登入中的 `/c/<id>` |
+| 4 | 同源隱藏 iframe 載入 `/share/<id>` 再讀它的 router state | 貼上的任意 share URL |
+
+第 4 條可行是因為 chatgpt.com 的 CSP 是 `frame-ancestors 'self' …`——同源框得起來。
+（直接用 `fetch` 打 `/backend-api/share/<id>` 會被 Cloudflare 擋 403，所以那不能當主力。）
+
+**四條都失敗時它會明白報錯，不會退回去 scrape DOM。**
+殘缺的 transcript 比沒有 transcript 更糟——agent 不會知道少了什麼。
+
+## 幾個處理過的細節
+
+- **citation**：`\uE200cite\uE202turn0search1\uE201` 這種私有區 sentinel 會用同一則訊息的
+  `metadata.content_references` 換成現成的 markdown 連結，例如 `([GitHub](https://…))`。
+  換的時候是**按 index 換那一段**而不是全文 `replace`——因為 `sources_footnote` 型的
+  `matched_text` 是「一個半形空白」，全文替換會把整篇的空白刪光。
+- **合併同 role 的連續訊息**：一輪 assistant 常被拆成「開場白 → 搜尋 → 正文」好幾則。
+- **只匯出目前選中的那條 branch**，編輯／重生過的分支不會混進來。
+- **未知的 content_type**（Deep Research、canvas 之類的新東西）會以 JSON code block
+  原樣留著，不會靜默消失。
+
+## 已知限制
+
+- 靠 `__reactRouterContext` 這種 app internals，ChatGPT 改版就可能失效
+  （見 [`docs/06`](../../docs/06-sandbox-and-unsafewindow.md)，那裡把這列為最脆弱的一層）。
+  選它是因為更穩的那層（DOM）根本拿不到完整資料。壞掉的徵兆是按鈕跳「抓不到對話資料」。
+- 只在 share 頁做過端到端驗證（`npm run preview`）。登入中的 `/c/` 走的是第 1/3 條路，
+  沒有登入 session 的 harness 驗不到，得實機確認。
+- Deep Research 報告目前沒有真實樣本可驗；官方本來就有 Download → Markdown，混合的
+  對話建議兩邊都留一份。
+- 圖片只輸出 `![image](<asset_pointer>)` 佔位，不會下載檔案。
+
+## 測試
+
+```bash
+npm run preview -- chatgpt-export-markdown \
+  "https://chatgpt.com/share/<id>" --menu "Copy Markdown" --wait 20000
+```
+
+`--wait` 不能省：抓資料是 async 的，harness 預設只等 300ms。
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:57:22Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check working tree state
+
+`cd /tmp && git -C /Users/david/Documents/Program/Tampermonkey-Scripts status --short && echo '=== diff stat ===' && git -C /Users/david/Documents/Program/Tampermonkey-Scripts diff --stat userscripts/`
+
+```text
+ M .claude/plans/specstory-local-codex-chat-history-mark-shimmering-eagle.md
+ M .specstory/history/2026-08-25_08-55-31Z-specstory-local-codex-chat.md
+ M .specstory/statistics.json
+=== diff stat ===
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:57:26Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Verify v1.1.0 commit exists
+
+`cd /tmp && git -C /Users/david/Documents/Program/Tampermonkey-Scripts log --oneline -3 && grep -n '@version' /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js`
+
+```text
+3447ee4 Backup chat history
+b561045 feat(chatgpt-export-markdown): 讓浮動按鈕可以拖到任何位置
+a4a4568 feat(chatgpt-export-markdown): export a whole ChatGPT chat as agent-ready Markdown
+4:// @version      1.1.0
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:57:31Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read shared/dom.js, meta lib, package.json
+
+`cat shared/dom.js; echo '======= meta.mjs ======='; cat scripts/lib/meta.mjs; echo '======= package.json ======='; cat package.json`
+
+```text
+/* eslint-env browser */
+/**
+ * 共用 DOM 工具，給 userscript 用 `@require` 引入：
+ *
+ *   // @require https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/dom.js
+ *
+ * 注意這不是 ES module —— `@require` 進來的檔案會直接在腳本的 scope 執行，
+ * 所以這裡用的是全域函式宣告。
+ *
+ * 先讀 shared/README.md：多數情況直接把需要的函式複製到腳本裡更省事。
+ */
+
+/** 等某個 selector 出現，逾時就 reject。SPA 上最常用的一個。 */
+function waitForElement(selector, { timeout = 10_000, root = document.documentElement } = {}) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(selector);
+    if (existing) return resolve(existing);
+
+    const observer = new MutationObserver(() => {
+      const el = document.querySelector(selector);
+      if (el) {
+        observer.disconnect();
+        clearTimeout(timer);
+        resolve(el);
+      }
+    });
+    observer.observe(root, { childList: true, subtree: true });
+
+    const timer = setTimeout(() => {
+      observer.disconnect();
+      reject(new Error(`${selector} not found within ${timeout}ms`));
+    }, timeout);
+  });
+}
+
+/** SPA 路由變化偵測。history.pushState 不會觸發任何原生事件，所以比對 URL。 */
+function onUrlChange(callback) {
+  let lastUrl = location.href;
+  const observer = new MutationObserver(() => {
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      callback(location.href);
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  return () => observer.disconnect();
+}
+
+/** MutationObserver callback 幾乎都該包一層 debounce。 */
+function debounce(fn, ms = 200) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+/** 只做一次：已標記過的節點直接跳過。SPA 重複呼叫時的去重手段。 */
+function markOnce(element, key) {
+  if (element.dataset[key]) return false;
+  element.dataset[key] = '1';
+  return true;
+}
+
+/** 右下角浮動按鈕。重複呼叫只會建立一個。 */
+function addFloatingButton({ id, label, onClick, offset = 16 }) {
+  const existing = document.getElementById(id);
+  if (existing) return existing;
+
+  const btn = document.createElement('button');
+  btn.id = id;
+  btn.textContent = label;
+  btn.style.cssText = `
+    position: fixed; right: ${offset}px; bottom: ${offset}px; z-index: 2147483647;
+    padding: 8px 14px; border: 0; border-radius: 8px; cursor: pointer;
+    background: #3ba3ff; color: #06131f; font-weight: 600;
+    font: 600 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  `;
+  btn.addEventListener('click', onClick);
+  document.body.appendChild(btn);
+  return btn;
+}
+
+/** 不需要任何 @grant 的檔案下載。 */
+function downloadText(filename, text, mime = 'text/markdown;charset=utf-8') {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+======= meta.mjs =======
+// Zero-dependency helpers for reading the repo's userscripts and their
+// `// ==UserScript== ... // ==/UserScript==` metadata blocks.
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+export const USERSCRIPTS_DIR = join(REPO_ROOT, 'userscripts');
+
+const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'));
+
+/** e.g. https://github.com/daviddwlee84/Tampermonkey-Scripts */
+export const REPO_URL = pkg.repository.url.replace(/\.git$/, '');
+export const BRANCH = 'main';
+/** Base for @updateURL / @downloadURL. */
+export const RAW_BASE = REPO_URL.replace(
+  'https://github.com/',
+  'https://raw.githubusercontent.com/'
+)
+  .concat('/', BRANCH);
+
+const META_START = '// ==UserScript==';
+const META_END = '// ==/UserScript==';
+
+/**
+ * Parse a metadata block into { key: [values...] }. Keys can repeat
+ * (@match, @grant, @require ...), so every value is stored in an array.
+ */
+export function parseMeta(source) {
+  const start = source.indexOf(META_START);
+  const end = source.indexOf(META_END);
+  if (start === -1 || end === -1 || end < start) return null;
+
+  const meta = {};
+  const body = source.slice(start + META_START.length, end);
+  for (const line of body.split('\n')) {
+    const m = line.match(/^\s*\/\/\s*@([\w:-]+)\s*(.*)$/);
+    if (!m) continue;
+    const [, key, rawValue] = m;
+    (meta[key] ??= []).push(rawValue.trim());
+  }
+  return meta;
+}
+
+/** First value of a metadata key, or '' when absent. */
+export function first(meta, key) {
+  return meta?.[key]?.[0] ?? '';
+}
+
+/**
+ * Every userscript in the repo, as
+ * { slug, file, relPath, source, meta, readme }.
+ * Convention: userscripts/<slug>/<slug>.user.js
+ * Directories starting with `_` (e.g. _template) are skipped.
+ */
+export function listUserscripts() {
+  let entries;
+  try {
+    entries = readdirSync(USERSCRIPTS_DIR, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  return entries
+    .filter((e) => e.isDirectory() && !e.name.startsWith('_') && !e.name.startsWith('.'))
+    .map((e) => e.name)
+    .sort()
+    .flatMap((slug) => {
+      const dir = join(USERSCRIPTS_DIR, slug);
+      const file = join(dir, `${slug}.user.js`);
+      try {
+        statSync(file);
+      } catch {
+        return [{ slug, dir, file, relPath: `userscripts/${slug}/${slug}.user.js`, missing: true }];
+      }
+      const source = readFileSync(file, 'utf8');
+      return [
+        {
+          slug,
+          dir,
+          file,
+          relPath: `userscripts/${slug}/${slug}.user.js`,
+          source,
+          meta: parseMeta(source),
+          hasReadme: readdirSync(dir).includes('README.md'),
+        },
+      ];
+    });
+}
+
+/** Canonical raw URL used for @updateURL / @downloadURL and install links. */
+export function rawUrlFor(slug) {
+  return `${RAW_BASE}/userscripts/${slug}/${slug}.user.js`;
+}
+
+/**
+ * Blank out comments and string literals so lint passes can scan real code
+ * without tripping over prose. Regex literals are not tracked — a regex
+ * containing a quote character can confuse it, which is acceptable for a
+ * best-effort repo lint.
+ */
+export function stripCommentsAndStrings(source) {
+  let out = '';
+  let i = 0;
+  while (i < source.length) {
+    const two = source.slice(i, i + 2);
+    if (two === '//') {
+      while (i < source.length && source[i] !== '\n') i++;
+      continue;
+    }
+    if (two === '/*') {
+      i += 2;
+      while (i < source.length && source.slice(i, i + 2) !== '*/') i++;
+      i += 2;
+      continue;
+    }
+    const ch = source[i];
+    if (ch === '"' || ch === "'" || ch === '`') {
+      i++;
+      while (i < source.length && source[i] !== ch) {
+        if (source[i] === '\\') i++;
+        i++;
+      }
+      i++;
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return out;
+}
+======= package.json =======
+{
+  "name": "tampermonkey-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Da-Wei Lee's userscripts + a Traditional Chinese guide to writing them",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daviddwlee84/Tampermonkey-Scripts"
+  },
+  "author": "Da-Wei Lee",
+  "license": "MIT",
+  "scripts": {
+    "new": "node scripts/new-script.mjs",
+    "check": "node scripts/check-meta.mjs",
+    "index": "node scripts/build-index.mjs",
+    "index:check": "node scripts/build-index.mjs --check",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "npm run check && npm run index:check",
+    "preview": "node scripts/preview.mjs"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "playwright": "^1.62.1"
+  }
+}
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:58:06Z)**_
+
+Step 0 was already committed (`b561045`). Starting with the shared modules.
+
+_**Agent (claude-opus-5 2026-08-25 14:58:40Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Write shared/chat-export.js
+
+```bash
+cat > /Users/david/Documents/Program/Tampermonkey-Scripts/shared/chat-export.js <<'JSEOF'
+/* eslint-env browser */
+/**
+ * 對話匯出的共用轉換層，給 chatgpt / claude / copilot 三支 exporter 用 `@require` 引入：
+ *
+ *   // @require https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/chat-export.js
+ *
+ * 這不是 ES module —— `@require` 進來的檔案會直接在腳本的 scope 執行，
+ * 所以這裡用的是全域函式宣告。
+ *
+ * 這一層只做「正規化過的 doc → Markdown」：不碰 DOM、不呼叫任何 GM API。
+ * 各站專屬的「怎麼拿到對話 JSON」與「欄位怎麼對應」留在各自的腳本裡。
+ *
+ * doc 的形狀（各腳本的 adapter 負責產出，這是三支腳本之間唯一的介面）：
+ *
+ *   {
+ *     source: 'chatgpt',            // frontmatter 的 source，也用在檔名前綴
+ *     sourceLabel: 'ChatGPT',       // 給人看的名字（Agent Handoff 的抬頭用）
+ *     title: '…',
+ *     url: 'https://…',
+ *     ids: { conversation_id: '…', share_id: '…' },  // 有什麼寫什麼，原樣進 frontmatter
+ *     model: '',                    // 沒有就空字串
+ *     createdAt: 1756100000 | '2026-08-23T12:34:14Z',
+ *     sections: [{ role, model, time, body }],
+ *   }
+ */
+
+/** fence 要比內文裡最長的一串 backtick 還長，否則 code block 會被自己的內容截斷。 */
+function fence(body, lang = '') {
+  const text = String(body ?? '');
+  const longest = (text.match(/`+/g) || []).reduce((max, run) => Math.max(max, run.length), 0);
+  const ticks = '`'.repeat(Math.max(3, longest + 1));
+  return `${ticks}${lang}\n${text.replace(/\n$/, '')}\n${ticks}`;
+}
+
+/** 任何東西包成 JSON code block。未知型態一律走這裡，不要靜默丟掉。 */
+function jsonFence(value) {
+  try {
+    return fence(JSON.stringify(value, null, 2), 'json');
+  } catch {
+    return fence(String(value), 'text');
+  }
+}
+
+function pad(n) {
+  return String(Math.floor(Math.abs(n))).padStart(2, '0');
+}
+
+/** epoch 秒 / epoch 毫秒 / ISO 字串都吃，認不得就回 null。 */
+function toDate(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === 'number') {
+    // ChatGPT 給的是 epoch 秒（小數），其他兩家給 ISO 字串。
+    return new Date(value < 1e12 ? value * 1000 : value);
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** 對齊 .specstory/history/ 的寫法：UTC 的 `YYYY-MM-DD HH:mm:ssZ`。 */
+function formatUtc(value) {
+  const d = toDate(value);
+  if (!d) return '';
+  return (
+    `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
+    `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}Z`
+  );
+}
+
+/** 本地時區的 ISO（給 exported_at 用）。 */
+function localIso(date = new Date()) {
+  const offset = -date.getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}` +
+    `${sign}${pad(offset / 60)}:${pad(offset % 60)}`
+  );
+}
+
+/** JSON 字串剛好是合法的 YAML double-quoted scalar，拿來當跳脫最省事。 */
+function yaml(value) {
+  return JSON.stringify(String(value ?? ''));
+}
+
+/**
+ * 連續同 role 的訊息要合併成一段。一輪 assistant 常被拆成
+ * 「開場白 → 搜尋 → 正文」好幾則，不合併的話 transcript 會出現一堆只有一行的區塊。
+ */
+function mergeSections(sections) {
+  const merged = [];
+  for (const section of sections) {
+    const body = String(section.body ?? '').trim();
+    if (!body) continue;
+    const previous = merged[merged.length - 1];
+    if (previous && previous.role === section.role) {
+      previous.body += `\n\n${body}`;
+      if (!previous.model) previous.model = section.model || '';
+      continue;
+    }
+    merged.push({
+      role: section.role,
+      model: section.model || '',
+      time: section.time,
+      body,
+    });
+  }
+  return merged;
+}
+
+/** 去重後的來源清單。Claude / Copilot 的 citation 都是「有 url 有 title」的物件。 */
+function sourcesBlock(citations) {
+  const seen = new Set();
+  const lines = [];
+  for (const citation of citations || []) {
+    const url = citation?.url;
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    lines.push(`- [${citation.title || url}](${url})`);
+  }
+  return lines.length ? `**Sources**\n\n${lines.join('\n')}` : '';
+}
+
+function handoffHeader(label) {
+  return [
+    `# Prior ${label} Context`,
+    '',
+    `The following is a prior discussion between the user and ${label}.`,
+    '',
+    '## Instructions for the coding agent',
+    '',
+    '- Treat established decisions as existing project decisions.',
+    '- Do not reopen settled design questions unless implementation reveals a conflict.',
+    "- Preserve the user's stated constraints.",
+    '- Consult the original conversation below when necessary.',
+    '',
+    '---',
+    '',
+    '## Conversation',
+  ].join('\n');
+}
+
+/**
+ * 正規化的 doc → SpecStory 風格的 Markdown。
+ * opts: { handoff, includeThinking, includeTools, exporter }
+ */
+function renderTranscript(doc, opts = {}) {
+  const sections = mergeSections(doc.sections || []);
+  if (sections.length === 0) throw new Error('這個對話沒有可匯出的訊息。');
+
+  const title = doc.title || `${doc.sourceLabel || doc.source} conversation`;
+  const idLines = Object.entries(doc.ids || {})
+    .filter(([, value]) => value)
+    .map(([key, value]) => `${key}: ${yaml(value)}`);
+
+  const frontMatter = [
+    '---',
+    `source: ${doc.source}`,
+    `title: ${yaml(title)}`,
+    `url: ${yaml(doc.url)}`,
+    ...idLines,
+    `model: ${yaml(doc.model || '')}`,
+    `created_at: ${yaml(formatUtc(doc.createdAt))}`,
+    `exported_at: ${yaml(localIso())}`,
+    `messages: ${sections.length}`,
+    `include_thinking: ${opts.includeThinking === true}`,
+    `include_tools: ${opts.includeTools === true}`,
+    `exporter: ${yaml(opts.exporter || '')}`,
+    '---',
+  ].join('\n');
+
+  const body = sections
+    .map((section) => {
+      const label = [section.model, formatUtc(section.time)].filter(Boolean).join(', ');
+      return `_**${section.role}${label ? ` (${label})` : ''}**_\n\n${section.body}`;
+    })
+    .join('\n\n---\n\n');
+
+  const heading = opts.handoff
+    ? handoffHeader(doc.sourceLabel || doc.source)
+    : `# ${title}`;
+
+  return `${frontMatter}\n\n${heading}\n\n<!-- Generated by ${opts.exporter} -->\n\n${body}\n`;
+}
+
+/** `<source>-<標題>-<YYYYMMDD-HHmm>.<ext>`，檔名不合法的字元一律拿掉。 */
+function filenameFor(doc, extension) {
+  const slug =
+    String(doc.title || 'conversation')
+      .replace(/[\\/:*?"<>|]+/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .slice(0, 60) || 'conversation';
+  const now = new Date();
+  const stamp =
+    `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-` +
+    `${pad(now.getHours())}${pad(now.getMinutes())}`;
+  return `${doc.source}-${slug}-${stamp}.${extension}`;
+}
+
+/** 不需要任何 @grant 的檔案下載（同 shared/dom.js 的 downloadText）。 */
+function downloadText(filename, text, mime = 'text/markdown;charset=utf-8') {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+JSEOF
+node -e "new Function(require('fs').readFileSync('shared/chat-export.js','utf8')); console.log('chat-export.js parses OK')"
+```
+
+```text
+chat-export.js parses OK
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:59:25Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Write shared/export-ui.js
+
+```bash
+cat > /Users/david/Documents/Program/Tampermonkey-Scripts/shared/export-ui.js <<'JSEOF'
+/* eslint-env browser */
+/**
+ * 匯出腳本共用的右下角浮動按鈕 + 可拖曳面板，用 `@require` 引入：
+ *
+ *   // @require https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/export-ui.js
+ *
+ * 這不是 ES module —— `@require` 進來的檔案會直接在腳本的 scope 執行。
+ *
+ * **這裡刻意不呼叫任何 GM API**：位置記憶走呼叫端注入的 `storage`，
+ * 剪貼簿 / 選單 / 儲存都留在各腳本裡。理由是 `scripts/check-meta.mjs` 只掃腳本本體
+ * 來交叉比對 `@grant`，GM 呼叫留在腳本裡 `npm run check` 才驗得到。
+ */
+
+/**
+ * @param {object} config
+ * @param {string} config.ns            DOM id 前綴，各腳本要不一樣
+ * @param {string} config.buttonLabel   浮動按鈕上的字
+ * @param {string} [config.buttonTitle] 按鈕的 tooltip
+ * @param {Array<{label: string, run: Function}>} config.actions
+ * @param {Array<{label: string, get: Function, set: Function}>} [config.toggles]
+ * @param {{placeholder: string, buttonLabel: string, onSubmit: Function}} [config.shareInput]
+ * @param {{get: Function, set: Function}} config.storage  位置記憶（GM_getValue / GM_setValue 包一層）
+ * @param {Function} [config.onStatus]  每次 setStatus 也會呼叫一次，通常拿去 console.log
+ * @returns {{mount: Function, openPanel: Function, setStatus: Function, resetPosition: Function}}
+ */
+function createExportPanel(config) {
+  const { ns, storage } = config;
+  const panelWidth = config.panelWidth ?? 230;
+  const toggles = config.toggles ?? [];
+  const POSITION_KEY = 'buttonPosition'; // 拖曳後記住的位置：{ left, top }（viewport 座標）
+
+  const ROOT_CSS =
+    'position:fixed;right:16px;bottom:16px;z-index:2147483647;' +
+    'font:400 13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;';
+
+  let statusEl = null;
+  let justDragged = false;
+
+  function setStatus(text) {
+    if (config.onStatus) config.onStatus(text);
+    if (statusEl) statusEl.textContent = text;
+  }
+
+  function style(el, css) {
+    el.style.cssText = css;
+    return el;
+  }
+
+  function makeButton(label, onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.addEventListener('click', onClick);
+    return style(
+      button,
+      'display:block;width:100%;margin:0 0 6px;padding:7px 10px;border:0;border-radius:7px;' +
+        'cursor:pointer;background:#3ba3ff;color:#06131f;font:600 13px/1.4 inherit;text-align:left;'
+    );
+  }
+
+  function makeToggle(toggle) {
+    const wrapper = style(
+      document.createElement('label'),
+      'display:flex;align-items:center;gap:6px;margin:0 0 4px;font:400 12px/1.4 inherit;cursor:pointer;'
+    );
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = toggle.get() === true;
+    box.addEventListener('change', () => {
+      toggle.set(box.checked);
+      setStatus(`${toggle.label}：${box.checked ? '含' : '不含'}`);
+    });
+    wrapper.append(box, document.createTextNode(toggle.label));
+    return wrapper;
+  }
+
+  /** 把面板放在按鈕的哪一邊：上面塞不下就往下、右邊塞不下就往左。 */
+  function placePanel(root, panel) {
+    const rect = root.getBoundingClientRect();
+    const above = rect.top >= panel.offsetHeight + 16;
+    panel.style.top = above ? 'auto' : '100%';
+    panel.style.bottom = above ? '100%' : 'auto';
+    panel.style.marginTop = above ? '0' : '8px';
+    panel.style.marginBottom = above ? '8px' : '0';
+
+    const rightAligned = rect.right - panelWidth >= 8;
+    panel.style.right = rightAligned ? '0' : 'auto';
+    panel.style.left = rightAligned ? 'auto' : '0';
+  }
+
+  /** 用 left/top 定位（取代預設的 right/bottom），並夾在畫面裡。 */
+  function moveTo(root, left, top) {
+    const x = Math.min(Math.max(left, 4), window.innerWidth - root.offsetWidth - 4);
+    const y = Math.min(Math.max(top, 4), window.innerHeight - root.offsetHeight - 4);
+    root.style.left = `${x}px`;
+    root.style.top = `${y}px`;
+    root.style.right = 'auto';
+    root.style.bottom = 'auto';
+  }
+
+  function resetPosition() {
+    storage.set(POSITION_KEY, null);
+    const root = document.getElementById(`${ns}-root`);
+    if (root) root.style.cssText = ROOT_CSS;
+  }
+
+  /**
+   * 讓按鈕可以拖到任何地方。用 pointer events（滑鼠 / 觸控同一套），
+   * 位移小於 4px 就當成「手抖的點擊」而不是拖曳，否則單純想開面板會很難按。
+   */
+  function makeDraggable(root, handle, onMoved) {
+    let drag = null;
+
+    handle.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      const rect = root.getBoundingClientRect();
+      drag = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, moved: false };
+      handle.setPointerCapture(event.pointerId);
+      event.preventDefault(); // 不要順便選到頁面的文字
+    });
+
+    handle.addEventListener('pointermove', (event) => {
+      if (!drag) return;
+      const dx = event.clientX - drag.x;
+      const dy = event.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+      drag.moved = true;
+      moveTo(root, drag.left + dx, drag.top + dy);
+    });
+
+    const end = (event) => {
+      if (!drag) return;
+      const { moved } = drag;
+      drag = null;
+      if (handle.hasPointerCapture?.(event.pointerId)) {
+        handle.releasePointerCapture(event.pointerId);
+      }
+      if (!moved) return;
+      const rect = root.getBoundingClientRect();
+      storage.set(POSITION_KEY, { left: Math.round(rect.left), top: Math.round(rect.top) });
+      onMoved();
+    };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+  }
+
+  /** 掛 UI。可重複呼叫，必須 idempotent（SPA 換頁會再跑一次）。 */
+  function mount() {
+    if (!document.body || document.getElementById(`${ns}-root`)) return;
+
+    const root = style(document.createElement('div'), ROOT_CSS);
+    root.id = `${ns}-root`;
+
+    const panel = style(
+      document.createElement('div'),
+      `display:none;position:absolute;right:0;bottom:100%;margin-bottom:8px;width:${panelWidth}px;` +
+        'padding:12px;border-radius:10px;background:#12181f;color:#e6edf3;' +
+        'box-shadow:0 8px 28px rgba(0,0,0,.35);'
+    );
+    panel.id = `${ns}-panel`;
+
+    for (const action of config.actions) panel.appendChild(makeButton(action.label, action.run));
+
+    if (toggles.length > 0) {
+      panel.appendChild(
+        style(document.createElement('hr'), 'margin:10px 0;border:0;border-top:1px solid #2a3441;')
+      );
+      for (const toggle of toggles) panel.appendChild(makeToggle(toggle));
+    }
+
+    if (config.shareInput) {
+      const input = style(
+        document.createElement('input'),
+        'width:100%;box-sizing:border-box;margin:10px 0 6px;padding:6px 8px;border-radius:6px;' +
+          'border:1px solid #2a3441;background:#0b0f14;color:#e6edf3;font:400 12px/1.4 inherit;'
+      );
+      input.type = 'text';
+      input.placeholder = config.shareInput.placeholder;
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') config.shareInput.onSubmit(input.value);
+      });
+      panel.appendChild(input);
+      panel.appendChild(
+        makeButton(config.shareInput.buttonLabel, () => config.shareInput.onSubmit(input.value))
+      );
+    }
+
+    statusEl = style(
+      document.createElement('div'),
+      'margin-top:8px;color:#8b98a5;font:400 11px/1.5 inherit;word-break:break-word;'
+    );
+    statusEl.textContent = '就緒';
+    panel.appendChild(statusEl);
+
+    const toggle = style(
+      document.createElement('button'),
+      'padding:8px 14px;border:0;border-radius:8px;cursor:grab;touch-action:none;' +
+        'background:#3ba3ff;color:#06131f;font:600 13px/1.4 inherit;' +
+        'box-shadow:0 4px 16px rgba(0,0,0,.25);'
+    );
+    toggle.type = 'button';
+    toggle.textContent = config.buttonLabel;
+    toggle.title = config.buttonTitle || '點一下開關面板，拖曳可以搬到別的位置';
+    toggle.addEventListener('click', () => {
+      if (justDragged) {
+        justDragged = false; // 拖曳結束後瀏覽器還是會補一個 click，忽略它
+        return;
+      }
+      if (panel.style.display === 'block') {
+        panel.style.display = 'none';
+      } else {
+        panel.style.display = 'block';
+        placePanel(root, panel);
+      }
+    });
+
+    makeDraggable(root, toggle, () => {
+      justDragged = true;
+      if (panel.style.display === 'block') placePanel(root, panel);
+    });
+
+    root.append(panel, toggle);
+    document.body.appendChild(root);
+
+    // 位置要等進 DOM 才量得到寬高。
+    const saved = storage.get(POSITION_KEY, null);
+    if (saved && typeof saved.left === 'number') moveTo(root, saved.left, saved.top);
+
+    // 視窗縮小後按鈕可能被推到畫面外，重新夾一次。
+    window.addEventListener('resize', () => {
+      if (root.style.left === 'auto' || !root.style.left) return;
+      moveTo(root, parseFloat(root.style.left), parseFloat(root.style.top));
+      if (panel.style.display === 'block') placePanel(root, panel);
+    });
+  }
+
+  function openPanel() {
+    mount();
+    const root = document.getElementById(`${ns}-root`);
+    const panel = document.getElementById(`${ns}-panel`);
+    if (!root || !panel) return;
+    panel.style.display = 'block';
+    placePanel(root, panel);
+  }
+
+  return { mount, openPanel, setStatus, resetPosition };
+}
+JSEOF
+node -e "new Function(require('fs').readFileSync('shared/export-ui.js','utf8')); console.log('export-ui.js parses OK')"
+```
+
+```text
+export-ui.js parses OK
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:59:43Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Add @require support to preview harness
+
+```bash
+python3 - <<'PYEOF'
+from pathlib import Path
+p = Path('scripts/preview.mjs')
+s = p.read_text()
+
+s = s.replace(
+    "import { listUserscripts, first, REPO_ROOT } from './lib/meta.mjs';",
+    "import { listUserscripts, first, REPO_ROOT, RAW_BASE } from './lib/meta.mjs';",
+)
+
+old_inject = """console.log(`→ ${url}`);
+await page.goto(url, { waitUntil: 'domcontentloaded' });
+
+// @run-at document-idle roughly corresponds to after load + a beat.
+await page.addScriptTag({ content: GM_SHIM });
+await page.addScriptTag({ content: readFileSync(script.file, 'utf8') });
+await page.waitForTimeout(600);
+"""
+new_inject = """/**
+ * Resolve one @require URL to its source. URLs pointing at this repo are read
+ * from the working tree, so `npm run preview` tests uncommitted shared/ code
+ * instead of whatever is on main.
+ */
+async function loadRequire(requireUrl) {
+  if (requireUrl.startsWith(`${RAW_BASE}/`)) {
+    const relPath = requireUrl.slice(RAW_BASE.length + 1);
+    return { source: readFileSync(join(REPO_ROOT, relPath), 'utf8'), from: `local ${relPath}` };
+  }
+  const res = await fetch(requireUrl);
+  if (!res.ok) throw new Error(`${requireUrl} -> HTTP ${res.status}`);
+  return { source: await res.text(), from: `remote ${requireUrl}` };
+}
+
+console.log(`→ ${url}`);
+await page.goto(url, { waitUntil: 'domcontentloaded' });
+
+// @run-at document-idle roughly corresponds to after load + a beat.
+await page.addScriptTag({ content: GM_SHIM });
+
+// A manager evaluates every @require in the script's scope before the script
+// itself. Do the same, or a script built on shared/ dies on the first call.
+for (const requireUrl of script.meta.require ?? []) {
+  let loaded;
+  try {
+    loaded = await loadRequire(requireUrl);
+  } catch (err) {
+    console.error(`@require failed: ${err.message}`);
+    await browser.close();
+    process.exit(1);
+  }
+  await page.addScriptTag({ content: loaded.source });
+  console.log(`@require       : ${loaded.from}`);
+}
+
+await page.addScriptTag({ content: readFileSync(script.file, 'utf8') });
+await page.waitForTimeout(600);
+"""
+assert old_inject in s
+s = s.replace(old_inject, new_inject)
+p.write_text(s)
+print('preview.mjs patched')
+PYEOF
+node -c scripts/preview.mjs 2>/dev/null || node --check scripts/preview.mjs && echo 'syntax ok'
+```
+
+```text
+preview.mjs patched
+syntax ok
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 14:59:53Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Add @require validation to check-meta
+
+```bash
+python3 - <<'PYEOF'
+from pathlib import Path
+p = Path('scripts/check-meta.mjs')
+s = p.read_text()
+
+s = s.replace(
+    "import { listUserscripts, first, rawUrlFor, stripCommentsAndStrings } from './lib/meta.mjs';",
+    "import { existsSync } from 'node:fs';\nimport { join } from 'node:path';\nimport {\n  listUserscripts,\n  first,\n  rawUrlFor,\n  stripCommentsAndStrings,\n  RAW_BASE,\n  REPO_ROOT,\n} from './lib/meta.mjs';",
+)
+
+old = """  // A remote @icon is a runtime dependency:"""
+new = """  // A @require pointing at this repo must resolve to a file that actually
+  // exists — a typo here installs fine and then dies at runtime, and the
+  // manager caches the 404 body as if it were code.
+  for (const requireUrl of s.meta.require ?? []) {
+    if (!requireUrl.startsWith(`${RAW_BASE}/`)) {
+      warnings.push(at(`@require ${requireUrl} is outside this repo — extra runtime dependency`));
+      continue;
+    }
+    const relPath = requireUrl.slice(RAW_BASE.length + 1);
+    if (!existsSync(join(REPO_ROOT, relPath))) {
+      errors.push(at(`@require points at ${relPath}, which does not exist in this repo`));
+    }
+  }
+
+  // A remote @icon is a runtime dependency:"""
+assert old in s
+s = s.replace(old, new, 1)
+p.write_text(s)
+print('check-meta.mjs patched')
+PYEOF
+node --check scripts/check-meta.mjs && npm run check
+```
+
+```text
+check-meta.mjs patched
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 3 userscript(s): 0 error(s), 0 warning(s).
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:00:01Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Scaffold the two new userscripts
+
+`npm run new -- claude-export-markdown "Claude Export Markdown" "https://claude.ai/*" "把整段 Claude 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用" 2>&1 | tail -20; npm run new -- copilot-export-markdown "Copilot Export Markdown" "https://copilot.microsoft.com/*" "把整段 Microsoft Copilot 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用" 2>&1 | tail -20`
+
+```text
+> tampermonkey-scripts@1.0.0 new
+> node scripts/new-script.mjs claude-export-markdown Claude Export Markdown https://claude.ai/* 把整段 Claude 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用
+
+Created userscripts/claude-export-markdown/
+Next: 實作腳本 → npm run check → npm run index
+
+> tampermonkey-scripts@1.0.0 new
+> node scripts/new-script.mjs copilot-export-markdown Copilot Export Markdown https://copilot.microsoft.com/* 把整段 Microsoft Copilot 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用
+
+Created userscripts/copilot-export-markdown/
+Next: 實作腳本 → npm run check → npm run index
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:00:05Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Inspect scaffolded metadata
+
+`sed -n '1,25p' userscripts/claude-export-markdown/claude-export-markdown.user.js; echo '--- copilot icon ---'; grep -n '@icon' userscripts/copilot-export-markdown/copilot-export-markdown.user.js`
+
+```text
+// ==UserScript==
+// @name         Claude Export Markdown
+// @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
+// @version      0.1.0
+// @description  把整段 Claude 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用
+// @author       Da-Wei Lee
+// @license      MIT
+// @match        https://claude.ai/*
+// @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9ImhzbCgxNTMgNjIlIDQ2JSkiLz48dGV4dCB4PSIzMiIgeT0iMzMiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJIZWx2ZXRpY2EsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNyIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9ImNlbnRyYWwiPkNFPC90ZXh0Pjwvc3ZnPg==
+// @run-at       document-idle
+// @grant        none
+// @updateURL    https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/claude-export-markdown/claude-export-markdown.user.js
+// @downloadURL  https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/claude-export-markdown/claude-export-markdown.user.js
+// ==/UserScript==
+
+/**
+ * Claude Export Markdown
+ *
+ * 開發備忘：
+ * - 改動後記得把 @version 往上加，否則其他機器的 Tampermonkey 不會更新。
+ * - 用到任何 GM_* API 都要在上面加對應的 `// @grant`，`npm run check` 會擋。
+ * - 現代網站多半是 SPA：換頁不會 reload，所以下面用 MutationObserver + URL 監看。
+ */
+(function () {
+  'use strict';
+--- copilot icon ---
+9:// @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9ImhzbCgyNjMgNjIlIDQ2JSkiLz48dGV4dCB4PSIzMiIgeT0iMzMiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJIZWx2ZXRpY2EsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNyIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9ImNlbnRyYWwiPkNFPC90ZXh0Pjwvc3ZnPg==
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:02:15Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Write the Claude exporter userscript
+
+```bash
+cat > /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/claude-export-markdown/claude-export-markdown.user.js <<'JSEOF'
+// ==UserScript==
+// @name         Claude Export Markdown
+// @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
+// @version      1.0.0
+// @description  把整段 Claude 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用
+// @author       Da-Wei Lee
+// @license      MIT
+// @match        https://claude.ai/*
+// @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9ImhzbCgxNTMgNjIlIDQ2JSkiLz48dGV4dCB4PSIzMiIgeT0iMzMiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJIZWx2ZXRpY2EsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNyIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9ImNlbnRyYWwiPkNFPC90ZXh0Pjwvc3ZnPg==
+// @run-at       document-start
+// @grant        unsafeWindow
+// @grant        GM_registerMenuCommand
+// @grant        GM_setClipboard
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_deleteValue
+// @grant        GM_openInTab
+// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/chat-export.js
+// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/export-ui.js
+// @updateURL    https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/claude-export-markdown/claude-export-markdown.user.js
+// @downloadURL  https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/claude-export-markdown/claude-export-markdown.user.js
+// ==/UserScript==
+
+/* global createExportPanel, downloadText, filenameFor, jsonFence, renderTranscript, sourcesBlock */
+
+/**
+ * 把一整段 Claude 對話匯成 Markdown，格式跟 chatgpt-export-markdown 一致
+ * （SpecStory 風格的 `_**User (ts)**_` / `---` / `_**Assistant**_`），目的是貼給 coding agent。
+ *
+ * 為什麼只有「攔截」這一條路（實測結果，不要照 ChatGPT 那支的四層 fallback 抄）：
+ *
+ * 1. share 頁在載入時只打一次 `/api/chat_snapshots/<id>?rendering_mode=messages&render_all_tools=true`，
+ *    回來的 JSON 就是完整對話（`chat_messages[]`，裡面是模型吐出的 raw markdown）。
+ * 2. **同一個 endpoint 再打第二次一律被 Cloudflare 擋 403**（同頁 fetch、別的分頁 fetch、
+ *    同源 iframe 載入 share 頁全部試過）。只有頁面自己那一次會過。
+ * 3. 頁面上也沒有留副本：TanStack Router 的 match 沒有 loaderData、
+ *    `__PUBLIC_VIEWER_PRELOAD__.responses[url]` 在 hydration 後就被清掉、
+ *    React Query 的 cache 關在 module closure 裡。
+ *
+ * 所以：`@run-at document-start` 攔 `fetch`，接住頁面自己那一次成功的回應。
+ * 攔不到就明白報錯叫使用者重新整理，**不要退回去 scrape DOM**——
+ * 殘缺的 transcript 比沒有 transcript 更糟，agent 不會知道少了什麼。
+ */
+(function () {
+  'use strict';
+
+  const VERSION = '1.0.0';
+  const NS = 'claude-export-md';
+  const EXPORTER = `claude-export-markdown v${VERSION}`;
+  const LOG_PREFIX = '[claude-export-markdown]';
+  const log = (...args) => console.log(LOG_PREFIX, ...args);
+
+  // 有任何 @grant 就會被 sandbox，頁面的全域要走 unsafeWindow 才看得到。
+  const pageWin = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+
+  // ---------------------------------------------------------------- 設定
+
+  const SETTINGS_KEYS = ['includeThinking', 'includeTools'];
+  const PENDING_KEY = 'pendingExport'; // 「貼 share URL → 開新分頁自動匯出」的一次性交棒
+  const settings = { includeThinking: false, includeTools: false };
+
+  for (const key of SETTINGS_KEYS) {
+    settings[key] = GM_getValue(key, settings[key]) === true;
+  }
+
+  function setSetting(key, value) {
+    settings[key] = value === true;
+    GM_setValue(key, settings[key]);
+  }
+
+  // ------------------------------------------------- 來源：攔截網站自己的請求
+
+  /** id（snapshot uuid / conversation uuid）-> 對話 JSON。 */
+  const captured = new Map();
+  let lastCaptured = null;
+
+  // share 頁走 chat_snapshots，登入中的 /chat/<uuid> 走 chat_conversations。
+  const CAPTURE_URL = /\/api\/(chat_snapshots\/|organizations\/[^/]+\/chat_conversations\/)/;
+
+  function looksLikeConversation(value) {
+    return !!value && typeof value === 'object' && Array.isArray(value.chat_messages);
+  }
+
+  function rememberPayload(payload) {
+    const data = looksLikeConversation(payload?.data) ? payload.data : payload;
+    if (!looksLikeConversation(data)) return;
+    for (const id of [data.uuid, data.conversation_uuid]) {
+      if (id) captured.set(id, data);
+    }
+    lastCaptured = data;
+    log('captured conversation:', data.uuid || '(no uuid)', `${data.chat_messages.length} messages`);
+  }
+
+  function installNetworkCapture() {
+    const originalFetch = pageWin.fetch;
+    if (typeof originalFetch !== 'function' || originalFetch.__claudeExportPatched) return;
+
+    const patched = function (...args) {
+      const promise = originalFetch.apply(this, args);
+      return promise.then((response) => {
+        try {
+          const input = args[0];
+          const url = typeof input === 'string' ? input : input?.url || '';
+          // body 只能讀一次，一定要 clone，否則網站自己就讀不到了。
+          if (response.ok && CAPTURE_URL.test(url)) {
+            response
+              .clone()
+              .json()
+              .then(rememberPayload)
+              .catch(() => {});
+          }
+        } catch {
+          /* 攔截失敗不能影響網站本身 */
+        }
+        return response; // 一定要把原本的 response 還回去
+      });
+    };
+    patched.__claudeExportPatched = true;
+    pageWin.fetch = patched;
+  }
+
+  // ------------------------------------------------------- 來源：自己打 API
+
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  /** 頁面自己的請求是 async 的，剛載入就按按鈕會撲空 —— 給它一點時間。 */
+  async function waitForCapture(ids, { timeout = 8_000, interval = 200 } = {}) {
+    const deadline = Date.now() + timeout;
+    for (;;) {
+      const hit = pickCaptured(ids);
+      if (hit) return hit;
+      if (Date.now() >= deadline) return null;
+      await delay(interval);
+    }
+  }
+
+  function pickCaptured({ convId, shareId }) {
+    if (shareId && captured.has(shareId)) return captured.get(shareId);
+    if (convId && captured.has(convId)) return captured.get(convId);
+    if (!convId && !shareId && captured.size === 1) return lastCaptured;
+    return null;
+  }
+
+  /**
+   * 自己打一次 API。登入中的 /chat/<uuid> 這條實測可行；
+   * share 那條幾乎一定會被 Cloudflare 403 —— 還是留著，因為它不花什麼成本，
+   * 而且不同網路環境的 CF 判定不一樣。
+   */
+  async function fromApi({ convId, shareId }) {
+    const paths = [];
+    if (shareId) {
+      paths.push(`/api/chat_snapshots/${shareId}?rendering_mode=messages&render_all_tools=true`);
+    }
+    if (convId) {
+      const orgId = await currentOrgId();
+      if (orgId) {
+        paths.push(
+          `/api/organizations/${orgId}/chat_conversations/${convId}` +
+            '?tree=True&rendering_mode=messages&render_all_tools=true'
+        );
+      }
+    }
+
+    for (const path of paths) {
+      try {
+        const res = await fetch(path, {
+          credentials: 'include',
+          headers: { accept: 'application/json' },
+        });
+        if (!res.ok) {
+          log('api fallback failed:', path, res.status);
+          continue;
+        }
+        const json = await res.json();
+        const data = looksLikeConversation(json?.data) ? json.data : json;
+        if (looksLikeConversation(data)) return data;
+      } catch (error) {
+        log('api fallback threw:', error.message);
+      }
+    }
+    return null;
+  }
+
+  async function currentOrgId() {
+    try {
+      const res = await fetch('/api/organizations', {
+        credentials: 'include',
+        headers: { accept: 'application/json' },
+      });
+      if (!res.ok) return null;
+      const list = await res.json();
+      return Array.isArray(list) ? list[0]?.uuid || null : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // ------------------------------------------------------------ 來源總調度
+
+  function currentIds() {
+    const chat = location.pathname.match(/\/chat\/([0-9a-zA-Z-]+)/);
+    const share = location.pathname.match(/^\/share\/([0-9a-zA-Z-]+)/);
+    return { convId: chat?.[1] || null, shareId: share?.[1] || null };
+  }
+
+  function shareIdFromUrl(input) {
+    const match = String(input).match(/\/share\/([0-9a-zA-Z-]+)/);
+    return match ? match[1] : null;
+  }
+
+  async function resolveConversation(ids) {
+    const hit = pickCaptured(ids) || (await waitForCapture(ids));
+    if (hit) return { data: hit, source: 'network-capture' };
+
+    const api = await fromApi(ids);
+    if (api) return { data: api, source: 'api' };
+
+    throw new Error(
+      '抓不到對話資料。Claude 只放行頁面自己的第一次請求 —— 請重新整理這一頁再按一次。'
+    );
+  }
+
+  // ------------------------------------------------------------ 轉成 Markdown
+
+  /**
+   * 取出目前這條 branch。snapshot 幾乎都是線性的（照 index 排就好），
+   * 但登入中的 `?tree=True` 會把編輯／重生過的分支一起送來 ——
+   * 那時就從最後一則沿 parent_message_uuid 往回走。
+   */
+  function buildThread(data) {
+    const messages = (data.chat_messages || []).filter(Boolean);
+    if (messages.length === 0) return [];
+
+    const parentCount = new Map();
+    for (const message of messages) {
+      const parent = message.parent_message_uuid;
+      parentCount.set(parent, (parentCount.get(parent) || 0) + 1);
+    }
+    const branched = [...parentCount.values()].some((count) => count > 1);
+    const byIndex = [...messages].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+    if (!branched) return byIndex;
+
+    const byUuid = new Map(messages.map((message) => [message.uuid, message]));
+    const thread = [];
+    const guard = new Set();
+    let cursor = byIndex[byIndex.length - 1];
+    while (cursor && !guard.has(cursor.uuid)) {
+      guard.add(cursor.uuid);
+      thread.push(cursor);
+      cursor = byUuid.get(cursor.parent_message_uuid);
+    }
+    return thread.reverse();
+  }
+
+  /** citation 的欄位名在不同型態下不太一樣，能拿到 url 就算數。 */
+  function citationTargets(block) {
+    return (block.citations || [])
+      .map((citation) => {
+        const details = citation.details || citation.metadata || citation;
+        return {
+          url: details.url || citation.url || '',
+          title: details.title || citation.title || '',
+        };
+      })
+      .filter((citation) => citation.url);
+  }
+
+  function thinkingText(block) {
+    if (typeof block.thinking === 'string' && block.thinking.trim()) return block.thinking;
+    if (Array.isArray(block.summaries)) {
+      const summaries = block.summaries
+        .map((item) => item?.summary || item?.text || '')
+        .filter(Boolean);
+      if (summaries.length) return summaries.join('\n\n');
+    }
+    return String(block.text ?? '');
+  }
+
+  /** tool_result 的 content 可能是字串、`[{type:'text', text}]`，或整包結構化資料。 */
+  function toolResultText(block) {
+    const content = block.content;
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+      const texts = content
+        .map((item) => (typeof item === 'string' ? item : item?.text || ''))
+        .filter(Boolean);
+      if (texts.length) return texts.join('\n\n');
+    }
+    return jsonFence(block.structured_content ?? content ?? block.message ?? null);
+  }
+
+  function blockToText(block, opts) {
+    if (!block || typeof block !== 'object') return '';
+
+    switch (block.type) {
+      case 'text': {
+        const body = String(block.text ?? '');
+        const sources = sourcesBlock(citationTargets(block));
+        return sources ? `${body}\n\n${sources}` : body;
+      }
+      case 'thinking':
+        return opts.includeThinking ? thinkingText(block) : '';
+      case 'tool_use': {
+        if (!opts.includeTools) return '';
+        const name = block.name || 'tool';
+        const input = block.input ?? block.message ?? null;
+        return input === null
+          ? `**Tool call: ${name}**`
+          : `**Tool call: ${name}**\n\n${jsonFence(input)}`;
+      }
+      case 'tool_result': {
+        if (!opts.includeTools) return '';
+        return `**Tool result: ${block.name || 'tool'}**\n\n${toolResultText(block)}`;
+      }
+      default:
+        // 未知型態（Claude 一直在加新的 block）不靜默丟掉，寧可留 JSON。
+        if (typeof block.text === 'string' && block.text.trim()) return block.text;
+        return jsonFence(block);
+    }
+  }
+
+  function attachmentLines(message) {
+    const names = [
+      ...(message.attachments || []).map((item) => item?.file_name || item?.name),
+      ...(message.files || []).map((item) => item?.file_name || item?.name),
+    ].filter(Boolean);
+    return names.length ? `**附件**\n\n${names.map((name) => `- ${name}`).join('\n')}` : '';
+  }
+
+  function messageToBody(message, opts) {
+    const blocks = Array.isArray(message.content) ? message.content : [];
+    const parts = blocks.map((block) => blockToText(block, opts)).filter((text) => text.trim());
+    // 舊格式（或 rendering_mode 不同時）只有 message.text。
+    if (parts.length === 0 && typeof message.text === 'string' && message.text.trim()) {
+      parts.push(message.text);
+    }
+    const attachments = attachmentLines(message);
+    if (attachments) parts.unshift(attachments);
+    return parts.join('\n\n');
+  }
+
+  function roleOf(message) {
+    return message.sender === 'human' ? 'User' : 'Assistant';
+  }
+
+  function normalize(data, ctx, opts) {
+    const sections = buildThread(data)
+      .map((message) => ({
+        role: roleOf(message),
+        model: message.sender === 'human' ? '' : message.model || '',
+        time: message.created_at,
+        body: messageToBody(message, opts),
+      }))
+      .filter((section) => section.body.trim());
+
+    const isSnapshot = Boolean(data.conversation_uuid);
+    return {
+      source: 'claude',
+      sourceLabel: 'Claude',
+      title: data.snapshot_name || data.name || 'Claude conversation',
+      url: ctx.url,
+      ids: {
+        conversation_id: data.conversation_uuid || data.uuid || '',
+        snapshot_id: isSnapshot ? data.uuid || '' : '',
+      },
+      model: data.model || '',
+      createdAt: data.created_at,
+      sections,
+    };
+  }
+
+  // ------------------------------------------------------------------ 動作
+
+  async function doExport({ mode, to, ids }) {
+    ui.setStatus('讀取對話…');
+    try {
+      const target = ids || currentIds();
+      const { data, source } = await resolveConversation(target);
+      const url = target.shareId ? `${location.origin}/share/${target.shareId}` : location.href;
+
+      const text =
+        mode === 'json'
+          ? JSON.stringify(data, null, 2)
+          : renderTranscript(normalize(data, { url }, settings), {
+              ...settings,
+              handoff: mode === 'handoff',
+              exporter: EXPORTER,
+            });
+
+      if (to === 'clipboard') {
+        GM_setClipboard(text, 'text');
+        ui.setStatus(`已複製 ${text.length.toLocaleString()} 字（來源：${source}）`);
+      } else {
+        const doc = normalize(data, { url }, settings);
+        downloadText(
+          filenameFor(doc, mode === 'json' ? 'json' : 'md'),
+          text,
+          mode === 'json' ? 'application/json;charset=utf-8' : 'text/markdown;charset=utf-8'
+        );
+        ui.setStatus(`已下載（來源：${source}）`);
+      }
+      log('exported', { mode, to, source, length: text.length });
+    } catch (error) {
+      ui.setStatus(`失敗：${error.message}`);
+      log('export failed:', error);
+    }
+  }
+
+  /**
+   * 貼上的 share URL 沒辦法就地讀（見檔頭第 2 點）——
+   * 改成把「等一下要匯出什麼」寫進 GM storage，再開一個分頁，
+   * 讓那邊的腳本自己攔到資料後匯出。
+   */
+  function exportFromShareUrl(raw) {
+    const shareId = shareIdFromUrl(raw);
+    if (!shareId) {
+      ui.setStatus('這不像 share URL（要有 /share/<id>）。');
+      return;
+    }
+    if (shareId === currentIds().shareId) {
+      doExport({ mode: 'transcript', to: 'clipboard' });
+      return;
+    }
+    GM_setValue(PENDING_KEY, { shareId, expires: Date.now() + 120_000 });
+    GM_openInTab(`${location.origin}/share/${shareId}`, { active: true });
+    ui.setStatus('已開新分頁，那邊載完就會自動複製。');
+  }
+
+  async function consumePending() {
+    const pending = GM_getValue(PENDING_KEY, null);
+    if (!pending || typeof pending !== 'object') return;
+    const { shareId } = currentIds();
+    if (!shareId || pending.shareId !== shareId) return;
+
+    GM_deleteValue(PENDING_KEY); // 一次性：先消耗再執行，免得失敗時每次開頁都重跑
+    if (Date.now() > (pending.expires ?? 0)) return;
+
+    ui.openPanel();
+    await doExport({ mode: 'transcript', to: 'clipboard' });
+  }
+
+  const ACTIONS = [
+    { label: 'Copy Markdown', run: () => doExport({ mode: 'transcript', to: 'clipboard' }) },
+    { label: 'Copy Agent Handoff', run: () => doExport({ mode: 'handoff', to: 'clipboard' }) },
+    { label: 'Download .md', run: () => doExport({ mode: 'transcript', to: 'file' }) },
+    { label: 'Download .json', run: () => doExport({ mode: 'json', to: 'file' }) },
+  ];
+
+  // -------------------------------------------------------------------- UI
+
+  const ui = createExportPanel({
+    ns: NS,
+    buttonLabel: '⇩ Export MD',
+    actions: ACTIONS,
+    toggles: [
+      {
+        label: '含 thinking / reasoning',
+        get: () => settings.includeThinking,
+        set: (value) => setSetting('includeThinking', value),
+      },
+      {
+        label: '含工具呼叫與搜尋結果',
+        get: () => settings.includeTools,
+        set: (value) => setSetting('includeTools', value),
+      },
+    ],
+    shareInput: {
+      placeholder: '貼上任意 share URL…',
+      buttonLabel: 'Open & copy share URL',
+      onSubmit: exportFromShareUrl,
+    },
+    storage: { get: (key, fallback) => GM_getValue(key, fallback), set: GM_setValue },
+    onStatus: log,
+  });
+
+  function registerMenu() {
+    for (const action of ACTIONS) {
+      // 不要用 accessKey —— 那是 Tampermonkey 限定的。
+      GM_registerMenuCommand(action.label, () => {
+        ui.openPanel();
+        action.run();
+      });
+    }
+    GM_registerMenuCommand('Export from share URL…', () => {
+      ui.openPanel();
+      const raw = prompt('貼上 Claude share URL：');
+      if (raw) exportFromShareUrl(raw);
+    });
+    GM_registerMenuCommand('Toggle thinking / reasoning', () => {
+      setSetting('includeThinking', !settings.includeThinking);
+      ui.openPanel();
+      ui.setStatus(`thinking / reasoning：${settings.includeThinking ? '含' : '不含'}`);
+    });
+    GM_registerMenuCommand('Toggle 工具呼叫與搜尋結果', () => {
+      setSetting('includeTools', !settings.includeTools);
+      ui.openPanel();
+      ui.setStatus(`工具呼叫：${settings.includeTools ? '含' : '不含'}`);
+    });
+    GM_registerMenuCommand('Reset button position', () => {
+      ui.mount();
+      ui.resetPosition();
+      ui.openPanel();
+      ui.setStatus('按鈕已放回右下角');
+    });
+  }
+
+  // ----------------------------------------------------------------- 啟動
+
+  installNetworkCapture(); // 必須在網站發出請求之前，所以 @run-at document-start
+  registerMenu();
+
+  function start() {
+    ui.mount();
+    consumePending();
+
+    // SPA 換對話不會 reload，只要確保 UI 還在（抓資料完全不碰 DOM，不需要重建狀態）。
+    let lastUrl = location.href;
+    new MutationObserver(() => {
+      if (location.href === lastUrl) return;
+      lastUrl = location.href;
+      ui.mount();
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  // document-start 時 <body>（有時連 <html>）都還沒有，所以 UI 與 observer 等到 DOM 就緒再掛。
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else {
+    start();
+  }
+})();
+JSEOF
+node --check userscripts/claude-export-markdown/claude-export-markdown.user.js && echo 'claude script syntax ok'
+```
+
+```text
+claude script syntax ok
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:02:44Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+End-to-end test Claude exporter on real share page
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+cat > $SP/e2e.mjs <<'JSEOF'
+// document-start 版的 preview：用 addInitScript 在頁面自己的 script 之前注入，
+// 這樣 fetch 攔截那層才測得到（npm run preview 是 document-idle，測不到）。
+import { chromium } from 'playwright';
+import { readFileSync } from 'node:fs';
+
+const REPO = '/Users/david/Documents/Program/Tampermonkey-Scripts';
+const [slug, url, menu = 'Copy Markdown', waitMs = '15000'] = process.argv.slice(2);
+
+const GM_SHIM = `
+window.__gmStore = {}; window.__gmClipboard = null; window.__gmMenu = [];
+window.GM_setValue = (k, v) => { window.__gmStore[k] = v; };
+window.GM_getValue = (k, d) => (k in window.__gmStore ? window.__gmStore[k] : d);
+window.GM_deleteValue = (k) => { delete window.__gmStore[k]; };
+window.GM_setClipboard = (t) => { window.__gmClipboard = t; };
+window.GM_openInTab = (u) => console.log('GM_openInTab', u);
+window.GM_registerMenuCommand = (c, f) => { window.__gmMenu.push({ caption: c, fn: f }); return c; };
+window.GM_unregisterMenuCommand = () => {};
+window.unsafeWindow = window;
+`;
+
+const script = readFileSync(`${REPO}/userscripts/${slug}/${slug}.user.js`, 'utf8');
+const requires = [...script.matchAll(/^\/\/ @require\s+(\S+)/gm)].map((m) => m[1]);
+
+const browser = await chromium.launch({
+  headless: false,
+  channel: 'chrome',
+  proxy: { server: 'http://127.0.0.1:7897' },
+});
+const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+page.on('console', (m) => console.log(`  [${m.type()}] ${m.text()}`.slice(0, 300)));
+page.on('pageerror', (e) => console.log('  [pageerror]', e.message));
+
+await page.addInitScript({ content: GM_SHIM });
+for (const req of requires) {
+  const rel = req.replace(/^.*\/main\//, '');
+  await page.addInitScript({ content: readFileSync(`${REPO}/${rel}`, 'utf8') });
+  console.log('@require:', rel);
+}
+await page.addInitScript({ content: script });
+
+await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.waitForTimeout(8000);
+
+console.log('menu:', await page.evaluate(() => window.__gmMenu.map((m) => m.caption)));
+const ran = await page.evaluate((c) => {
+  const cmd = window.__gmMenu.find((m) => m.caption === c);
+  if (!cmd) return false;
+  cmd.fn();
+  return true;
+}, menu);
+if (!ran) console.log('!! no such menu command:', menu);
+await page
+  .waitForFunction(() => window.__gmClipboard !== null, null, { timeout: Number(waitMs) })
+  .catch(() => console.log('!! clipboard never written'));
+
+const out = await page.evaluate(() => window.__gmClipboard);
+console.log('\n===== clipboard (%s chars) =====\n', out ? out.length : 0);
+if (out) console.log(out);
+await browser.close();
+JSEOF
+cd $SP && node e2e.mjs claude-export-markdown "https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868" "Copy Markdown" 2>&1 | tail -60
+```
+
+```text
+node:internal/modules/package_json_reader:301
+  throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null);
+        ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright' imported from /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad/e2e.mjs
+    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:301:9)
+    at packageResolve (node:internal/modules/esm/resolve:769:81)
+    at moduleResolve (node:internal/modules/esm/resolve:860:18)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:719:20)
+    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:736:38)
+    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:765:52)
+    at #resolve (node:internal/modules/esm/loader:701:17)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:621:35)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:160:33) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v24.13.1
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:03:18Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Rerun Claude e2e test
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+sed -i '' "s#from 'playwright'#from '/Users/david/Documents/Program/Tampermonkey-Scripts/node_modules/playwright/index.mjs'#" $SP/e2e.mjs
+cd $SP && node e2e.mjs claude-export-markdown "https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868" "Copy Markdown" 2>&1 | tail -70
+```
+
+```text
+@require: shared/chat-export.js
+@require: shared/export-ui.js
+  [pageerror] createExportPanel is not defined
+  [pageerror] createExportPanel is not defined
+  [info] [O11Y] [DatadogRUM] Initialized {service: claude-ai, env: production, version: 0784c1c40d}
+  [pageerror] createExportPanel is not defined
+  [pageerror] createExportPanel is not defined
+  [pageerror] createExportPanel is not defined
+  [pageerror] createExportPanel is not defined
+  [debug] [IsolatedSegment] Sending iframe_ready message
+  [debug] [IsolatedSegment] Message received from parent {origin: https://claude.ai, data: Object}
+  [debug] [IsolatedSegment] Processing message {type: init}
+  [debug] [IsolatedSegment] init called {writeKey: LKJN8LsLER..., segmentCdnHost: a-cdn.anthropic.com, gtagMeasurementId: AW-16632748715, gtagMccMeasurementId: AW-11477462985, floodlightId: DC-15684265}
+  [debug] [IsolatedSegment] Loading analytics via analytics.js
+  [debug] [IsolatedSegment] gtag.js loaded {measurementId: AW-16632748715, floodlightId: DC-15684265, mccMeasurementId: AW-11477462985}
+  [debug] [IsolatedSegment] Analytics loaded successfully {hasAnalytics: true, hasGtag: true}
+  [debug] [IsolatedSegment] sendMessage called {data: Object}
+  [debug] [IsolatedSegment] Message sent to parent {type: segment_initialized}
+  [pageerror] createExportPanel is not defined
+  [error] Failed to load resource: the server responded with a status of 403 ()
+  [warning] [antalytics] %s failed: flush Error: batch dropped (4xx); 1 events lost
+    at Object.doFlush (https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/shared-0-C-BGZ_iQ.js:2:235265)
+    at async Object.flush (https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/shared-0-C-BGZ_iQ.j
+menu: []
+!! no such menu command: Copy Markdown
+  [error] Failed to load resource: the server responded with a status of 403 ()
+!! clipboard never written
+
+===== clipboard (0 chars) =====
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:03:50Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Fix scope bundling and rerun Claude e2e
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+python3 - <<'PYEOF'
+from pathlib import Path
+p = Path('/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad/e2e.mjs')
+s = p.read_text()
+old = """await page.addInitScript({ content: GM_SHIM });
+for (const req of requires) {
+  const rel = req.replace(/^.*\\/main\\//, '');
+  await page.addInitScript({ content: readFileSync(`${REPO}/${rel}`, 'utf8') });
+  console.log('@require:', rel);
+}
+await page.addInitScript({ content: script });"""
+new = """// 一個 manager 會把 @require 與腳本放在**同一個 scope**，所以這裡要串成一份注入，
+// 分開 addInitScript 的話每份會各自包一層 function，彼此看不到對方。
+const bundle = [GM_SHIM];
+for (const req of requires) {
+  const rel = req.replace(/^.*\\/main\\//, '');
+  bundle.push(readFileSync(`${REPO}/${rel}`, 'utf8'));
+  console.log('@require:', rel);
+}
+bundle.push(script);
+await page.addInitScript({ content: bundle.join('\\n;\\n') });"""
+assert old in s
+p.write_text(s.replace(old, new))
+print('patched')
+PYEOF
+cd $SP && node e2e.mjs claude-export-markdown "https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868" "Copy Markdown" 2>&1 | grep -v IsolatedSegment | tail -60
+```
+
+```text
+patched
+**你的边际优势在哪里,不在哪里**
+
+你有很强的RL/LLM背景(PPO/GRPO/DAPO/DPO这些你都自学过),这在policy learning、agent系统上是真实的技术壁垒。但把这套能力迁移到量化交易上,你面临的是完全不同的竞争格局:
+
+- 数据边际:Citadel、Two Sigma这类机构有另类数据、更低延迟、更大算力,你作为个人在信息获取上没有结构性优势
+- 资金规模劣势反而是优势的另一面:小资金可以进出一些机构进不去的细分策略(比如某些流动性差的期权套利),但这类策略的研究成本/收益比对个人来说往往不划算
+- 你现在的时间/精力,边际用在什么地方回报最高?对一个senior ML engineer来说,晋升、跳槽、副业(比如咨询或自己的agent产品)带来的收益增速,大概率远超过你把周末投入去研究一个夏普比率1.0出头的策略
+
+**和定投指数的对比,数字上其实很直接**
+
+定投CSPX/VUAA(你之前研究过的UCITS ETF)这类标的,长期年化大概率在7-10%左右(名义,含通胀),接近零维护成本,税务效率你也已经研究过了。量化策略如果做得好,理论上能拿到更高的risk-adjusted return,但"做得好"这三个字背后是:
+
+1. 回测过拟合的坑非常深,尤其是个人研究者样本外验证的自律很难维持
+2. 交易成本、滑点、税(尤其新加坡对trading gain和investment gain的边界)会侵蚀掉大部分理论alpha
+3. 心理层面,主动策略在drawdown期极易导致你偏离原计划,这个行为成本很少被计入回测
+
+**一个更贴近你情况的框架**
+
+与其问"要不要做量化"，不如问:你想要的是被动收入,还是想要一个用你的ML能力做的智力项目?如果是前者,大概率定投指数(核心仓位)+ 把省下的时间投入到职业发展和主动收入上,期望值更高。如果是后者,量化可以作为一个卫星仓位(比如总资产的5-10%封顶)来做,当成一个有严格止损纪律的研究项目,而不是財务规划的核心支柱——这样即使全部亏光,也不影响你的FIRE路径。
+
+真正能撬动你财务自由速度的杠杆,通常不是找到更好的alpha,而是储蓄率和主业收入增速——这个在ML/AI这个赛道上,你现在其实站在一个相当有利的位置上。
+
+---
+
+_**User (2026-08-23 12:31:14Z)**_
+
+我想要的是被动收入，做个人量化投资上限是不是更高一些
+
+---
+
+_**Assistant (2026-08-23 12:31:34Z)**_
+
+从"上限"这个角度看,你说得对——理论上限确实更高。但这里有两个需要拆开的问题:上限高不高,和你能不能拿到,是两件事,而且中间那段路径恰好会吃掉"被动"这个属性。
+
+**上限高,是因为方差大,不是因为期望值高**
+
+个人量化策略的收益分布,如果你回测一堆策略,确实能找到年化20%+、甚至更高的曲线。但这类高上限样本,几乎全部来自:
+- 过拟合的历史区间(样本外直接崩)
+- 尾部风险没有暴露出来的策略(比如卖期权吃权利金,回测期没遇到黑天鹅)
+- 加了杠杆放大波动,恰好在测试期方向对了
+
+也就是说,"上限更高"这句话在统计意义上是真的,但它描述的是收益分布的右尾,不是你实际能拿到的期望值。个人量化投资者的收益分布,大概率是"中位数低于指数、右尾偶尔很高、左尾偶尔归零"。你如果只看过那些晒出高收益的量化博主/论坛帖子,那是幸存者偏差在起作用——亏光离场的人不会发帖。
+
+**"上限更高"和"被动收入"这两个目标其实在互相消耗资源**
+
+如果你的目标真的是上限最大化,那对应的打法是:高频迭代策略、承担更大方差、可能加杠杆、持续跟踪市场结构变化——这是一份高强度的主动工作,你说的"睡后收入"这个标签在这条路径下基本不成立。
+
+如果你的目标是被动收入,那"上限"这个指标其实不该是你的目标函数,因为被动策略天然要牺牲一部分上限来换取免维护——这和指数化投资的逻辑是一致的:你放弃了跑赢市场的可能性,换取零维护成本和确定性更高的long-run compounding。
+
+这两个目标函数不能同时最大化,你需要先想清楚自己实际上在优化哪一个。
+
+**如果你确实想要更高上限,且愿意为此花时间,那问题就不是"要不要量化",而是"这份时间投在哪最划算"**
+
+以你现在的位置(TikTok senior MLE,RL/agent背景),同样一份周末+晚上的时间精力,大概率有几个选项的期望回报都高于个人量化交易:
+- 深耕主业到更高level/跳槽溢价——这个的年化"回报率"通常远超散户量化策略的realistic Sharpe
+- 做一个和你专业相关的副业/产品(比如agent工具、咨询)——上限可能更高,而且是复利在你已有的技术护城河上
+- 如果纯粹是想做量化因为感兴趣,那用一个封顶仓位(比如总资产5-10%)去做,当成认知投资而不是财务支柱,这样即使上限没兑现,也不影响你的核心复利路径
+
+所以我的判断是:量化的理论上限确实更高,但那个上限对应的是主动、高方差、非被动的打法;如果你把"被动"作为硬约束,现实中能拿到的期望收益大概率不如定投指数+把精力投在主业上。你更想优化哪个目标,决定了答案会不一样。
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:04:13Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Capture Claude e2e output head
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+cd $SP && node e2e.mjs claude-export-markdown "https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868" "Copy Markdown" > claude-out.txt 2>&1; grep -n 'captured\|exported\|clipboard (' claude-out.txt | head; echo '--- head of transcript ---'; sed -n '/===== clipboard/,/^_\*\*Assistant/p' claude-out.txt | head -30
+```
+
+```text
+3:  [log] [claude-export-markdown] captured conversation: fc04b1a4-0476-4782-b1eb-5aabfcbe1868 4 messages
+30:  [log] [claude-export-markdown] exported {mode: transcript, to: clipboard, source: network-capture, length: 3202}
+32:===== clipboard (3202 chars) =====
+42:exported_at: "2026-08-25T23:04:12+08:00"
+--- head of transcript ---
+===== clipboard (3202 chars) =====
+
+---
+source: claude
+title: "量化投资 vs 定投指数的选择"
+url: "https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868"
+conversation_id: "e2381eda-4c8b-4918-b821-774df3fa5610"
+snapshot_id: "fc04b1a4-0476-4782-b1eb-5aabfcbe1868"
+model: ""
+created_at: "2026-08-23 12:34:14Z"
+exported_at: "2026-08-25T23:04:12+08:00"
+messages: 4
+include_thinking: false
+include_tools: false
+exporter: "claude-export-markdown v1.0.0"
+---
+
+# 量化投资 vs 定投指数的选择
+
+<!-- Generated by claude-export-markdown v1.0.0 -->
+
+_**User (2026-08-23 12:22:18Z)**_
+
+我是一个机器学习工程师，我对投资理财非常重视，我想了解下我有没有必要去进行量化投资作为我的“睡后”收入呢？还是说就定投美股指数即可
+
+---
+
+_**Assistant (2026-08-23 12:22:55Z)**_
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:04:39Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Test Claude exporter with tools+thinking and handoff
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+python3 - <<'PYEOF'
+from pathlib import Path
+p = Path('/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad/e2e.mjs')
+s = p.read_text()
+old = """const ran = await page.evaluate((c) => {
+  const cmd = window.__gmMenu.find((m) => m.caption === c);
+  if (!cmd) return false;
+  cmd.fn();
+  return true;
+}, menu);
+if (!ran) console.log('!! no such menu command:', menu);"""
+new = """for (const caption of menu.split('|')) {
+  const ran = await page.evaluate((c) => {
+    const cmd = window.__gmMenu.find((m) => m.caption === c);
+    if (!cmd) return false;
+    cmd.fn();
+    return true;
+  }, caption);
+  if (!ran) console.log('!! no such menu command:', caption);
+  await page.waitForTimeout(500);
+}"""
+assert old in s
+p.write_text(s.replace(old, new))
+print('patched')
+PYEOF
+cd $SP && node e2e.mjs claude-export-markdown "https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868" "Toggle 工具呼叫與搜尋結果|Toggle thinking / reasoning|Copy Agent Handoff" > claude-tools.txt 2>&1; sed -n '/===== clipboard/,$p' claude-tools.txt | head -45
+```
+
+```text
+patched
+===== clipboard (3650 chars) =====
+
+---
+source: claude
+title: "量化投资 vs 定投指数的选择"
+url: "https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868"
+conversation_id: "e2381eda-4c8b-4918-b821-774df3fa5610"
+snapshot_id: "fc04b1a4-0476-4782-b1eb-5aabfcbe1868"
+model: ""
+created_at: "2026-08-23 12:34:14Z"
+exported_at: "2026-08-25T23:04:38+08:00"
+messages: 4
+include_thinking: true
+include_tools: true
+exporter: "claude-export-markdown v1.0.0"
+---
+
+# Prior Claude Context
+
+The following is a prior discussion between the user and Claude.
+
+## Instructions for the coding agent
+
+- Treat established decisions as existing project decisions.
+- Do not reopen settled design questions unless implementation reveals a conflict.
+- Preserve the user's stated constraints.
+- Consult the original conversation below when necessary.
+
+---
+
+## Conversation
+
+<!-- Generated by claude-export-markdown v1.0.0 -->
+
+_**User (2026-08-23 12:22:18Z)**_
+
+我是一个机器学习工程师，我对投资理财非常重视，我想了解下我有没有必要去进行量化投资作为我的“睡后”收入呢？还是说就定投美股指数即可
+
+---
+
+_**Assistant (2026-08-23 12:22:55Z)**_
+
+**Tool call: memory_read**
+
+**Tool result: memory_read**
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:06:28Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Write the Copilot exporter userscript
+
+```bash
+cat > /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/copilot-export-markdown/copilot-export-markdown.user.js <<'JSEOF'
+// ==UserScript==
+// @name         Copilot Export Markdown
+// @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
+// @version      1.0.0
+// @description  把整段 Microsoft Copilot 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用
+// @author       Da-Wei Lee
+// @license      MIT
+// @match        https://copilot.microsoft.com/*
+// @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9ImhzbCgyNjMgNjIlIDQ2JSkiLz48dGV4dCB4PSIzMiIgeT0iMzMiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJIZWx2ZXRpY2EsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNyIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9ImNlbnRyYWwiPkNFPC90ZXh0Pjwvc3ZnPg==
+// @run-at       document-start
+// @grant        unsafeWindow
+// @grant        GM_registerMenuCommand
+// @grant        GM_setClipboard
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_deleteValue
+// @grant        GM_openInTab
+// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/chat-export.js
+// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/export-ui.js
+// @updateURL    https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/copilot-export-markdown/copilot-export-markdown.user.js
+// @downloadURL  https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/copilot-export-markdown/copilot-export-markdown.user.js
+// ==/UserScript==
+
+/* global createExportPanel, downloadText, filenameFor, jsonFence, renderTranscript, sourcesBlock */
+
+/**
+ * 把一整段 Microsoft Copilot 對話匯成 Markdown，格式跟 chatgpt / claude 那兩支一致
+ * （SpecStory 風格的 `_**User (ts)**_` / `---` / `_**Assistant**_`），目的是貼給 coding agent。
+ *
+ * 這支腳本刻意「不把 API 綁死」，因為實測時有一段是黑箱：
+ *
+ * - 登入中的對話：`/chats/<id>` ＋ `GET /c/api/conversations/<id>/history?api-version=2`
+ *   → `{ results: [{ author: { type: 'ai' | 'human' }, content: [...], createdAt }] }`
+ * - 分享出來的對話：`/shares/<id>`。匿名開只會拿到「Sign in to Copilot」擋頁，
+ *   打 `/c/api/shares/<id>` 回 **401**（endpoint 存在但要登入），
+ *   所以**它的回應長什麼樣沒辦法事先確認**。
+ *
+ * 因應方式：攔下 `/c/api/{shares,conversations}/…` 的所有 JSON，然後**用形狀找訊息列表**
+ * （元素同時有 author/sender 與 content 的那個陣列，取最長的），
+ * 不假設 top-level key 叫 `results`。成功時會把命中的 URL 與 top-level keys 印到 console，
+ * 遇到沒見過的形狀請把那行連同 Download .json 的內容回報。
+ */
+(function () {
+  'use strict';
+
+  const VERSION = '1.0.0';
+  const NS = 'copilot-export-md';
+  const EXPORTER = `copilot-export-markdown v${VERSION}`;
+  const LOG_PREFIX = '[copilot-export-markdown]';
+  const log = (...args) => console.log(LOG_PREFIX, ...args);
+
+  // 有任何 @grant 就會被 sandbox，頁面的全域要走 unsafeWindow 才看得到。
+  const pageWin = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+
+  // ---------------------------------------------------------------- 設定
+
+  const SETTINGS_KEYS = ['includeThinking', 'includeTools'];
+  const PENDING_KEY = 'pendingExport'; // 「貼 share URL → 開新分頁自動匯出」的一次性交棒
+  const settings = { includeThinking: false, includeTools: false };
+
+  for (const key of SETTINGS_KEYS) {
+    settings[key] = GM_getValue(key, settings[key]) === true;
+  }
+
+  function setSetting(key, value) {
+    settings[key] = value === true;
+    GM_setValue(key, settings[key]);
+  }
+
+  // ------------------------------------------------- 來源 1：攔截網站自己的請求
+
+  const CAPTURE_URL = /\/c\/api\/(shares|conversations)\//;
+  /** [{ url, data, messages }]，最新的排最後。 */
+  const captured = [];
+  let capturedAuth = null;
+
+  /** 深掃找「訊息列表」：元素同時有 author/sender 與 content 的陣列，取最長的那個。 */
+  function findMessageList(root, maxDepth = 6) {
+    const seen = new Set();
+    let best = null;
+
+    const isMessage = (item) =>
+      !!item &&
+      typeof item === 'object' &&
+      (item.author || item.sender || item.role) &&
+      (Array.isArray(item.content) || typeof item.content === 'string' || 'text' in item);
+
+    const walk = (node, depth) => {
+      if (!node || typeof node !== 'object' || depth > maxDepth || seen.has(node)) return;
+      seen.add(node);
+      if (Array.isArray(node)) {
+        if (node.length > 0 && node.every(isMessage)) {
+          if (!best || node.length > best.length) best = node;
+          return;
+        }
+        for (const item of node) walk(item, depth + 1);
+        return;
+      }
+      for (const value of Object.values(node)) walk(value, depth + 1);
+    };
+
+    walk(root, 0);
+    return best;
+  }
+
+  function rememberPayload(url, payload) {
+    const messages = findMessageList(payload);
+    if (!messages) return;
+    captured.push({ url, data: payload, messages });
+    log('captured conversation:', url, `${messages.length} messages`);
+  }
+
+  function rememberAuth(value) {
+    if (typeof value === 'string' && /^Bearer\s+/i.test(value)) capturedAuth = value;
+  }
+
+  function installFetchCapture() {
+    const originalFetch = pageWin.fetch;
+    if (typeof originalFetch !== 'function' || originalFetch.__copilotExportPatched) return;
+
+    const patched = function (...args) {
+      try {
+        const [input, init] = args;
+        const headers = init?.headers || (input && input.headers);
+        if (headers) {
+          const list = headers instanceof Headers ? headers : new Headers(headers);
+          rememberAuth(list.get('authorization'));
+        }
+      } catch {
+        /* 取不到 header 不影響主流程 */
+      }
+
+      const promise = originalFetch.apply(this, args);
+      return promise.then((response) => {
+        try {
+          const input = args[0];
+          const url = typeof input === 'string' ? input : input?.url || '';
+          // body 只能讀一次，一定要 clone，否則網站自己就讀不到了。
+          if (response.ok && CAPTURE_URL.test(url)) {
+            response
+              .clone()
+              .json()
+              .then((json) => rememberPayload(url, json))
+              .catch(() => {});
+          }
+        } catch {
+          /* 攔截失敗不能影響網站本身 */
+        }
+        return response; // 一定要把原本的 response 還回去
+      });
+    };
+    patched.__copilotExportPatched = true;
+    pageWin.fetch = patched;
+  }
+
+  /** Copilot 有些請求走 XHR，所以兩種都要攔。 */
+  function installXhrCapture() {
+    const XHR = pageWin.XMLHttpRequest;
+    if (!XHR || XHR.prototype.__copilotExportPatched) return;
+
+    const { open, send, setRequestHeader } = XHR.prototype;
+
+    XHR.prototype.open = function (method, url, ...rest) {
+      this.__copilotExportUrl = String(url || '');
+      return open.call(this, method, url, ...rest);
+    };
+
+    XHR.prototype.setRequestHeader = function (name, value) {
+      if (String(name).toLowerCase() === 'authorization') rememberAuth(value);
+      return setRequestHeader.call(this, name, value);
+    };
+
+    XHR.prototype.send = function (...args) {
+      this.addEventListener('load', () => {
+        try {
+          const url = this.__copilotExportUrl || '';
+          if (this.status < 200 || this.status >= 300 || !CAPTURE_URL.test(url)) return;
+          const raw = this.responseType === '' || this.responseType === 'text' ? this.responseText : this.response;
+          rememberPayload(url, typeof raw === 'string' ? JSON.parse(raw) : raw);
+        } catch {
+          /* 不是 JSON 就算了 */
+        }
+      });
+      return send.apply(this, args);
+    };
+
+    XHR.prototype.__copilotExportPatched = true;
+  }
+
+  // ------------------------------------------------------- 來源 2：自己打 API
+
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  function pickCaptured({ chatId, shareId }) {
+    const id = shareId || chatId;
+    if (id) {
+      for (let i = captured.length - 1; i >= 0; i--) {
+        if (captured[i].url.includes(id)) return captured[i];
+      }
+    }
+    return captured[captured.length - 1] || null;
+  }
+
+  async function waitForCapture(ids, { timeout = 8_000, interval = 200 } = {}) {
+    const deadline = Date.now() + timeout;
+    for (;;) {
+      const hit = pickCaptured(ids);
+      if (hit) return hit;
+      if (Date.now() >= deadline) return null;
+      await delay(interval);
+    }
+  }
+
+  /** 暖一下 session。公開的 Copilot exporter 都這樣做，401 之後再試一次常常就過了。 */
+  async function warmSession() {
+    try {
+      await fetch('/c/api/start', { method: 'POST', credentials: 'include' });
+    } catch {
+      /* 暖不起來就直接試 */
+    }
+  }
+
+  async function fromApi({ chatId, shareId }) {
+    const paths = [];
+    if (shareId) paths.push(`/c/api/shares/${shareId}`, `/c/api/shares/${shareId}?api-version=2`);
+    if (chatId) paths.push(`/c/api/conversations/${chatId}/history?api-version=2`);
+
+    for (const path of paths) {
+      for (const attempt of [1, 2]) {
+        try {
+          const headers = { accept: 'application/json' };
+          if (capturedAuth) headers.authorization = capturedAuth;
+          const res = await fetch(path, { credentials: 'include', headers });
+          if (!res.ok) {
+            log('api fallback failed:', path, res.status);
+            if (attempt === 1 && (res.status === 401 || res.status === 403)) {
+              await warmSession();
+              continue;
+            }
+            break;
+          }
+          const json = await res.json();
+          const messages = findMessageList(json);
+          if (messages) return { url: path, data: json, messages };
+          break;
+        } catch (error) {
+          log('api fallback threw:', error.message);
+          break;
+        }
+      }
+    }
+    return null;
+  }
+
+  // ------------------------------------------------------------ 來源總調度
+
+  function currentIds() {
+    const chat = location.pathname.match(/\/chats\/([A-Za-z0-9_-]+)/);
+    const share = location.pathname.match(/^\/shares\/([A-Za-z0-9_-]+)/);
+    return { chatId: chat?.[1] || null, shareId: share?.[1] || null };
+  }
+
+  function shareIdFromUrl(input) {
+    const match = String(input).match(/\/shares\/([A-Za-z0-9_-]+)/);
+    return match ? match[1] : null;
+  }
+
+  async function resolveConversation(ids) {
+    const hit = pickCaptured(ids) || (await waitForCapture(ids));
+    if (hit) return { ...hit, source: 'network-capture' };
+
+    const api = await fromApi(ids);
+    if (api) return { ...api, source: 'api' };
+
+    throw new Error(
+      '抓不到對話資料。請確認已登入、對話已載完，再重新整理這一頁試一次。'
+    );
+  }
+
+  // ------------------------------------------------------------ 轉成 Markdown
+
+  function roleOf(message) {
+    const type = String(message.author?.type || message.author || message.sender || message.role || '');
+    if (/human|user/i.test(type)) return 'User';
+    if (/^(ai|bot|assistant|copilot)$/i.test(type)) return 'Assistant';
+    return type ? type[0].toUpperCase() + type.slice(1) : 'Unknown';
+  }
+
+  function partToText(part, opts, citations) {
+    if (typeof part === 'string') return part;
+    if (!part || typeof part !== 'object') return '';
+
+    switch (part.type) {
+      case 'text':
+        return String(part.text ?? '');
+      case 'image': {
+        if (!part.url) return '';
+        const caption = part.prompt ? `\n\n*Prompt: ${part.prompt}*` : '';
+        return `![image](${part.url})${caption}`;
+      }
+      case 'citation':
+        if (part.url) citations.push({ url: part.url, title: part.title || '' });
+        return '';
+      case 'chainOfThought': {
+        if (!opts.includeThinking) return '';
+        const shot = part.screenshotUrl ? `\n\n![screenshot](${part.screenshotUrl})` : '';
+        return `${String(part.text ?? '')}${shot}`;
+      }
+      default:
+        // 沒見過的 part。預設不塞進正文（避免整篇被 tool 雜訊淹掉），
+        // 但打開「含工具呼叫」時原樣留 JSON，不靜默丟掉。
+        if (!opts.includeTools) return '';
+        return `**${part.type || 'part'}**\n\n${jsonFence(part)}`;
+    }
+  }
+
+  function messageToBody(message, opts) {
+    const citations = [];
+    const parts = Array.isArray(message.content)
+      ? message.content
+      : message.content
+        ? [message.content]
+        : [];
+
+    const texts = parts
+      .map((part) => partToText(part, opts, citations))
+      .filter((text) => String(text).trim());
+
+    if (texts.length === 0 && typeof message.text === 'string' && message.text.trim()) {
+      texts.push(message.text);
+    }
+
+    const sources = sourcesBlock(citations);
+    if (sources) texts.push(sources);
+    return texts.join('\n\n');
+  }
+
+  /** title 藏在哪一層不確定，往下找兩層就好。 */
+  function pickTitle(data) {
+    const keys = ['title', 'conversationTitle', 'name', 'snapshotName'];
+    const look = (node, depth) => {
+      if (!node || typeof node !== 'object' || depth > 2) return '';
+      for (const key of keys) {
+        if (typeof node[key] === 'string' && node[key].trim()) return node[key];
+      }
+      for (const value of Object.values(node)) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          const hit = look(value, depth + 1);
+          if (hit) return hit;
+        }
+      }
+      return '';
+    };
+    return look(data, 0) || 'Copilot conversation';
+  }
+
+  function normalize(hit, ctx, opts) {
+    const messages = [...hit.messages].sort((a, b) => {
+      const at = new Date(a.createdAt || a.created_at || 0).getTime() || 0;
+      const bt = new Date(b.createdAt || b.created_at || 0).getTime() || 0;
+      return at - bt;
+    });
+
+    const sections = messages
+      .map((message) => ({
+        role: roleOf(message),
+        model: '',
+        time: message.createdAt || message.created_at,
+        body: messageToBody(message, opts),
+      }))
+      .filter((section) => section.body.trim());
+
+    return {
+      source: 'copilot',
+      sourceLabel: 'Microsoft Copilot',
+      title: pickTitle(hit.data),
+      url: ctx.url,
+      ids: { conversation_id: ctx.chatId || '', share_id: ctx.shareId || '' },
+      model: '',
+      createdAt: messages[0]?.createdAt || messages[0]?.created_at,
+      sections,
+    };
+  }
+
+  // ------------------------------------------------------------------ 動作
+
+  async function doExport({ mode, to, ids }) {
+    ui.setStatus('讀取對話…');
+    try {
+      const target = ids || currentIds();
+      const hit = await resolveConversation(target);
+      const url = target.shareId ? `${location.origin}/shares/${target.shareId}` : location.href;
+      // 這一行就是把「/c/api/shares/<id> 到底長怎樣」收斂掉的手段，不要拿掉。
+      log('using payload from', hit.url, '| top-level keys:', Object.keys(hit.data || {}));
+
+      const doc = normalize(hit, { ...target, url }, settings);
+      const text =
+        mode === 'json'
+          ? JSON.stringify(hit.data, null, 2)
+          : renderTranscript(doc, {
+              ...settings,
+              handoff: mode === 'handoff',
+              exporter: EXPORTER,
+            });
+
+      if (to === 'clipboard') {
+        GM_setClipboard(text, 'text');
+        ui.setStatus(`已複製 ${text.length.toLocaleString()} 字（來源：${hit.source}）`);
+      } else {
+        downloadText(
+          filenameFor(doc, mode === 'json' ? 'json' : 'md'),
+          text,
+          mode === 'json' ? 'application/json;charset=utf-8' : 'text/markdown;charset=utf-8'
+        );
+        ui.setStatus(`已下載（來源：${hit.source}）`);
+      }
+      log('exported', { mode, to, source: hit.source, length: text.length });
+    } catch (error) {
+      ui.setStatus(`失敗：${error.message}`);
+      log('export failed:', error);
+    }
+  }
+
+  /** share 的內容要登入 session 才看得到，所以一律開分頁讓那邊的腳本自己抓。 */
+  function exportFromShareUrl(raw) {
+    const shareId = shareIdFromUrl(raw);
+    if (!shareId) {
+      ui.setStatus('這不像 share URL（要有 /shares/<id>）。');
+      return;
+    }
+    if (shareId === currentIds().shareId) {
+      doExport({ mode: 'transcript', to: 'clipboard' });
+      return;
+    }
+    GM_setValue(PENDING_KEY, { shareId, expires: Date.now() + 120_000 });
+    GM_openInTab(`${location.origin}/shares/${shareId}`, { active: true });
+    ui.setStatus('已開新分頁，那邊載完就會自動複製。');
+  }
+
+  async function consumePending() {
+    const pending = GM_getValue(PENDING_KEY, null);
+    if (!pending || typeof pending !== 'object') return;
+    const { shareId } = currentIds();
+    if (!shareId || pending.shareId !== shareId) return;
+
+    GM_deleteValue(PENDING_KEY); // 一次性：先消耗再執行，免得失敗時每次開頁都重跑
+    if (Date.now() > (pending.expires ?? 0)) return;
+
+    ui.openPanel();
+    await doExport({ mode: 'transcript', to: 'clipboard' });
+  }
+
+  const ACTIONS = [
+    { label: 'Copy Markdown', run: () => doExport({ mode: 'transcript', to: 'clipboard' }) },
+    { label: 'Copy Agent Handoff', run: () => doExport({ mode: 'handoff', to: 'clipboard' }) },
+    { label: 'Download .md', run: () => doExport({ mode: 'transcript', to: 'file' }) },
+    { label: 'Download .json', run: () => doExport({ mode: 'json', to: 'file' }) },
+  ];
+
+  // -------------------------------------------------------------------- UI
+
+  const ui = createExportPanel({
+    ns: NS,
+    buttonLabel: '⇩ Export MD',
+    actions: ACTIONS,
+    toggles: [
+      {
+        label: '含 thinking / reasoning',
+        get: () => settings.includeThinking,
+        set: (value) => setSetting('includeThinking', value),
+      },
+      {
+        label: '含工具呼叫與未知區塊',
+        get: () => settings.includeTools,
+        set: (value) => setSetting('includeTools', value),
+      },
+    ],
+    shareInput: {
+      placeholder: '貼上任意 share URL…',
+      buttonLabel: 'Open & copy share URL',
+      onSubmit: exportFromShareUrl,
+    },
+    storage: { get: (key, fallback) => GM_getValue(key, fallback), set: GM_setValue },
+    onStatus: log,
+  });
+
+  function registerMenu() {
+    for (const action of ACTIONS) {
+      // 不要用 accessKey —— 那是 Tampermonkey 限定的。
+      GM_registerMenuCommand(action.label, () => {
+        ui.openPanel();
+        action.run();
+      });
+    }
+    GM_registerMenuCommand('Export from share URL…', () => {
+      ui.openPanel();
+      const raw = prompt('貼上 Copilot share URL：');
+      if (raw) exportFromShareUrl(raw);
+    });
+    GM_registerMenuCommand('Toggle thinking / reasoning', () => {
+      setSetting('includeThinking', !settings.includeThinking);
+      ui.openPanel();
+      ui.setStatus(`thinking / reasoning：${settings.includeThinking ? '含' : '不含'}`);
+    });
+    GM_registerMenuCommand('Toggle 工具呼叫與未知區塊', () => {
+      setSetting('includeTools', !settings.includeTools);
+      ui.openPanel();
+      ui.setStatus(`工具呼叫：${settings.includeTools ? '含' : '不含'}`);
+    });
+    GM_registerMenuCommand('Reset button position', () => {
+      ui.mount();
+      ui.resetPosition();
+      ui.openPanel();
+      ui.setStatus('按鈕已放回右下角');
+    });
+  }
+
+  // ----------------------------------------------------------------- 啟動
+
+  installFetchCapture(); // 必須在網站發出請求之前，所以 @run-at document-start
+  installXhrCapture();
+  registerMenu();
+
+  function start() {
+    ui.mount();
+    consumePending();
+
+    // SPA 換對話不會 reload，只要確保 UI 還在（抓資料完全不碰 DOM，不需要重建狀態）。
+    let lastUrl = location.href;
+    new MutationObserver(() => {
+      if (location.href === lastUrl) return;
+      lastUrl = location.href;
+      ui.mount();
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  // document-start 時 <body>（有時連 <html>）都還沒有，所以 UI 與 observer 等到 DOM 就緒再掛。
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else {
+    start();
+  }
+})();
+JSEOF
+node --check userscripts/copilot-export-markdown/copilot-export-markdown.user.js && echo 'copilot script syntax ok' && npm run check
+```
+
+```text
+copilot script syntax ok
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 5 userscript(s): 0 error(s), 0 warning(s).
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:07:03Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Stub-test the Copilot exporter pipeline
+
+````bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+cat > $SP/copilot-stub.mjs <<'JSEOF'
+// 用 stub server 打 copilot 腳本的整條鏈：攔截 → 找形狀 → normalize → render。
+// 真的 /c/api/shares/<id> 匿名拿不到（401），所以這裡同時測兩種形狀：
+// history 的 { results: [...] } 與 share 可能的 { conversation: { messages: [...] } }。
+import { chromium } from '/Users/david/Documents/Program/Tampermonkey-Scripts/node_modules/playwright/index.mjs';
+import { readFileSync } from 'node:fs';
+
+const REPO = '/Users/david/Documents/Program/Tampermonkey-Scripts';
+const script = readFileSync(`${REPO}/userscripts/copilot-export-markdown/copilot-export-markdown.user.js`, 'utf8');
+const requires = [...script.matchAll(/^\/\/ @require\s+(\S+)/gm)].map((m) => m[1]);
+
+const GM_SHIM = `
+window.__gmStore = {}; window.__gmClipboard = null; window.__gmMenu = [];
+window.GM_setValue = (k, v) => { window.__gmStore[k] = v; };
+window.GM_getValue = (k, d) => (k in window.__gmStore ? window.__gmStore[k] : d);
+window.GM_deleteValue = (k) => { delete window.__gmStore[k]; };
+window.GM_setClipboard = (t) => { window.__gmClipboard = t; };
+window.GM_openInTab = (u) => console.log('GM_openInTab', u);
+window.GM_registerMenuCommand = (c, f) => { window.__gmMenu.push({ caption: c, fn: f }); return c; };
+window.unsafeWindow = window;
+`;
+
+const messages = [
+  {
+    author: { type: 'human' },
+    createdAt: '2026-08-20T03:00:00Z',
+    content: [{ type: 'text', text: '幫我查一下 userscript 的 @require 快取行為' }],
+  },
+  {
+    author: { type: 'ai' },
+    createdAt: '2026-08-20T03:00:09Z',
+    content: [
+      { type: 'chainOfThought', text: '先確認兩個 manager 的差異…' },
+      { type: 'text', text: '結論：\n\n```js\nconst a = 1;\n```\n\n兩邊都會快取。' },
+      { type: 'citation', url: 'https://violentmonkey.github.io/', title: 'Violentmonkey' },
+      { type: 'citation', url: 'https://violentmonkey.github.io/', title: 'Violentmonkey' },
+      { type: 'somethingNew', payload: { a: 1 } },
+    ],
+  },
+];
+
+const SHAPES = {
+  FAKEHISTORY: { path: '/c/api/conversations/FAKEHISTORY/history', body: { results: messages } },
+  FAKESHARE: {
+    path: '/c/api/shares/FAKESHARE',
+    body: { share: { id: 'FAKESHARE', title: '共用的對話' }, conversation: { title: '共用的對話', messages } },
+  },
+};
+
+const browser = await chromium.launch({ headless: true });
+
+for (const [id, shape] of Object.entries(SHAPES)) {
+  const page = await browser.newPage();
+  page.on('console', (m) => { if (m.text().includes('copilot-export')) console.log(`  ${m.text()}`.slice(0, 220)); });
+  page.on('pageerror', (e) => console.log('  [pageerror]', e.message));
+
+  await page.route('https://copilot.microsoft.com/**', (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.startsWith('/c/api/')) {
+      const match = Object.values(SHAPES).find((s) => url.pathname === s.path);
+      return match
+        ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(match.body) })
+        : route.fulfill({ status: 401, body: '' });
+    }
+    return route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>stub</title><body>stub</body>' });
+  });
+
+  const bundle = [GM_SHIM, ...requires.map((r) => readFileSync(`${REPO}/${r.replace(/^.*\/main\//, '')}`, 'utf8')), script];
+  await page.addInitScript({ content: bundle.join('\n;\n') });
+
+  const pagePath = id === 'FAKESHARE' ? `/shares/${id}` : `/chats/${id}`;
+  await page.goto(`https://copilot.microsoft.com${pagePath}`, { waitUntil: 'domcontentloaded' });
+  // 模擬網站自己發出那個請求（攔截器應該接住它）
+  await page.evaluate((p) => fetch(p).then((r) => r.json()), shape.path);
+  await page.waitForTimeout(300);
+
+  await page.evaluate(() => window.__gmMenu.find((m) => m.caption === 'Copy Markdown').fn());
+  await page.waitForFunction(() => window.__gmClipboard !== null, null, { timeout: 15000 }).catch(() => {});
+  console.log(`\n########## ${id} (${pagePath}) ##########\n`);
+  console.log(await page.evaluate(() => window.__gmClipboard));
+  await page.close();
+}
+await browser.close();
+JSEOF
+cd $SP && node copilot-stub.mjs 2>&1 | head -90
+````
+
+```text
+  [copilot-export-markdown] captured conversation: /c/api/conversations/FAKEHISTORY/history 2 messages
+  [copilot-export-markdown] 讀取對話…
+  [copilot-export-markdown] using payload from /c/api/conversations/FAKEHISTORY/history | top-level keys: [results]
+  [copilot-export-markdown] 已複製 622 字（來源：network-capture）
+  [copilot-export-markdown] exported {mode: transcript, to: clipboard, source: network-capture, length: 622}
+
+########## FAKEHISTORY (/chats/FAKEHISTORY) ##########
+
+---
+source: copilot
+title: "Copilot conversation"
+url: "https://copilot.microsoft.com/chats/FAKEHISTORY"
+conversation_id: "FAKEHISTORY"
+model: ""
+created_at: "2026-08-20 03:00:00Z"
+exported_at: "2026-08-25T23:07:03+08:00"
+messages: 2
+include_thinking: false
+include_tools: false
+exporter: "copilot-export-markdown v1.0.0"
+---
+
+# Copilot conversation
+
+<!-- Generated by copilot-export-markdown v1.0.0 -->
+
+_**User (2026-08-20 03:00:00Z)**_
+
+幫我查一下 userscript 的 @require 快取行為
+
+---
+
+_**Assistant (2026-08-20 03:00:09Z)**_
+
+結論：
+
+```js
+const a = 1;
+```
+
+兩邊都會快取。
+
+**Sources**
+
+- [Violentmonkey](https://violentmonkey.github.io/)
+
+  [copilot-export-markdown] captured conversation: /c/api/shares/FAKESHARE 2 messages
+  [copilot-export-markdown] 讀取對話…
+  [copilot-export-markdown] using payload from /c/api/shares/FAKESHARE | top-level keys: [share, conversation]
+  [copilot-export-markdown] 已複製 582 字（來源：network-capture）
+  [copilot-export-markdown] exported {mode: transcript, to: clipboard, source: network-capture, length: 582}
+
+########## FAKESHARE (/shares/FAKESHARE) ##########
+
+---
+source: copilot
+title: "共用的對話"
+url: "https://copilot.microsoft.com/shares/FAKESHARE"
+share_id: "FAKESHARE"
+model: ""
+created_at: "2026-08-20 03:00:00Z"
+exported_at: "2026-08-25T23:07:03+08:00"
+messages: 2
+include_thinking: false
+include_tools: false
+exporter: "copilot-export-markdown v1.0.0"
+---
+
+# 共用的對話
+
+<!-- Generated by copilot-export-markdown v1.0.0 -->
+
+_**User (2026-08-20 03:00:00Z)**_
+
+幫我查一下 userscript 的 @require 快取行為
+
+---
+
+_**Assistant (2026-08-20 03:00:09Z)**_
+
+結論：
+
+```js
+const a = 1;
+```
+
+兩邊都會快取。
+
+**Sources**
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:07:19Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Add conversation title lookup to Copilot script
+
+```bash
+python3 - <<'PYEOF'
+from pathlib import Path
+p = Path('userscripts/copilot-export-markdown/copilot-export-markdown.user.js')
+s = p.read_text()
+
+old = """  /** title 藏在哪一層不確定，往下找兩層就好。 */"""
+new = """  /**
+   * `/c/api/conversations/<id>/history` 的回應裡沒有標題，
+   * 標題在對話列表那支 API 上。拿不到就算了，frontmatter 留預設值。
+   */
+  async function lookupTitle(chatId) {
+    try {
+      const headers = { accept: 'application/json' };
+      if (capturedAuth) headers.authorization = capturedAuth;
+      const res = await fetch('/c/api/conversations?api-version=2', {
+        credentials: 'include',
+        headers,
+      });
+      if (!res.ok) return '';
+      const json = await res.json();
+      const items = Array.isArray(json?.results) ? json.results : Array.isArray(json) ? json : [];
+      return items.find((item) => item?.id === chatId)?.title || '';
+    } catch {
+      return '';
+    }
+  }
+
+  /** title 藏在哪一層不確定，往下找兩層就好。 */"""
+assert old in s
+s = s.replace(old, new, 1)
+
+old2 = """      const doc = normalize(hit, { ...target, url }, settings);
+      const text ="""
+new2 = """      const doc = normalize(hit, { ...target, url }, settings);
+      if (doc.title === DEFAULT_TITLE && target.chatId) {
+        doc.title = (await lookupTitle(target.chatId)) || doc.title;
+      }
+      const text ="""
+assert old2 in s
+s = s.replace(old2, new2, 1)
+
+s = s.replace(
+    "    return look(data, 0) || 'Copilot conversation';",
+    "    return look(data, 0) || DEFAULT_TITLE;",
+)
+s = s.replace(
+    "  const CAPTURE_URL = /\\/c\\/api\\/(shares|conversations)\\//;",
+    "  const CAPTURE_URL = /\\/c\\/api\\/(shares|conversations)\\//;\n  const DEFAULT_TITLE = 'Copilot conversation';",
+)
+p.write_text(s)
+print('patched')
+PYEOF
+node --check userscripts/copilot-export-markdown/copilot-export-markdown.user.js && grep -n 'DEFAULT_TITLE' userscripts/copilot-export-markdown/copilot-export-markdown.user.js
+```
+
+```text
+patched
+73:  const DEFAULT_TITLE = 'Copilot conversation';
+376:    return look(data, 0) || DEFAULT_TITLE;
+419:      if (doc.title === DEFAULT_TITLE && target.chatId) {
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:07:34Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Rerun Copilot stub test with toggles on
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+python3 - <<'PYEOF'
+from pathlib import Path
+p = Path('/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad/copilot-stub.mjs')
+s = p.read_text()
+s = s.replace("""    if (url.pathname.startsWith('/c/api/')) {
+      const match = Object.values(SHAPES).find((s) => url.pathname === s.path);""",
+"""    if (url.pathname === '/c/api/conversations') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ results: [{ id: 'FAKEHISTORY', title: 'require 快取行為' }] }),
+      });
+    }
+    if (url.pathname.startsWith('/c/api/')) {
+      const match = Object.values(SHAPES).find((s) => url.pathname === s.path);""")
+s = s.replace("""  await page.evaluate(() => window.__gmMenu.find((m) => m.caption === 'Copy Markdown').fn());""",
+"""  for (const caption of (process.env.MENUS || 'Copy Markdown').split('|')) {
+    await page.evaluate((c) => window.__gmMenu.find((m) => m.caption === c).fn(), caption);
+    await page.waitForTimeout(300);
+  }""")
+p.write_text(s)
+print('patched')
+PYEOF
+cd $SP && MENUS='Toggle thinking / reasoning|Toggle 工具呼叫與未知區塊|Copy Markdown' node copilot-stub.mjs 2>&1 | sed -n '1,60p'
+```
+
+```text
+patched
+  [copilot-export-markdown] captured conversation: /c/api/conversations/FAKEHISTORY/history 2 messages
+  [copilot-export-markdown] thinking / reasoning：含
+  [copilot-export-markdown] 工具呼叫：含
+  [copilot-export-markdown] 讀取對話…
+  [copilot-export-markdown] using payload from /c/api/conversations/FAKEHISTORY/history | top-level keys: [results]
+  [copilot-export-markdown] 已複製 715 字（來源：network-capture）
+  [copilot-export-markdown] exported {mode: transcript, to: clipboard, source: network-capture, length: 715}
+
+########## FAKEHISTORY (/chats/FAKEHISTORY) ##########
+
+---
+source: copilot
+title: "require 快取行為"
+url: "https://copilot.microsoft.com/chats/FAKEHISTORY"
+conversation_id: "FAKEHISTORY"
+model: ""
+created_at: "2026-08-20 03:00:00Z"
+exported_at: "2026-08-25T23:07:33+08:00"
+messages: 2
+include_thinking: true
+include_tools: true
+exporter: "copilot-export-markdown v1.0.0"
+---
+
+# require 快取行為
+
+<!-- Generated by copilot-export-markdown v1.0.0 -->
+
+_**User (2026-08-20 03:00:00Z)**_
+
+幫我查一下 userscript 的 @require 快取行為
+
+---
+
+_**Assistant (2026-08-20 03:00:09Z)**_
+
+先確認兩個 manager 的差異…
+
+結論：
+
+```js
+const a = 1;
+```
+
+兩邊都會快取。
+
+**somethingNew**
+
+```json
+{
+  "type": "somethingNew",
+  "payload": {
+    "a": 1
+  }
+}
+```
+
+**Sources**
+
+- [Violentmonkey](https://violentmonkey.github.io/)
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:08:29Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Refactor chatgpt script part 1
+
+```bash
+python3 - <<'PYEOF'
+from pathlib import Path
+p = Path('userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js')
+s = p.read_text()
+
+def rep(old, new, count=1):
+    global s
+    assert old in s, f'NOT FOUND: {old[:70]!r}'
+    s = s.replace(old, new, count)
+
+rep('// @version      1.1.0', '// @version      1.2.0')
+
+rep("""// @grant        GM_getValue
+// @updateURL""",
+"""// @grant        GM_getValue
+// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/chat-export.js
+// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/export-ui.js
+// @updateURL""")
+
+rep("""// ==/UserScript==
+
+/**
+ * 把一整段 ChatGPT 對話匯成 Markdown""",
+"""// ==/UserScript==
+
+/* global createExportPanel, downloadText, fence, filenameFor, renderTranscript */
+
+/**
+ * 把一整段 ChatGPT 對話匯成 Markdown""")
+
+rep("""  const VERSION = '1.1.0';
+  const NS = 'cgpt-export-md';""",
+"""  const VERSION = '1.2.0';
+  const NS = 'cgpt-export-md';
+  const EXPORTER = `chatgpt-export-markdown v${VERSION}`;""")
+
+rep("""  const SETTINGS_KEYS = ['includeThinking', 'includeTools'];
+  const POSITION_KEY = 'buttonPosition'; // 拖曳後記住的位置：{ left, top }（viewport 座標）
+  const PANEL_WIDTH = 230;
+  const settings""",
+"""  const SETTINGS_KEYS = ['includeThinking', 'includeTools'];
+  const settings""")
+
+# fence 現在來自 shared/chat-export.js
+rep("""  /** fence 要比內文裡最長的一串 backtick 還長，否則 code block 會被自己的內容截斷。 */
+  function fence(body, lang = '') {
+    const longest = (String(body).match(/`+/g) || []).reduce(
+      (max, run) => Math.max(max, run.length),
+      0
+    );
+    const ticks = '`'.repeat(Math.max(3, longest + 1));
+    return `${ticks}${lang}\\n${String(body).replace(/\\n$/, '')}\\n${ticks}`;
+  }
+
+""", "")
+
+# 時間格式與 yaml 也搬進 shared 了
+rep("""  function pad(n) {
+    return String(Math.floor(Math.abs(n))).padStart(2, '0');
+  }
+
+  /** 對齊 .specstory/history/ 的寫法：UTC 的 `YYYY-MM-DD HH:mm:ssZ`。 */
+  function formatUtc(epochSeconds) {
+    if (!epochSeconds) return '';
+    const d = new Date(epochSeconds * 1000);
+    return (
+      `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
+      `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}Z`
+    );
+  }
+
+  function localIso(date = new Date()) {
+    const offset = -date.getTimezoneOffset();
+    const sign = offset >= 0 ? '+' : '-';
+    return (
+      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T` +
+      `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}` +
+      `${sign}${pad(offset / 60)}:${pad(offset % 60)}`
+    );
+  }
+
+""", "")
+
+# toSections 的合併交給 shared 的 mergeSections
+rep("""  /**
+   * 連續同 role 的訊息要合併。一輪 assistant 常被拆成「開場白 → 搜尋 → 正文」好幾則，
+   * 不合併的話 transcript 會出現一堆只有一行的 Assistant 區塊。
+   */
+  function toSections(messages) {
+    const sections = [];
+    for (const message of messages) {
+      const body = applyCitations(textOf(message), message).trim();
+      if (!body) continue;
+
+      const role = roleOf(message);
+      const model = role === 'Assistant' ? message.metadata?.model_slug || '' : '';
+      const previous = sections[sections.length - 1];
+      if (previous && previous.role === role) {
+        previous.body += `\\n\\n${body}`;
+        if (!previous.model) previous.model = model;
+        continue;
+      }
+      sections.push({ role, model, body, time: message.create_time });
+    }
+    return sections;
+  }
+
+  function yaml(value) {
+    return JSON.stringify(String(value ?? '')); // JSON 字串剛好是合法的 YAML double-quoted scalar
+  }
+
+  const HANDOFF_HEADER = [
+    '# Prior ChatGPT Context',
+    '',
+    'The following is a prior discussion between the user and ChatGPT.',
+    '',
+    '## Instructions for the coding agent',
+    '',
+    '- Treat established decisions as existing project decisions.',
+    '- Do not reopen settled design questions unless implementation reveals a conflict.',
+    "- Preserve the user's stated constraints.",
+    '- Consult the original conversation below when necessary.',
+    '',
+    '---',
+    '',
+    '## Conversation',
+  ].join('\\n');
+
+  function render(data, opts, ctx) {
+    const sections = toSections(visibleMessages(buildThread(data), opts));
+    if (sections.length === 0) throw new Error('這個對話沒有可匯出的訊息。');
+
+    const title = data.title || 'ChatGPT conversation';
+    const frontMatter = [
+      '---',
+      'source: chatgpt',
+      `title: ${yaml(title)}`,
+      `url: ${yaml(ctx.url)}`,
+      `conversation_id: ${yaml(data.conversation_id || data.id || '')}`,
+      `model: ${yaml(data.default_model_slug || '')}`,
+      `created_at: ${yaml(formatUtc(data.create_time))}`,
+      `exported_at: ${yaml(localIso())}`,
+      `messages: ${sections.length}`,
+      `include_thinking: ${opts.includeThinking}`,
+      `include_tools: ${opts.includeTools}`,
+      `exporter: ${yaml(`chatgpt-export-markdown v${VERSION}`)}`,
+      '---',
+    ].join('\\n');
+
+    const body = sections
+      .map((section) => {
+        const label = [section.model, formatUtc(section.time)].filter(Boolean).join(', ');
+        return `_**${section.role}${label ? ` (${label})` : ''}**_\\n\\n${section.body}`;
+      })
+      .join('\\n\\n---\\n\\n');
+
+    const heading = opts.handoff ? HANDOFF_HEADER : `# ${title}`;
+    return `${frontMatter}\\n\\n${heading}\\n\\n<!-- Generated by chatgpt-export-markdown v${VERSION} -->\\n\\n${body}\\n`;
+  }
+
+  function filenameFor(data, extension) {
+    const slug =
+      String(data.title || 'conversation')
+        .replace(/[\\\\/:*?"<>|]+/g, '')
+        .trim()
+        .replace(/\\s+/g, '-')
+        .slice(0, 60) || 'conversation';
+    const now = new Date();
+    const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+    return `chatgpt-${slug}-${stamp}.${extension}`;
+  }
+
+  /** 不需要任何 @grant 的下載（同 shared/dom.js 的 downloadText）。 */
+  function downloadText(filename, text, mime) {
+    const url = URL.createObjectURL(new Blob([text], { type: mime }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+""",
+"""  /** 把 ChatGPT 的對話 JSON 轉成 shared/chat-export.js 吃的正規化 doc。 */
+  function normalize(data, ctx, opts) {
+    const sections = visibleMessages(buildThread(data), opts).map((message) => ({
+      role: roleOf(message),
+      model: roleOf(message) === 'Assistant' ? message.metadata?.model_slug || '' : '',
+      time: message.create_time,
+      body: applyCitations(textOf(message), message),
+    }));
+
+    return {
+      source: 'chatgpt',
+      sourceLabel: 'ChatGPT',
+      title: data.title || 'ChatGPT conversation',
+      url: ctx.url,
+      ids: { conversation_id: data.conversation_id || data.id || '' },
+      model: data.default_model_slug || '',
+      createdAt: data.create_time,
+      sections,
+    };
+  }
+""")
+
+p.write_text(s)
+print('part 1 done')
+PYEOF
+node --check userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js && echo 'syntax still ok (part 1)'
+```
+
+```text
+part 1 done
+syntax still ok (part 1)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:08:54Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Refactor chatgpt script part 2 (UI + menu)
+
+```bash
+python3 - <<'PYEOF'
+from pathlib import Path
+p = Path('userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js')
+s = p.read_text()
+
+def rep(old, new, count=1):
+    global s
+    assert old in s, f'NOT FOUND: {old[:80]!r}'
+    s = s.replace(old, new, count)
+
+# --- doExport 改吃正規化 doc ---
+rep("""  async function doExport({ mode, to, ids }) {
+    setStatus('讀取對話…');
+    try {
+      const target = ids || currentIds();
+      const { data, source } = await resolveConversation(target);
+      const url = target.shareId ? `${location.origin}/share/${target.shareId}` : location.href;
+
+      const text =
+        mode === 'json'
+          ? JSON.stringify(data, null, 2)
+          : render(data, { ...settings, handoff: mode === 'handoff' }, { url });
+
+      if (to === 'clipboard') {
+        GM_setClipboard(text, 'text');
+        setStatus(`已複製 ${text.length.toLocaleString()} 字（來源：${source}）`);
+      } else {
+        downloadText(
+          filenameFor(data, mode === 'json' ? 'json' : 'md'),
+          text,
+          mode === 'json' ? 'application/json;charset=utf-8' : 'text/markdown;charset=utf-8'
+        );
+        setStatus(`已下載（來源：${source}）`);
+      }
+      log('exported', { mode, to, source, length: text.length });
+    } catch (error) {
+      setStatus(`失敗：${error.message}`);
+      log('export failed:', error);
+    }
+  }""",
+"""  async function doExport({ mode, to, ids }) {
+    ui.setStatus('讀取對話…');
+    try {
+      const target = ids || currentIds();
+      const { data, source } = await resolveConversation(target);
+      const url = target.shareId ? `${location.origin}/share/${target.shareId}` : location.href;
+
+      const doc = normalize(data, { url }, settings);
+      const text =
+        mode === 'json'
+          ? JSON.stringify(data, null, 2)
+          : renderTranscript(doc, {
+              ...settings,
+              handoff: mode === 'handoff',
+              exporter: EXPORTER,
+            });
+
+      if (to === 'clipboard') {
+        GM_setClipboard(text, 'text');
+        ui.setStatus(`已複製 ${text.length.toLocaleString()} 字（來源：${source}）`);
+      } else {
+        downloadText(
+          filenameFor(doc, mode === 'json' ? 'json' : 'md'),
+          text,
+          mode === 'json' ? 'application/json;charset=utf-8' : 'text/markdown;charset=utf-8'
+        );
+        ui.setStatus(`已下載（來源：${source}）`);
+      }
+      log('exported', { mode, to, source, length: text.length });
+    } catch (error) {
+      ui.setStatus(`失敗：${error.message}`);
+      log('export failed:', error);
+    }
+  }""")
+
+rep("""    if (!shareId) {
+      setStatus('這不像 share URL（要有 /share/<id>）。');
+      return;
+    }""",
+"""    if (!shareId) {
+      ui.setStatus('這不像 share URL（要有 /share/<id>）。');
+      return;
+    }""")
+
+# --- 整段 UI 換成 shared/export-ui.js ---
+start = s.index('  // -------------------------------------------------------------------- UI')
+end = s.index('  function registerMenu() {')
+ui_block = """  // -------------------------------------------------------------------- UI
+
+  const ui = createExportPanel({
+    ns: NS,
+    buttonLabel: '⇩ Export MD',
+    actions: ACTIONS,
+    toggles: [
+      {
+        label: '含 thinking / reasoning',
+        get: () => settings.includeThinking,
+        set: (value) => setSetting('includeThinking', value),
+      },
+      {
+        label: '含工具呼叫與搜尋結果',
+        get: () => settings.includeTools,
+        set: (value) => setSetting('includeTools', value),
+      },
+    ],
+    shareInput: {
+      placeholder: '貼上任意 share URL…',
+      buttonLabel: 'Copy from share URL',
+      onSubmit: exportFromShareUrl,
+    },
+    storage: { get: (key, fallback) => GM_getValue(key, fallback), set: GM_setValue },
+    onStatus: log,
+  });
+
+"""
+s = s[:start] + ui_block + s[end:]
+
+rep("""      GM_registerMenuCommand(action.label, () => {
+        openPanel();
+        action.run();
+      });
+    }
+    GM_registerMenuCommand('Export from share URL…', () => {
+      openPanel();
+      const raw = prompt('貼上 ChatGPT share URL：');
+      if (raw) exportFromShareUrl(raw);
+    });
+    GM_registerMenuCommand('Toggle thinking / reasoning', () => {
+      setSetting('includeThinking', !settings.includeThinking);
+      openPanel();
+      setStatus(`thinking / reasoning：${settings.includeThinking ? '含' : '不含'}`);
+    });
+    GM_registerMenuCommand('Reset button position', () => {
+      mount();
+      const root = document.getElementById(`${NS}-root`);
+      if (root) resetPosition(root);
+      openPanel();
+      setStatus('按鈕已放回右下角');
+    });
+    GM_registerMenuCommand('Toggle 工具呼叫與搜尋結果', () => {
+      setSetting('includeTools', !settings.includeTools);
+      openPanel();
+      setStatus(`工具呼叫：${settings.includeTools ? '含' : '不含'}`);
+    });""",
+"""      GM_registerMenuCommand(action.label, () => {
+        ui.openPanel();
+        action.run();
+      });
+    }
+    GM_registerMenuCommand('Export from share URL…', () => {
+      ui.openPanel();
+      const raw = prompt('貼上 ChatGPT share URL：');
+      if (raw) exportFromShareUrl(raw);
+    });
+    GM_registerMenuCommand('Toggle thinking / reasoning', () => {
+      setSetting('includeThinking', !settings.includeThinking);
+      ui.openPanel();
+      ui.setStatus(`thinking / reasoning：${settings.includeThinking ? '含' : '不含'}`);
+    });
+    GM_registerMenuCommand('Toggle 工具呼叫與搜尋結果', () => {
+      setSetting('includeTools', !settings.includeTools);
+      ui.openPanel();
+      ui.setStatus(`工具呼叫：${settings.includeTools ? '含' : '不含'}`);
+    });
+    GM_registerMenuCommand('Reset button position', () => {
+      ui.mount();
+      ui.resetPosition();
+      ui.openPanel();
+      ui.setStatus('按鈕已放回右下角');
+    });""")
+
+rep("""  function start() {
+    mount();
+""",
+"""  function start() {
+    ui.mount();
+""")
+
+rep("""      lastUrl = location.href;
+      mount();
+    }).observe""",
+"""      lastUrl = location.href;
+      ui.mount();
+    }).observe""")
+
+p.write_text(s)
+print('part 2 done')
+PYEOF
+node --check userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js && grep -n 'setStatus\|openPanel\|mount()\|resetPosition' userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js | head -30 && wc -l userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+```
+
+```text
+part 2 done
+440:    ui.setStatus('讀取對話…');
+458:        ui.setStatus(`已複製 ${text.length.toLocaleString()} 字（來源：${source}）`);
+465:        ui.setStatus(`已下載（來源：${source}）`);
+469:      ui.setStatus(`失敗：${error.message}`);
+477:      ui.setStatus('這不像 share URL（要有 /share/<id>）。');
+521:        ui.openPanel();
+526:      ui.openPanel();
+532:      ui.openPanel();
+533:      ui.setStatus(`thinking / reasoning：${settings.includeThinking ? '含' : '不含'}`);
+537:      ui.openPanel();
+538:      ui.setStatus(`工具呼叫：${settings.includeTools ? '含' : '不含'}`);
+541:      ui.mount();
+542:      ui.resetPosition();
+543:      ui.openPanel();
+544:      ui.setStatus('按鈕已放回右下角');
+554:    ui.mount();
+561:      ui.mount();
+     571 userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:09:02Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check for dangling references after refactor
+
+`grep -n 'toSections\|yaml(\|HANDOFF_HEADER\|formatUtc\|localIso\|function pad\|PANEL_WIDTH\|POSITION_KEY' userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js; echo "--- exit $? (no output = clean) ---"; npm run check`
+
+```text
+--- exit 1 (no output = clean) ---
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 5 userscript(s): 0 error(s), 0 warning(s).
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:09:35Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Regression test refactored ChatGPT exporter
+
+`timeout 180 npm run preview -- chatgpt-export-markdown "https://chatgpt.com/share/6a8d5801-10d8-83ec-b5e7-9d8dc54d48c6" --menu "Copy Markdown" --wait 25000 2>&1 | head -45`
+
+```text
+> tampermonkey-scripts@1.0.0 preview
+> node scripts/preview.mjs chatgpt-export-markdown https://chatgpt.com/share/*** --menu Copy Markdown --wait 25000
+
+→ https://chatgpt.com/share/6a8d5801-10d8-83ec-b5e7-9d8dc54d48c6
+@require       : local shared/chat-export.js
+@require       : local shared/export-ui.js
+ran menu       : Copy Markdown
+
+document.title : 分享聊天Context
+menu commands  : Copy Markdown, Copy Agent Handoff, Download .md, Download .json, Export from share URL…, Toggle thinking / reasoning, Toggle 工具呼叫與搜尋結果, Reset button position
+GM storage     : {}
+clipboard      :
+  | ---
+  | source: chatgpt
+  | title: "分享聊天Context"
+  | url: "https://chatgpt.com/share/6a8d5801-10d8-83ec-b5e7-9d8dc54d48c6"
+  | conversation_id: "6a8d5801-10d8-83ec-b5e7-9d8dc54d48c6"
+  | model: "gpt-5-6-thinking"
+  | created_at: "2026-08-25 08:53:21Z"
+  | exported_at: "2026-08-25T23:09:35+08:00"
+  | messages: 4
+  | include_thinking: false
+  | include_tools: false
+  | exporter: "chatgpt-export-markdown v1.2.0"
+  | ---
+  | 
+  | # 分享聊天Context
+  | 
+  | <!-- Generated by chatgpt-export-markdown v1.2.0 -->
+  | 
+  | _**User (2026-08-25 07:29:46Z)**_
+  | 
+  | 有方法可以分享一整個ChatGPT的聊天context嗎？特別是貼給coding agent
+  | （因爲share link會不讓bot爬；內建複製鈕只能複製一個回覆而非一整輪問答）
+  | 
+  | ---
+  | 
+  | _**Assistant (gpt-5-6-thinking, 2026-08-25 07:29:51Z)**_
+  | 
+  | 可以，實務上有幾條路；如果目標是「把**整段對話連同 user/assistant turn**餵給 coding agent」，我會優先考慮可機器讀取的 Markdown/JSON，而不是 share link。下面我也會區分「一次性分享」和「長期把 ChatGPT 當 project memory」。
+  | 
+  | 有，而且如果目標是 **ChatGPT → Claude Code / Codex / Cursor / Pi 之類 coding agent 的 context handoff**，我會避開 share link，把聊天直接變成 `.md`。
+  | 
+  | 先補一個容易忽略的點：ChatGPT 目前其實有兩種 Share。**右上角／sidebar 的 Share 是整個 conversation 截至當下的 snapshot**；單一 assistant response 上面的 Share 才只包含那一則 response。官方文件也明確寫了，假設有 10 輪問答，從 conversation-level Share 建立的 link 會包含前面完整 10 輪。([OpenAI Help Center](https://help.openai.com/en/articles/7925741-chatgpt-shared-links-faq?utm_source=chatgpt.com))
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:09:44Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Format with prettier and re-check
+
+`npx prettier --write shared/ scripts/ userscripts/ 2>&1 | tail -15 && node --check userscripts/copilot-export-markdown/copilot-export-markdown.user.js && node --check userscripts/claude-export-markdown/claude-export-markdown.user.js && npm run check`
+
+```text
+shared/chat-export.js 84ms
+shared/dom.js 11ms (unchanged)
+shared/export-ui.js 23ms (unchanged)
+scripts/build-index.mjs 7ms (unchanged)
+scripts/check-meta.mjs 12ms
+scripts/lib/icon.mjs 4ms (unchanged)
+scripts/lib/meta.mjs 11ms
+scripts/new-script.mjs 5ms (unchanged)
+scripts/preview.mjs 18ms
+userscripts/_template/template.user.js 5ms (unchanged)
+userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js 39ms (unchanged)
+userscripts/claude-export-markdown/claude-export-markdown.user.js 35ms
+userscripts/copilot-export-markdown/copilot-export-markdown.user.js 46ms
+userscripts/hello-userscript/hello-userscript.user.js 8ms (unchanged)
+userscripts/page-title-tag/page-title-tag.user.js 4ms
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 5 userscript(s): 0 error(s), 0 warning(s).
+[This command modified 3 files you've previously read: scripts/preview.mjs, scripts/check-meta.mjs, scripts/lib/meta.mjs. Call Read before editing.]
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:10:23Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Write Claude exporter README
+
+````bash
+cat > userscripts/claude-export-markdown/README.md <<'MDEOF'
+# Claude Export Markdown
+
+把一整段 Claude 對話匯成 Markdown，格式跟
+[`chatgpt-export-markdown`](../chatgpt-export-markdown/) 一致（仿 SpecStory 的 chat history），
+目的是**貼給 coding agent**（Claude Code / Codex / Cursor…）當作前情提要。
+
+- **生效網站**：`https://claude.ai/*`（`/chat/<id>` 與 `/share/<id>`）
+- **安裝**：[點這裡安裝](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/claude-export-markdown/claude-export-markdown.user.js)（需先裝好 Tampermonkey / Violentmonkey）
+- **原始碼**：[`claude-export-markdown.user.js`](./claude-export-markdown.user.js)
+
+## 它做了什麼
+
+右下角一顆 **⇩ Export MD**，點開有四個動作：
+
+| 動作 | 輸出 |
+| --- | --- |
+| Copy Markdown | 完整 transcript（YAML frontmatter + `_**User**_` / `_**Assistant**_`）進剪貼簿 |
+| Copy Agent Handoff | 同上，但前面多一段給 agent 的指示 |
+| Download .md | 同 transcript，存成 `claude-<標題>-<時間>.md` |
+| Download .json | 原始對話 JSON，之後要重新 render / 建索引用 |
+
+外加兩個開關（預設關，會記住）：**含 thinking / reasoning**、**含工具呼叫與搜尋結果**。
+預設輸出就是最乾淨的問答本文。
+
+按鈕**可以直接拖到畫面上任何位置**（滑鼠、觸控都行），位置會記住；
+面板會自動判斷該往上還是往下開。想放回右下角就用選單的 `Reset button position`。
+
+同樣的動作在 manager 的選單裡也各有一個。
+
+## 資料是從哪來的
+
+Claude 的 share 頁在載入時會打一次
+
+```text
+GET /api/chat_snapshots/<id>?rendering_mode=messages&render_all_tools=true
+```
+
+回來的 JSON 就是完整對話：`chat_messages[]`，每則有 `sender`、`content[]`
+（`text` / `thinking` / `tool_use` / `tool_result`）、`created_at`。
+**裡面是模型原本吐出的 raw markdown**，不是從 HTML 反推回來的，所以 code fence、表格、
+清單都是原樣。登入中的 `/chat/<id>` 走的是
+`/api/organizations/<org>/chat_conversations/<id>`，格式一樣。
+
+腳本用 `@run-at document-start` 攔 `fetch`，接住頁面自己那一次回應。
+
+## 為什麼只有「攔截」這一條路
+
+`chatgpt-export-markdown` 有四層 fallback，這支只有兩層，是實測後砍掉的：
+
+| 試過的做法 | 結果 |
+| --- | --- |
+| 頁面載完後自己再打一次同一個 API | **Cloudflare 403**（"Just a moment"） |
+| 從別的 claude.ai 分頁打那個 API | **403** |
+| 同源 iframe 載入 share 頁再讀它 | 被導去 `/api/challenge_redirect`，**403** |
+| 從 `window` 上找頁面留下的副本 | 找不到：TanStack Router 的 match 沒有 loaderData、`__PUBLIC_VIEWER_PRELOAD__.responses` 在 hydration 後被清空、React Query 的 cache 關在 module closure 裡 |
+
+也就是說 **Claude 只放行「頁面自己在載入時發的那一次請求」**。
+所以按鈕失敗時的正解就是**重新整理那一頁再按一次**（腳本的錯誤訊息也是這樣寫的）。
+
+自己打 API 那層還是留著——不同網路環境的 Cloudflare 判定不一樣，登入中的
+`/chat/<id>` 也可能過——但不要指望它。
+
+**攔不到時它會明白報錯，不會退回去 scrape DOM。**
+殘缺的 transcript 比沒有 transcript 更糟——agent 不會知道少了什麼。
+
+## 貼 share URL 是「開新分頁」而不是就地匯出
+
+因為上面那張表，貼上別的 share URL 沒辦法在目前這頁讀到內容。
+所以面板的輸入框（與選單的 `Export from share URL…`）做的是：
+
+1. 把「等一下要匯出哪個 share」寫進 GM storage（兩分鐘後過期）
+2. `GM_openInTab` 開那一頁
+3. 新分頁的腳本自己攔到資料後**自動複製到剪貼簿**，並把結果顯示在面板上
+
+## 已知限制
+
+- 靠的是 Claude 的私有 API 與頁面行為，改版就可能失效
+  （見 [`docs/06`](../../docs/06-sandbox-and-unsafewindow.md)）。
+- **沒攔到就要重新整理**：如果腳本是在頁面載完之後才被注入（剛裝好、剛更新），
+  第一次按會失敗。
+- 只匯出目前這條 branch，編輯／重生過的其他分支不會混進來。
+- citation 的欄位名只在沒有搜尋結果的對話上驗證過；帶 web search 的對話會把
+  `citations[]` 整理成段末的 **Sources** 清單，欄位對不上時不會爆掉，只會少那份清單。
+- 附件 / 圖片只列檔名，不會下載檔案。
+- 用 `@require` 引入 [`shared/`](../../shared/)，所以安裝時多一個
+  raw.githubusercontent.com 的網路相依。
+
+## 測試
+
+`npm run preview` 是 `document-idle` 注入的，**攔截那層在 harness 裡測不到**
+（見 [`docs/13`](../../docs/13-playwright-vs-userscript.md)），
+所以它只能證明「腳本載得起來、選單有註冊、UI 掛得上」：
+
+```bash
+npm run preview -- claude-export-markdown "https://claude.ai/login"
+```
+
+真正的驗證要在裝好 manager 的瀏覽器裡開一個 share 或對話頁按下去。
+MDEOF
+echo ok
+````
+
+```text
+ok
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:10:54Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Write Copilot exporter README
+
+````bash
+cat > userscripts/copilot-export-markdown/README.md <<'MDEOF'
+# Copilot Export Markdown
+
+把一整段 Microsoft Copilot 對話匯成 Markdown，格式跟
+[`chatgpt-export-markdown`](../chatgpt-export-markdown/) 一致（仿 SpecStory 的 chat history），
+目的是**貼給 coding agent**（Claude Code / Codex / Cursor…）當作前情提要。
+
+- **生效網站**：`https://copilot.microsoft.com/*`（`/chats/<id>` 與 `/shares/<id>`）
+- **安裝**：[點這裡安裝](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/copilot-export-markdown/copilot-export-markdown.user.js)（需先裝好 Tampermonkey / Violentmonkey）
+- **原始碼**：[`copilot-export-markdown.user.js`](./copilot-export-markdown.user.js)
+
+## 它做了什麼
+
+右下角一顆 **⇩ Export MD**，點開有四個動作：
+
+| 動作 | 輸出 |
+| --- | --- |
+| Copy Markdown | 完整 transcript（YAML frontmatter + `_**User**_` / `_**Assistant**_`）進剪貼簿 |
+| Copy Agent Handoff | 同上，但前面多一段給 agent 的指示 |
+| Download .md | 同 transcript，存成 `copilot-<標題>-<時間>.md` |
+| Download .json | 原始對話 JSON |
+
+外加兩個開關（預設關，會記住）：**含 thinking / reasoning**（Copilot 的 `chainOfThought`）、
+**含工具呼叫與未知區塊**。按鈕可以拖到畫面上任何位置，位置會記住。
+
+同樣的動作在 manager 的選單裡也各有一個。
+
+## 資料是從哪來的
+
+Copilot 自己的 API：
+
+| 頁面 | endpoint |
+| --- | --- |
+| `/chats/<id>` | `GET /c/api/conversations/<id>/history?api-version=2` |
+| `/shares/<id>` | `GET /c/api/shares/<id>` |
+
+腳本用 `@run-at document-start` 同時攔 `fetch` 與 `XMLHttpRequest`，
+接住網站自己發的那一次回應（順便記下 `Authorization: Bearer …` 給 fallback 用）；
+攔不到才自己打一次（打之前會先 `POST /c/api/start` 暖 session，401 後會再試一次）。
+
+**兩條路都不假設回應的 top-level key 叫什麼**：拿到 JSON 之後是**用形狀找訊息列表**——
+深掃找「元素同時有 `author`／`sender` 與 `content` 的陣列」，取最長的那個。
+所以 `{ results: […] }`、`{ messages: […] }`、`{ conversation: { messages: […] } }` 都吃得到。
+
+會這樣寫是因為 `/c/api/shares/<id>` 的回應**沒辦法事先看到**：匿名開 share 頁只會拿到
+「Sign in to Copilot」擋頁，直接打那個 endpoint 回 401（endpoint 存在，但要登入 session）。
+形狀辨識是為了讓第一版就算沒看過真實樣本也不會整支壞掉。
+
+### 如果它在你的 share 頁上失敗了
+
+匯出成功時 console 會印一行：
+
+```text
+[copilot-export-markdown] using payload from /c/api/shares/xxx | top-level keys: [...]
+```
+
+**失敗的話請把 console 的 log 連同 Download .json 的內容回報**，
+就能把 `/c/api/shares/<id>` 的真實形狀補成明確的對應，不必再靠猜。
+
+## 已知限制
+
+- **share 內容要登入才看得到**：沒登入的話那一頁本身就只有 sign-in 擋頁，腳本也拿不到東西。
+- `/c/api/shares/<id>` 的欄位對應是靠形狀辨識推出來的，還沒有真實樣本驗證過
+  （`/chats/<id>` 那條的 `{ results: [{ author, content, createdAt }] }` 有公開資料佐證）。
+- 靠的是 Copilot 的私有 API，改版就可能失效
+  （見 [`docs/06`](../../docs/06-sandbox-and-unsafewindow.md)）。
+- 沒見過的 part 型態預設不會進正文（避免整篇被雜訊淹掉），
+  打開「含工具呼叫與未知區塊」才會以 JSON code block 原樣留著——**不會靜默消失**。
+- 圖片只輸出 `![image](url)`，不會下載檔案。
+- 用 `@require` 引入 [`shared/`](../../shared/)，所以安裝時多一個
+  raw.githubusercontent.com 的網路相依。
+
+## 測試
+
+`npm run preview` 是 `document-idle` 注入的，**攔截那層在 harness 裡測不到**
+（見 [`docs/13`](../../docs/13-playwright-vs-userscript.md)），
+而且 Copilot 沒登入就沒有資料，所以它只能證明「腳本載得起來、UI 掛得上」：
+
+```bash
+npm run preview -- copilot-export-markdown "https://copilot.microsoft.com/"
+```
+
+轉檔那條鏈（攔截 → 找形狀 → normalize → render）是用 stub server 餵合成 payload 測的；
+真正的驗證要在登入後的瀏覽器裡按下去。
+MDEOF
+echo ok
+````
+
+```text
+ok
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:11:17Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Update shared/README.md
+
+```bash
+python3 - <<'PYEOF'
+from pathlib import Path
+p = Path('shared/README.md')
+s = p.read_text()
+
+old = """## 目前有什麼
+
+[`dom.js`](./dom.js)
+
+| 函式                    | 用途                                      |
+| ----------------------- | ----------------------------------------- |
+| `waitForElement()`      | 等 selector 出現，有逾時保護              |
+| `onUrlChange()`         | SPA 換頁偵測                              |
+| `debounce()`            | 包住 MutationObserver callback            |
+| `markOnce()`            | 用 dataset 標記處理過的節點，避免重複執行  |
+| `addFloatingButton()`   | 右下角浮動按鈕                            |
+| `downloadText()`        | 不需 `@grant` 的檔案下載                  |
+"""
+
+new = """## 目前有什麼
+
+[`dom.js`](./dom.js)
+
+| 函式                    | 用途                                      |
+| ----------------------- | ----------------------------------------- |
+| `waitForElement()`      | 等 selector 出現，有逾時保護              |
+| `onUrlChange()`         | SPA 換頁偵測                              |
+| `debounce()`            | 包住 MutationObserver callback            |
+| `markOnce()`            | 用 dataset 標記處理過的節點，避免重複執行  |
+| `addFloatingButton()`   | 右下角浮動按鈕                            |
+| `downloadText()`        | 不需 `@grant` 的檔案下載                  |
+
+[`chat-export.js`](./chat-export.js) —— 三支對話匯出腳本共用的轉換層（不碰 DOM、不碰 GM）
+
+| 函式                  | 用途                                             |
+| --------------------- | ------------------------------------------------ |
+| `renderTranscript()`  | 正規化的 doc → SpecStory 風格 Markdown（含 Agent Handoff 變體） |
+| `mergeSections()`     | 連續同 role 的訊息合併成一段                     |
+| `fence()` / `jsonFence()` | backtick-run 感知的 code fence               |
+| `formatUtc()` / `localIso()` | 時間格式（epoch 秒 / ISO 都吃）           |
+| `sourcesBlock()`      | citation 去重後的來源清單                        |
+| `filenameFor()` / `downloadText()` | 檔名與下載                          |
+
+[`export-ui.js`](./export-ui.js) —— 同三支腳本共用的浮動 UI
+
+| 函式                  | 用途                                             |
+| --------------------- | ------------------------------------------------ |
+| `createExportPanel()` | 右下角可拖曳的按鈕 + 面板（動作、開關、狀態列、貼 URL 輸入框） |
+
+`export-ui.js` **刻意不呼叫任何 GM API**：位置記憶走呼叫端注入的 `storage`。
+因為 `scripts/check-meta.mjs` 只掃腳本本體來交叉比對 `@grant`，
+GM 呼叫留在腳本裡，`npm run check` 才驗得到少宣告的 grant。
+"""
+assert old in s
+s = s.replace(old, new)
+
+old2 = """判斷標準大致是：同一段 code 出現在三支以上的腳本，才值得搬進來。"""
+new2 = """判斷標準大致是：同一段 code 出現在三支以上的腳本，才值得搬進來。
+
+`chat-export.js` / `export-ui.js` 就是這樣進來的：chatgpt / claude / copilot 三支 exporter
+的 render 與浮動 UI 完全一樣（約 350 行），複製三份才是比較貴的那個選項。
+`dom.js` 目前反而沒有腳本 `@require`，維持「範例 + 可複製」的定位。
+
+順帶一提，`npm run preview` **會解析 `@require`**：指向本 repo 的會直接讀工作區的檔案
+（所以測得到還沒 commit 的 `shared/`），其他 URL 才走網路。
+`npm run check` 也會擋「指向本 repo 但檔案不存在」的 `@require`。"""
+assert old2 in s
+s = s.replace(old2, new2)
+p.write_text(s)
+print('shared/README.md updated')
+PYEOF
+echo '--- CLAUDE.md + docs/13 ---'
+grep -n 'preview' CLAUDE.md | head; grep -n '@require\|preview --' docs/13-playwright-vs-userscript.md | head
+```
+
+```text
+shared/README.md updated
+--- CLAUDE.md + docs/13 ---
+52:npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selector>"] [--wait <ms>]
+56:並截圖到 `.preview/<slug>.png`（agent 可以直接 Read 那張圖驗證）。
+83:npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selector>"] [--wait <ms>]
+90:$ npm run preview -- hello-userscript --menu "Copy page as Markdown"
+117:npm run preview -- chatgpt-export-markdown "https://chatgpt.com/share/<id>" \
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:11:21Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read context around preview docs
+
+`sed -n '45,70p' CLAUDE.md; echo '=== docs/13 80-130 ==='; sed -n '78,130p' docs/13-playwright-vs-userscript.md`
+
+```text
+   絕對不要手改 `<!-- BEGIN SCRIPT INDEX -->` / `<!-- END SCRIPT INDEX -->` 之間的內容
+
+`npm run verify` = `check` + `index:check`，等同 CI 跑的內容。
+
+## 測試腳本
+
+```bash
+npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selector>"] [--wait <ms>]
+```
+
+用 Playwright 把腳本注入真實頁面，印出 GM storage / 剪貼簿 / console，
+並截圖到 `.preview/<slug>.png`（agent 可以直接 Read 那張圖驗證）。
+
+**這是 shim 不是 manager**：它不驗 `@match`、`@run-at`、sandbox、`@grant`
+是否正確、也沒有真的跨域能力。那些只有裝進真的 manager 才算數，需要使用者操作。
+邊界寫在 `docs/13-playwright-vs-userscript.md`，改 harness 前先讀。
+
+寫 exporter 類腳本時，一定要用 `--menu` 把輸出印出來看——
+「注入的 UI 汙染自己的抓取結果」這種 bug 截圖看不出來。
+選單指令是 async 的（要等頁面資料就緒）就再加 `--wait <ms>`，
+否則 harness 會在它寫進剪貼簿之前就收工。
+
+## 寫腳本的規範
+
+**腳本必須同時支援 Tampermonkey 與 Violentmonkey**（見 `docs/09-managers-comparison.md`）：
+
+=== docs/13 80-130 ===
+把你的 userscript 注進去——這正是下面 `npm run preview` 在做的事。
+
+## 本 repo 的 `npm run preview`
+
+```bash
+npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selector>"] [--wait <ms>]
+```
+
+它用 Playwright 開一個真的 Chromium，導到 `@match` 對應的網址，
+注入 GM API 的 shim 和你的腳本，然後回報結果並截圖到 `.preview/<slug>.png`。
+
+```bash
+$ npm run preview -- hello-userscript --menu "Copy page as Markdown"
+→ https://example.com/
+ran menu       : Copy page as Markdown
+
+document.title : Example Domain
+menu commands  : Copy page as Markdown, Reset visit counter, Show panel
+GM storage     : {"visitCount":1}
+clipboard      :
+  | # Example Domain
+  |
+  | <https://example.com/>
+  ...
+screenshot     : .preview/hello-userscript.png
+```
+
+### ✅ 它能證明的事
+
+- 腳本語法正確、載入時不會丟例外
+- selector 抓得到東西，DOM 邏輯跑得動
+- 注入的 UI 真的畫出來了（看截圖）
+- 匯出 / 轉換邏輯的輸出長什麼樣
+- `GM_setValue` / `GM_setClipboard` / `GM_registerMenuCommand` 有被正確呼叫
+
+`--menu` 觸發的指令如果是 async（例如要等網站自己的資料載完才有東西可以匯出），
+預設 300ms 的等待會來不及，剪貼簿那一欄會是空的。加 `--wait`：
+
+```bash
+npm run preview -- chatgpt-export-markdown "https://chatgpt.com/share/<id>" \
+  --menu "Copy Markdown" --wait 20000
+```
+
+它會在剪貼簿一有內容就往下走，`--wait` 只是上限。
+
+### ❌ 它不能證明的事
+
+這是一個 **shim，不是 userscript manager**。以下只有真的裝進 manager 才算數：
+
+| 不涵蓋                       | 為什麼                                        |
+| ---------------------------- | --------------------------------------------- |
+| `@match` / `@exclude` 對不對 | harness 是直接注入，沒有做 URL 比對            |
+| `@run-at` 時機               | harness 固定在 `domcontentloaded` 之後注入     |
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:11:37Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Update CLAUDE.md and docs/13, regenerate index
+
+````bash
+python3 - <<'PYEOF'
+from pathlib import Path
+
+# --- CLAUDE.md ---
+p = Path('CLAUDE.md')
+s = p.read_text()
+old = """選單指令是 async 的（要等頁面資料就緒）就再加 `--wait <ms>`，
+否則 harness 會在它寫進剪貼簿之前就收工。"""
+new = """選單指令是 async 的（要等頁面資料就緒）就再加 `--wait <ms>`，
+否則 harness 會在它寫進剪貼簿之前就收工。
+
+`@require` 會被解析：指向本 repo 的 URL 直接讀工作區的檔案（測得到還沒 commit 的
+`shared/`），其他 URL 才走網路。`npm run check` 也會擋掉指向本 repo 但檔案不存在的 `@require`。"""
+assert old in s
+p.write_text(s.replace(old, new))
+print('CLAUDE.md updated')
+
+# --- docs/13 ---
+p = Path('docs/13-playwright-vs-userscript.md')
+s = p.read_text()
+old = """它會在剪貼簿一有內容就往下走，`--wait` 只是上限。"""
+new = """它會在剪貼簿一有內容就往下走，`--wait` 只是上限。
+
+### `@require` 會被解析
+
+一個 manager 會把每個 `@require` 的內容放在**腳本的 scope 裡**先跑一遍，
+harness 也照做——否則靠 `shared/` 的腳本一進來就會 `xxx is not defined`。
+
+指向本 repo 的 `@require`（`raw.githubusercontent.com/.../main/...`）**會改讀工作區的檔案**，
+所以改了 `shared/` 不用先 commit 就能測；其他網域的 URL 才真的下載，抓不到會直接失敗。
+每個 require 從哪來會印在輸出上：
+
+```text
+@require       : local shared/chat-export.js
+@require       : local shared/export-ui.js
+```"""
+assert old in s
+p.write_text(s.replace(old, new))
+print('docs/13 updated')
+PYEOF
+npm run index && npm run verify
+````
+
+```text
+CLAUDE.md updated
+docs/13 updated
+
+> tampermonkey-scripts@1.0.0 index
+> node scripts/build-index.mjs
+
+README.md script index updated (5 script(s)).
+
+> tampermonkey-scripts@1.0.0 verify
+> npm run check && npm run index:check
+
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 5 userscript(s): 0 error(s), 0 warning(s).
+
+> tampermonkey-scripts@1.0.0 index:check
+> node scripts/build-index.mjs --check
+
+README.md script index is up to date.
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:11:47Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Note shared dependency in ChatGPT README; prettier check
+
+```bash
+python3 - <<'PYEOF'
+from pathlib import Path
+p = Path('userscripts/chatgpt-export-markdown/README.md')
+s = p.read_text()
+old = "- 圖片只輸出 `![image](<asset_pointer>)` 佔位，不會下載檔案。"
+new = """- 圖片只輸出 `![image](<asset_pointer>)` 佔位，不會下載檔案。
+- 從 v1.2.0 起，render 與浮動 UI 搬到 [`shared/`](../../shared/) 用 `@require` 引入
+  （跟 claude / copilot 兩支共用），所以安裝時多一個 raw.githubusercontent.com 的網路相依。"""
+assert old in s
+p.write_text(s.replace(old, new))
+print('updated')
+PYEOF
+npx prettier --check . 2>&1 | tail -8
+```
+
+```text
+updated
+[warn] docs/06-sandbox-and-unsafewindow.md
+[warn] docs/08-distribution-and-sync.md
+[warn] docs/09-managers-comparison.md
+[warn] docs/10-recipes.md
+[warn] docs/11-troubleshooting.md
+[warn] docs/12-security.md
+[warn] docs/13-playwright-vs-userscript.md
+[warn] Code style issues found in 13 files. Run Prettier with --write to fix.
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:11:56Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+See full prettier warning list vs changed files
+
+`npx prettier --check . 2>&1 | head -20; echo '=== which of these did I touch? ==='; cd /tmp && git -C /Users/david/Documents/Program/Tampermonkey-Scripts status --short`
+
+```text
+Checking formatting...
+[warn] .claude/plans/specstory-local-codex-chat-history-mark-shimmering-eagle.md
+[warn] docs/01-what-is-userscript.md
+[warn] docs/02-getting-started.md
+[warn] docs/03-metadata-reference.md
+[warn] docs/04-gm-api.md
+[warn] docs/05-spa-and-timing.md
+[warn] docs/06-sandbox-and-unsafewindow.md
+[warn] docs/08-distribution-and-sync.md
+[warn] docs/09-managers-comparison.md
+[warn] docs/10-recipes.md
+[warn] docs/11-troubleshooting.md
+[warn] docs/12-security.md
+[warn] docs/13-playwright-vs-userscript.md
+[warn] Code style issues found in 13 files. Run Prettier with --write to fix.
+=== which of these did I touch? ===
+ M .claude/plans/specstory-local-codex-chat-history-mark-shimmering-eagle.md
+ M .specstory/history/2026-08-25_08-55-31Z-specstory-local-codex-chat.md
+ M .specstory/statistics.json
+ M CLAUDE.md
+ M README.md
+ M docs/13-playwright-vs-userscript.md
+ M scripts/check-meta.mjs
+ M scripts/lib/meta.mjs
+ M scripts/preview.mjs
+ M shared/README.md
+ M userscripts/chatgpt-export-markdown/README.md
+ M userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+ M userscripts/page-title-tag/page-title-tag.user.js
+?? shared/chat-export.js
+?? shared/export-ui.js
+?? userscripts/claude-export-markdown/
+?? userscripts/copilot-export-markdown/
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:12:03Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Inspect incidental prettier changes
+
+`cd /tmp && git -C /Users/david/Documents/Program/Tampermonkey-Scripts diff userscripts/page-title-tag/ scripts/lib/meta.mjs`
+
+```text
+diff --git a/scripts/lib/meta.mjs b/scripts/lib/meta.mjs
+index 9581070..9aefd6a 100644
+--- a/scripts/lib/meta.mjs
++++ b/scripts/lib/meta.mjs
+@@ -16,8 +16,7 @@ export const BRANCH = 'main';
+ export const RAW_BASE = REPO_URL.replace(
+   'https://github.com/',
+   'https://raw.githubusercontent.com/'
+-)
+-  .concat('/', BRANCH);
++).concat('/', BRANCH);
+ 
+ const META_START = '// ==UserScript==';
+ const META_END = '// ==/UserScript==';
+diff --git a/userscripts/page-title-tag/page-title-tag.user.js b/userscripts/page-title-tag/page-title-tag.user.js
+index b7f4884..dbdc66d 100644
+--- a/userscripts/page-title-tag/page-title-tag.user.js
++++ b/userscripts/page-title-tag/page-title-tag.user.js
+@@ -52,7 +52,11 @@
+   // <title> 的文字節點被網站換掉時再貼一次。
+   const titleEl = document.querySelector('title');
+   if (titleEl) {
+-    new MutationObserver(applyTag).observe(titleEl, { childList: true, characterData: true, subtree: true });
++    new MutationObserver(applyTag).observe(titleEl, {
++      childList: true,
++      characterData: true,
++      subtree: true,
++    });
+   }
+ 
+   // 保險：SPA 有時整個 <head> 重建，<title> 元素本身被換掉。
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:12:12Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Revert unrelated prettier-only changes
+
+`cd /tmp && git -C /Users/david/Documents/Program/Tampermonkey-Scripts checkout -- userscripts/page-title-tag/page-title-tag.user.js scripts/lib/meta.mjs && git -C /Users/david/Documents/Program/Tampermonkey-Scripts status --short | grep -v specstory`
+
+```text
+ M CLAUDE.md
+ M README.md
+ M docs/13-playwright-vs-userscript.md
+ M scripts/check-meta.mjs
+ M scripts/preview.mjs
+ M shared/README.md
+ M userscripts/chatgpt-export-markdown/README.md
+ M userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+?? shared/chat-export.js
+?? shared/export-ui.js
+?? userscripts/claude-export-markdown/
+?? userscripts/copilot-export-markdown/
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:12:23Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Smoke-test both new scripts through the harness
+
+`timeout 150 npm run preview -- claude-export-markdown "https://claude.ai/login" 2>&1 | tail -12; echo '=================='; timeout 150 npm run preview -- copilot-export-markdown "https://copilot.microsoft.com/" 2>&1 | tail -12`
+
+```text
+→ https://claude.ai/login
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.addScriptTag: Executing inline script violates the following Content Security Policy directive 'script-src 'nonce-NxUFBfKE6CzWJdvgH22QSh' 'unsafe-eval' https://challenges.cloudflare.com'. Either the 'unsafe-inline' keyword, a hash ('sha256-fEvVphtnf2rsRokwoIoXngKENY+gfIzE03qRyub//4I='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.
+    at /Users/david/Documents/Program/Tampermonkey-Scripts/scripts/preview.mjs:109:12 {
+  log: [],
+  name: 'Error'
+}
+
+Node.js v24.13.1
+==================
+    triggerUncaughtException(
+    ^
+
+page.addScriptTag: TypeError: Failed to set the 'text' property on 'HTMLScriptElement': This document requires 'TrustedScript' assignment and no 'default' policy for 'TrustedScript' has been defined.
+    at addScriptContent (eval at evaluate (:311:30), <anonymous>:4:23)
+    at UtilityScript.evaluate (<anonymous>:313:16)
+    at UtilityScript.<anonymous> (<anonymous>:1:44)
+    at /Users/david/Documents/Program/Tampermonkey-Scripts/scripts/preview.mjs:109:12 {
+  log: []
+}
+
+Node.js v24.13.1
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:12:39Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Add bypassCSP to preview harness and retest
+
+```bash
+python3 - <<'PYEOF'
+from pathlib import Path
+p = Path('scripts/preview.mjs')
+s = p.read_text()
+old = """const browser = await chromium.launch({ headless: !flag('--headed') });
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });"""
+new = """const browser = await chromium.launch({ headless: !flag('--headed') });
+// bypassCSP mirrors a real manager: it injects the script outside the page's
+// Content-Security-Policy. Without it, sites with a nonce-based CSP or Trusted
+// Types (claude.ai, copilot.microsoft.com) reject the injection outright.
+const page = await browser.newPage({
+  viewport: { width: 1280, height: 800 },
+  bypassCSP: true,
+});"""
+assert old in s
+p.write_text(s.replace(old, new))
+print('patched')
+PYEOF
+node --check scripts/preview.mjs && timeout 150 npm run preview -- claude-export-markdown "https://claude.ai/login" 2>&1 | tail -10
+```
+
+```text
+patched
+
+document.title : Just a moment...
+menu commands  : Copy Markdown, Copy Agent Handoff, Download .md, Download .json, Export from share URL…, Toggle thinking / reasoning, Toggle 工具呼叫與搜尋結果, Reset button position
+GM storage     : {}
+
+console:
+  [error] Failed to load resource: the server responded with a status of 403 ()
+  [warning] No available adapters.
+
+screenshot     : /Users/david/Documents/Program/Tampermonkey-Scripts/.preview/claude-export-markdown.png
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:12:49Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Smoke-test Copilot script through harness
+
+`timeout 150 npm run preview -- copilot-export-markdown "https://copilot.microsoft.com/" 2>&1 | tail -10`
+
+```text
+document.title : Microsoft Copilot: Your AI companion
+menu commands  : Copy Markdown, Copy Agent Handoff, Download .md, Download .json, Export from share URL…, Toggle thinking / reasoning, Toggle 工具呼叫與未知區塊, Reset button position
+GM storage     : {}
+
+console:
+  [warning] An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.
+  [error] Failed to load resource: the server responded with a status of 460 ()
+
+screenshot     : /Users/david/Documents/Program/Tampermonkey-Scripts/.preview/copilot-export-markdown.png
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:12:53Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./.preview/copilot-export-markdown.png`
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:13:08Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Document CSP bypass and region limitation; final verify
+
+```bash
+python3 - <<'PYEOF'
+from pathlib import Path
+
+p = Path('docs/13-playwright-vs-userscript.md')
+s = p.read_text()
+old = """### `@require` 會被解析"""
+new = """### 頁面的 CSP 會被繞過
+
+harness 用 Playwright 的 `bypassCSP`，因為**真的 manager 也不受頁面 CSP 管**。
+不繞的話，nonce-based CSP（claude.ai）或 Trusted Types（copilot.microsoft.com）
+會直接讓注入失敗，測不到任何東西。
+
+### `@require` 會被解析"""
+assert old in s
+p.write_text(s.replace(old, new))
+
+p = Path('userscripts/copilot-export-markdown/README.md')
+s = p.read_text()
+old = """- **share 內容要登入才看得到**"""
+new = """- **Copilot 有區域限制**：某些網路 / 地區直接連會拿到「Not available in your region」，
+  那是網站層面的事，跟腳本無關。
+- **share 內容要登入才看得到**"""
+assert old in s
+p.write_text(s.replace(old, new))
+print('docs updated')
+PYEOF
+npx prettier --check shared/ scripts/ userscripts/ CLAUDE.md README.md && npm run verify
+```
+
+```text
+Exit code 1
+docs updated
+Checking formatting...
+[warn] scripts/lib/meta.mjs
+[warn] userscripts/page-title-tag/page-title-tag.user.js
+[warn] Code style issues found in 2 files. Run Prettier with --write to fix.
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:13:16Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Run repo verification
+
+`npm run verify && echo '--- final tree ---' && cd /tmp && git -C /Users/david/Documents/Program/Tampermonkey-Scripts status --short | grep -v specstory`
+
+```text
+> tampermonkey-scripts@1.0.0 verify
+> npm run check && npm run index:check
+
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 5 userscript(s): 0 error(s), 0 warning(s).
+
+> tampermonkey-scripts@1.0.0 index:check
+> node scripts/build-index.mjs --check
+
+README.md script index is up to date.
+--- final tree ---
+ M CLAUDE.md
+ M README.md
+ M docs/13-playwright-vs-userscript.md
+ M scripts/check-meta.mjs
+ M scripts/preview.mjs
+ M shared/README.md
+ M userscripts/chatgpt-export-markdown/README.md
+ M userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+?? shared/chat-export.js
+?? shared/export-ui.js
+?? userscripts/claude-export-markdown/
+?? userscripts/copilot-export-markdown/
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:13:32Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Re-run ChatGPT regression after CSP change
+
+`timeout 180 npm run preview -- chatgpt-export-markdown "https://chatgpt.com/share/6a8d5801-10d8-83ec-b5e7-9d8dc54d48c6" --menu "Copy Markdown" --wait 25000 2>&1 | sed -n '1,14p'`
+
+```text
+> tampermonkey-scripts@1.0.0 preview
+> node scripts/preview.mjs chatgpt-export-markdown https://chatgpt.com/share/*** --menu Copy Markdown --wait 25000
+
+→ https://chatgpt.com/share/6a8d5801-10d8-83ec-b5e7-9d8dc54d48c6
+@require       : local shared/chat-export.js
+@require       : local shared/export-ui.js
+ran menu       : Copy Markdown
+
+document.title : 分享聊天Context
+menu commands  : Copy Markdown, Copy Agent Handoff, Download .md, Download .json, Export from share URL…, Toggle thinking / reasoning, Toggle 工具呼叫與搜尋結果, Reset button position
+GM storage     : {}
+clipboard      :
+  | ---
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:13:51Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Commit the new exporters and shared refactor
+
+```bash
+cd /tmp && R=/Users/david/Documents/Program/Tampermonkey-Scripts && git -C $R add shared/ scripts/ userscripts/ docs/13-playwright-vs-userscript.md CLAUDE.md README.md && git -C $R commit -q -F - <<'MSGEOF'
+feat: Claude 與 Copilot 對話匯出腳本，共用碼搬進 shared/
+
+新增兩支 exporter，輸出格式與 chatgpt-export-markdown 一致：
+
+- claude-export-markdown：claude.ai 的 /share/<id> 與 /chat/<id>。
+  只走 document-start 的 fetch 攔截 —— 實測 Claude 的 API 只放行「頁面自己
+  在載入時發的那一次請求」，事後再打、從別的分頁打、用同源 iframe 框都會被
+  Cloudflare 403，頁面上也沒有留下可讀的副本。因此「貼任意 share URL」改成
+  GM_openInTab 開新分頁、由那邊的腳本自己攔到資料後自動複製。
+- copilot-export-markdown：copilot.microsoft.com 的 /shares/<id> 與 /chats/<id>。
+  /c/api/shares/<id> 的回應形狀匿名看不到（401），所以攔到 JSON 之後是用形狀
+  找訊息列表（元素有 author/sender + content 的最長陣列），不綁死 top-level key；
+  匯出時把命中的 URL 與 top-level keys 印到 console 以便後續收斂。
+
+三支 exporter 共用的 render 與浮動 UI 搬進 shared/（達到 shared/README 自訂的
+「三支以上才值得搬」門檻）：
+
+- shared/chat-export.js：正規化 doc → SpecStory 風格 Markdown、fence、時間格式、
+  來源清單、檔名與下載
+- shared/export-ui.js：可拖曳的浮動按鈕與面板；刻意不呼叫 GM API（位置記憶走
+  注入的 storage），這樣 npm run check 仍驗得到各腳本的 @grant
+
+chatgpt-export-markdown 一併改用 shared/（1.1.0 → 1.2.0），四層 fallback 不動。
+
+工具鏈配合修改：
+- scripts/preview.mjs 會解析 @require（指向本 repo 的直接讀工作區檔案），
+  並用 bypassCSP 注入 —— 否則 nonce CSP / Trusted Types 的站台根本測不到
+- scripts/check-meta.mjs 擋掉指向本 repo 但檔案不存在的 @require
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_015g44u87L4nKmipfkpEaC9C
+MSGEOF
+git -C $R log --oneline -2 && git -C $R show --stat --oneline HEAD | tail -20
+```
+
+```text
+8fbf2e0 feat: Claude 與 Copilot 對話匯出腳本，共用碼搬進 shared/
+3447ee4 Backup chat history
+8fbf2e0 feat: Claude 與 Copilot 對話匯出腳本，共用碼搬進 shared/
+ CLAUDE.md                                          |   3 +
+ README.md                                          |   4 +-
+ docs/13-playwright-vs-userscript.md                |  20 +
+ scripts/check-meta.mjs                             |  66 ++-
+ scripts/preview.mjs                                |  53 +-
+ shared/README.md                                   |  29 ++
+ shared/chat-export.js                              | 207 ++++++++
+ shared/export-ui.js                                | 247 +++++++++
+ userscripts/chatgpt-export-markdown/README.md      |   2 +
+ .../chatgpt-export-markdown.user.js                | 438 +++-------------
+ userscripts/claude-export-markdown/README.md       |  98 ++++
+ .../claude-export-markdown.user.js                 | 535 +++++++++++++++++++
+ userscripts/copilot-export-markdown/README.md      |  85 +++
+ .../copilot-export-markdown.user.js                | 571 +++++++++++++++++++++
+ 14 files changed, 1979 insertions(+), 379 deletions(-)
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 15:14:14Z)**_
+
+做好了，兩支都寫完並提交（`8fbf2e0`，未 push）。
+
+## Claude 版 — 實測跑通了
+
+在真的 share 頁上跑 document-start 注入的端到端測試，拿到 3,202 字的 transcript，frontmatter、時間戳、合併、handoff 前綴都正確。
+
+架構跟 ChatGPT 那支**不一樣**，是實測逼出來的：Claude 的 `/api/chat_snapshots/<id>` 只放行「頁面自己在載入時發的那一次請求」——事後再打、從別的分頁打、用同源 iframe 框，全部 Cloudflare 403；頁面上也沒留副本（TanStack Router 沒 loaderData、`__PUBLIC_VIEWER_PRELOAD__` hydration 後被清空）。所以只有 `document-start` 攔 `fetch` 這一條路，攔不到就明白叫你重新整理。
+
+「貼任意 share URL」因此改成：寫一個兩分鐘過期的旗標進 GM storage → `GM_openInTab` 開那頁 → 新分頁的腳本攔到資料自動複製。
+
+## Copilot 版 — 邏輯測過，真實 share 樣本待你驗
+
+你那個 share 連結我最後連上了，但**匿名只會拿到 "Sign in to Copilot" 擋頁**，`/c/api/shares/<id>` 回 401（endpoint 存在、要登入）。所以我沒辦法看到它的回應長怎樣。
+
+因應方式是不綁死欄位：攔到 `/c/api/{shares,conversations}/…` 的 JSON 後**用形狀找訊息列表**（元素有 `author`/`sender` + `content` 的最長陣列）。用 stub server 餵了兩種形狀（`{results:[…]}` 和 `{conversation:{messages:[…]}}`），兩種都正確吐出 transcript，citation 去重、未知 part 進 JSON fence、`chainOfThought` 受 thinking 開關控制。
+
+**要麻煩你做的**：登入後在 `/shares/<id>` 按一次 Copy Markdown，把 console 那行 `using payload from … | top-level keys: […]` 回貼給我，我就能把它收斂成明確對應。
+
+## 共用碼
+
+三支 exporter 的 render + 浮動 UI 搬進 `shared/chat-export.js` 與 `shared/export-ui.js`，`chatgpt-export-markdown` 一併改用（1.1.0 → 1.2.0，857 → 571 行），四層 fallback 沒動，重跑 preview 輸出與舊版一致。
+
+工具鏈配合改了兩處：`npm run preview` 現在會解析 `@require`（指向本 repo 的直接讀工作區檔案），並加了 `bypassCSP` —— 沒有它的話 claude.ai 的 nonce CSP 和 Copilot 的 Trusted Types 會讓注入直接失敗，這兩支根本測不到。`npm run check` 會擋掉指向本 repo 但檔案不存在的 `@require`。
+
+裝上去之前記得：`@require` 指的是 `main` 上的 `shared/`，**這個 commit 沒 push 的話三支腳本裝起來都會壞**（shared 抓不到）。要我推嗎？

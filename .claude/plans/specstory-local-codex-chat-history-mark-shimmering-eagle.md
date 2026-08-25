@@ -1,264 +1,267 @@
-# ChatGPT → Markdown exporter userscript
+# Claude / Copilot 對話匯出 Markdown（＋把共用碼搬進 shared/）
 
 ## Context
 
-需求：把一整段 ChatGPT 網頁對話變成**能直接餵給 coding agent 的 Markdown**，格式仿
-`.specstory/history/*.md`（SpecStory 轉 local Codex/Claude chat history 的那套：
-`_**User (ts)**_` / `---` / `_**Assistant (model)**_`）。現況的痛點是內建複製鈕一次只
-複製一則 response，share link 又是給人看的 URL、bot 爬不到。
+`chatgpt-export-markdown` 已經上線（v1.1.0，可拖曳的浮動按鈕、SpecStory 風格 transcript、
+Agent Handoff、raw JSON）。使用者現在要**同一套東西給 claude.ai 與 copilot.microsoft.com**：
 
-### 已實測的關鍵事實（決定了整個架構）
+- <https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868>
+- <https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6>
 
-在 `https://chatgpt.com/share/6a8d5801-10d8-83ec-b5e7-9d8dc54d48c6` 上用 headless
-Chromium 驗證過：
+目的一樣：把整段對話變成能直接貼給 coding agent 的 Markdown。
 
-1. **DOM scrape 一定不完整。** 該對話有 44 個 node，但 DOM 裡只有 4 個
-   `[data-message-author-role]` —— 訊息列表是 virtualized 的。所以「clone DOM →
-   innerText」那條路（也就是 ChatGPT 自己建議的 console snippet）先天就是殘缺的。
-2. **完整對話 JSON 就掛在頁面的 router state 上**：
-   `window.__reactRouterContext.state.loaderData['routes/share.$shareId.($action)'].serverResponse.data`
-   含 `title` / `create_time` / `default_model_slug` / `mapping` / `linear_conversation`。
-3. **裡面是模型原本吐出的 raw markdown**，不是 HTML 還原的結果 —— code fence、表格、
-   引用全都在。這正是「保留完整 markdown format」唯一可靠的來源。
-4. **`/backend-api/share/<id>` 直接打會被 Cloudflare 擋 403**（curl 與 headless 都是），
-   所以不能倚賴它當主要來源。
-5. **同源 iframe 可行**：share 頁的 CSP 是 `frame-ancestors 'self' …`，實測在
-   chatgpt.com 頁面裡塞一個 `<iframe src="/share/<id>">`，載入後讀
-   `iframe.contentWindow.__reactRouterContext` 拿得到完整 44 則。→ 這就是「貼任意
-   public share URL」功能的實作方式。
-6. **citation 是私有區 unicode sentinel**：`citeturn418705search0`，
-   而同一則訊息的 `metadata.content_references[]` 有 `matched_text` 與 `alt`
-   （`alt` 就是現成的 `([GitHub](https://…))`）。→ 可以無損轉成 markdown 連結。
+有了第三支 exporter，`shared/README.md` 自己訂的門檻（「同一段 code 出現在三支以上的腳本，
+才值得搬進來」）剛好成立 → 這次順便把 render / 浮動 UI 搬進 `shared/`，三支都改用 `@require`。
+
+### 實測到的事實（決定了兩支新腳本的架構）
+
+用 headed Chrome（Playwright）對兩個 share 連結實測：
+
+**claude.ai**
+
+1. share 頁只打一次 API：`GET /api/chat_snapshots/<id>?rendering_mode=messages&render_all_tools=true`
+   → 乾淨的 JSON：`chat_messages[]`，每則有 `sender: human|assistant`、`content[]`
+   （block `type`：`text`（帶 `citations[]`）/ `thinking` / `tool_use` / `tool_result`）、
+   `parent_message_uuid`、`index`、`created_at`，外層有 `snapshot_name`、`conversation_uuid`。
+   比 ChatGPT 的 `mapping` 乾淨很多。
+2. **同一個 endpoint 再打第二次一律 Cloudflare 403（"Just a moment"）** —— 從同頁 `fetch`、
+   從別的 claude.ai 分頁 `fetch`、從同源 iframe 載入 share 頁，全部被擋。
+   只有「頁面自己在文件載入時發的那一次」會過。
+3. 頁面上**沒有留下**可讀的副本：`__TSR_ROUTER__`（TanStack Router）的 match 沒有 loaderData，
+   `__PUBLIC_VIEWER_PRELOAD__.responses[url]` 在 hydration 後就被清成 undefined，
+   React Query 的 cache 關在 module closure 裡。深掃 window 找 `chat_messages` 形狀：0 命中。
+4. ⇒ **ChatGPT 那支的 tier 2/3/4（router state / 自己重打 API / 隱藏 iframe）在 Claude 全部不能用。**
+   Claude 只剩一條路：`@run-at document-start` 攔截 `fetch`，接住頁面自己那一次成功的回應。
+5. CSP 是 `frame-ancestors 'self'`（iframe 框得起來），但框進去的 share 頁會被導去
+   `/api/challenge_redirect` → 所以「貼任意 share URL 就地讀取」在 Claude 做不到。
+
+**copilot.microsoft.com**
+
+6. 這台機器一度完全連不上（直連 `Connection reset`、proxy `SSL_ERROR_SYSCALL`）；換節點後
+   proxy 可通、直連仍不通。**做這件事時要先確認 copilot.microsoft.com 連得上**。
+7. 匿名開 `/shares/<id>` 會拿到「Sign in to Copilot」擋頁（`/c/api/start?features=anonymous-block-page`），
+   看不到對話內容 → share 內容需要登入 session。
+8. 從頁面 context 打各種 endpoint 的結果：
+   `/c/api/shares/<id>` → **401**（存在，需要 auth）、
+   `/c/api/conversations/<id>/history?api-version=2` → 403、
+   `/c/api/conversations/<id>?api-version=2` → 460。
+   ⇒ share 的門幾乎確定是 `/c/api/shares/<shareId>`，使用者登入後就有；
+   **但它的回應 JSON 長怎樣我看不到**（401 沒有 body）。
+9. 已知的 live chat 那條（來自公開的 Greasyfork exporter，只取用 API 事實、不抄它的程式碼）：
+   頁面 `/chats/<chatId>` ＋ `GET /c/api/conversations/<chatId>/history?api-version=2`
+   → `{ results: [{ author: { type: 'ai' | 'human' }, content: [ {type:'text'|'image'|'citation'|'chainOfThought'} ], createdAt }] }`，
+   authorization 是 `Bearer <token>`（從網站自己的請求上攔）。
 
 ### 使用者已確認的取捨
 
-- 範圍：**目前這一頁（`/c/` 與 `/share/`）＋ 貼任意 share URL**
-- 內容：問答本文 + citation→markdown 連結為預設；**thinking / tool calling 做成 optional
-  開關，預設關**（「先有最簡潔的輸入輸出」）
-- 輸出：SpecStory 風格 transcript ＋ raw JSON ＋ **Agent Handoff 變體**
-- UI：manager 選單指令 ＋ 右下角浮動按鈕
+- 共用碼**搬進 `shared/` 用 `@require`**（連帶要讓 `npm run preview` 看得懂 `@require`）
+- Claude 的「貼任意 share URL」→ **GM_openInTab 開新分頁自動匯出**（就地讀取被 CF 擋死）
+- Copilot 因為第 8 點的未知，採「**攔到什麼算什麼 + 找形狀**」的寫法，不預先把 endpoint 與
+  欄位名綁死；第一版裝上去後由使用者回報 console log 再收斂
 
 ---
 
 ## 要做的事
 
-用 scaffolder 建立新腳本（不要手動建目錄）：
+### 0. 先把手上的東西收乾淨
+
+工作區還有沒 commit 的 `chatgpt-export-markdown` v1.1.0（可拖曳按鈕）。
+先補 README 的拖曳說明再 commit，不要跟這次的重構混在同一個 commit：
+
+> 按鈕**可以直接拖到畫面上任何位置**（滑鼠、觸控都行），位置會記住；面板會自動判斷該往上還是往下開。
+> 想放回右下角就用選單的 `Reset button position`。
+
+### 1. `shared/` 兩個新模組
+
+`@require` 進來的檔案在腳本 scope 直接執行（不是 ES module），所以一律用全域函式宣告，
+寫法照 `shared/dom.js`。
+
+**`shared/chat-export.js`** —— 純轉換，不碰 DOM、不碰 GM：
+
+| 函式 | 用途 |
+| --- | --- |
+| `fence(body, lang)` | backtick-run 感知的 code fence（照搬 chatgpt 版，那個 bug 已經踩過） |
+| `formatUtc(msOrIso)` / `localIso()` / `pad()` | 時間格式，對齊 `.specstory/history/` 的 `YYYY-MM-DD HH:mm:ssZ` |
+| `renderTranscript(doc, opts)` | 吃**正規化後的 doc**，吐 SpecStory 風格 markdown（frontmatter → `# title` → `_**Role (model, ts)**_` 用 `---` 串） |
+| `HANDOFF_HEADER` / `renderHandoff(doc, opts)` | Agent Handoff 變體（前綴文字改成吃 `doc.source` 的名字） |
+| `mergeSections(sections)` | 連續同 role 合併 |
+| `filenameFor(doc, ext)` | `<source>-<title slug>-<YYYYMMDD-HHmm>.<ext>` |
+| `downloadText(name, text, mime)` | 不需 `@grant` 的 blob 下載 |
+
+**正規化的 doc 形狀**（每支腳本的 adapter 負責產出，這是整個重構的介面）：
+
+```js
+{
+  source: 'claude',            // frontmatter 的 source，也用在檔名與 handoff 標題
+  title: '量化投资 vs 定投指数的选择',
+  url: 'https://claude.ai/share/…',
+  ids: { conversation_id: '…', share_id: '…' },   // 有什麼寫什麼
+  model: '',                   // 沒有就空字串
+  createdAt: '2026-08-23T12:34:14Z',
+  sections: [{ role: 'User' | 'Assistant' | 'Tool (name)', model, time, body }],
+}
+```
+
+**`shared/export-ui.js`** —— 浮動按鈕 + 面板 + 拖曳，從 chatgpt 版整段搬過來：
+`createExportPanel({ ns, buttonLabel, actions, toggles, shareInput, storage })`。
+
+- **GM API 不在這個模組裡呼叫**，storage 用注入的 `{ get, set }`。
+  理由：`scripts/check-meta.mjs` 只掃腳本本體來交叉比對 `@grant`，
+  GM 呼叫留在各腳本裡，`npm run check` 才驗得到。
+- 回傳 `{ mount, openPanel, setStatus, resetPosition }`，讓各腳本接選單指令。
+- 拖曳邏輯（pointer events、4px 門檻、`justDragged` 吃掉拖曳後那個 click、
+  `placePanel` 自動翻上下左右、resize 重新夾回畫面）原封不動照搬，不要重寫。
+
+同步更新 `shared/README.md` 的表格與那段「先考慮直接複製」的判準說明
+（現在剛好是「三支以上」的例子，寫清楚為什麼這次搬了）。
+
+### 2. `scripts/preview.mjs`：支援 `@require`
+
+現在 harness 只 `addScriptTag` 腳本本身，`@require` 的內容不會被載入 → 一改成 `@require`，
+這三支腳本就完全沒辦法用 preview 測。所以：
+
+- 讀 metadata 的 `require` 陣列，依序注入到主腳本**之前**
+- URL 若是本 repo 的 raw base（`rawUrlFor` 用的那個前綴），**改讀本機檔案**，
+  這樣測到的是工作區沒 commit 的版本；其他 URL 就照原樣 `fetch`（失敗要明確報錯，不要靜默）
+- console 印出每個 require 是從 local 還是 remote 來的
+
+`scripts/check-meta.mjs` 加一條檢查：指向本 repo 的 `@require` 必須對得到存在的本機檔案
+（打錯路徑會讓腳本裝上去直接壞掉，這是 check 抓得到的事）。
+
+CLAUDE.md 的「測試腳本」段與 `docs/13-playwright-vs-userscript.md` 補一句
+「`@require` 會被解析，本 repo 的走本機檔案」。
+
+### 3. `userscripts/claude-export-markdown/`
 
 ```bash
-npm run new -- chatgpt-export-markdown "ChatGPT Export Markdown" "https://chatgpt.com/*" \
-  "把整段 ChatGPT 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用"
+npm run new -- claude-export-markdown "Claude Export Markdown" "https://claude.ai/*" \
+  "把整段 Claude 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用"
 ```
 
-產出兩個檔案，兩個都要重寫：
-`userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js`、
-`userscripts/chatgpt-export-markdown/README.md`。
+metadata：`@run-at document-start`（**非有不可**，晚一步就攔不到那唯一一次成功的請求）、
+`@grant unsafeWindow / GM_registerMenuCommand / GM_setClipboard / GM_setValue / GM_getValue /
+GM_deleteValue / GM_openInTab`（全在 `PORTABLE_GM` 內）、兩個 `@require` 指到 `shared/`。
 
-### 1. Metadata block
+**取得資料（只有兩層，而且要讓失敗講人話）：**
 
-```
-// @version      1.0.0
-// @match        https://chatgpt.com/*
-// @run-at       document-start
-// @grant        unsafeWindow
-// @grant        GM_registerMenuCommand
-// @grant        GM_setClipboard
-// @grant        GM_setValue
-// @grant        GM_getValue
-```
+1. `installNetworkCapture()`：patch `pageWin.fetch`，`response.clone().json()`，
+   URL 命中 `/\/api\/(chat_snapshots|organizations\/[^/]+\/chat_conversations)\//` 就存進
+   `Map<id, data>`。**一定要把原本的 response 還回去。**
+2. fallback：自己打同一個 URL（登入中的 `/chat/<uuid>` 這條大概率會過；share 那條實測會被
+   CF 403）。403 時的錯誤訊息必須是可行動的：
+   「Claude 只放行頁面自己的第一次請求 —— 請**重新整理這一頁**再按一次。」
+   **不要寫 DOM fallback**（理由同 chatgpt 版：寧可明白失敗，也不要吐殘缺的 transcript）。
 
-- `document-start` 是必要的：live chat 的來源之一是攔截網站自己發出的 conversation
-  request（見 `docs/06-sandbox-and-unsafewindow.md` 的 fetch 攔截 recipe），晚一步就抓不到。
-  代價是 `document.body` 可能還不存在 → 掛 UI 前要等 `DOMContentLoaded`。
-- 有任何 `@grant` 就會進 sandbox，所以讀 `__reactRouterContext` 一律走 `unsafeWindow`，
-  並 fallback 到 `window`（`const pageWin = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window`）。
-- 上述 GM API 全在 `scripts/check-meta.mjs` 的 `PORTABLE_GM` 清單內，`unsafeWindow`
-  兩個 manager 都支援 → 不會觸發 portability warning。
-- **不要**加 `@connect`：全部同源 `fetch`，不需要 `GM_xmlhttpRequest`。
-- `@icon` 用 `node -e "import('./scripts/lib/icon.mjs').then(m=>console.log(m.iconFor('chatgpt-export-markdown')))"`
-  產生的 data URI（scaffolder 會自動填好，不要換成 favicon 服務）。
-- 下載用 blob + `a.click()`（照抄 `shared/dom.js:86` 的 `downloadText`），不需要 `GM_download`。
+**normalize（adapter）：**
 
-### 2. 取得對話資料：四層 fallback
+- 取 thread：預設照 `index` 排序；`chat_messages` 有分支（同一個 `parent_message_uuid`
+  出現多次）時，從最後一則沿 `parent_message_uuid` 往上走再 reverse，只留目前這條。
+- `sender: human → User`、`assistant → Assistant`。
+- block `type`：
+  - `text` → 原文（**這就是模型吐出來的 raw markdown**），`citations[]` 非空時在段末補
+    一份去重的 `- [title](url)` 來源清單（Claude 的 citation 是 index 區間，不是 ChatGPT 那種
+    PUA sentinel，所以不需要 `applyCitations` 那套；實際欄位名要在拿到帶搜尋的樣本後確認，
+    先寫成「有 `url` 就用，`title` 缺就拿 url 當標題」）
+  - `thinking` → 受 `includeThinking` 控制（欄位優先序 `thinking` → `text` → `summaries[].summary`）
+  - `tool_use` / `tool_result` → 受 `includeTools` 控制；`name` 當標題，`input` /
+    `content` / `structured_content` 包 JSON fence
+  - 未知 type → JSON fence，**不要靜默丟掉**
+- `attachments[]` / `files[]` 有東西時列出檔名。
+- frontmatter：`source: claude`、`title: snapshot_name`、`url`、`conversation_uuid`、
+  `snapshot_uuid`、`created_at`、`exported_at`、`messages`、兩個 include 開關、`exporter`。
 
-一個 `resolveConversation({ shareId, convId })`，依序嘗試，第一個成功就用：
+**貼 share URL → 開新分頁自動匯出：**
 
-| # | 來源 | 適用 | 狀態 |
-|---|------|------|------|
-| 1 | fetch/XHR 攔截器攔到的 `/backend-api/conversation/<id>` payload（`Map<convId, data>`） | 登入中的 `/c/` | 需實機驗證 |
-| 2 | 掃 `pageWin.__reactRouterContext.state.loaderData` 每個 value，找含 `serverResponse.data.linear_conversation` 或 `.mapping` 的那個 | `/share/`（**已實測**），`/c/` 可能也有 | 已驗證 |
-| 3 | 同源 `fetch('/backend-api/conversation/<id>')`，Bearer token 取自 `fetch('/api/auth/session').accessToken` | 登入中的 `/c/` | 需實機驗證 |
-| 4 | 隱藏 iframe 載入 `/share/<id>`，輪詢 `iframe.contentWindow.__reactRouterContext`，取到就 `iframe.remove()` | 貼上的任意 share URL | 已驗證 |
+- 面板輸入框 / 選單 `Export from share URL…` 收到 URL → 取 `/share/<id>` →
+  `GM_setValue('pendingExport', { shareId, mode, expires: Date.now() + 120_000 })` →
+  `GM_openInTab(url, { active: true })`
+- 腳本啟動時：若目前就在 `/share/<id>` 且 pending 的 `shareId` 對得上、也還沒過期 →
+  先 `GM_deleteValue`（**一次性，先消耗再執行**，免得失敗時每次開頁都重跑），
+  等攔截到資料後自動 copy 並在面板顯示結果。
 
-**不要寫 DOM scrape fallback。** 理由寫在上面（44 則只渲染 4 則），寧可失敗時給一句
-可行動的錯誤訊息（「請重新整理頁面後再試一次」）也不要靜靜吐出殘缺的 transcript。
-route key（`routes/share.$shareId.($action)`）會隨 ChatGPT 改版變動，所以第 2 層要
-**掃描 loaderData 的所有 value 找形狀**，不要 hard-code key。
+### 4. `userscripts/copilot-export-markdown/`
 
-第 2 層拿到的是 `serverResponse.data`；第 1/3 層拿到的是 `/backend-api/conversation`
-的回應（只有 `mapping` + `current_node`，**沒有** `linear_conversation`）。因此下一步的
-thread 展開要同時支援兩種形狀。
-
-### 3. 轉檔 pipeline
-
-`buildThread(data)`：
-- 有 `linear_conversation` 就用它；否則從 `current_node` 沿 `mapping[id].parent` 往上走
-  再 reverse。這樣拿到的是**目前選中的那條 branch**，編輯/重生過的分支自動被排除。
-
-`visibleMessages(thread, opts)` 過濾（順序照這個寫，這是 ChatGPT UI 自己的判準）：
-- 丟掉 `metadata.is_visually_hidden_from_conversation === true`
-- 丟掉 `author.role === 'system'`
-- 丟掉 `content_type` 為 `model_editable_context` / `user_editable_context`（memory 更新）
-- `opts.includeThinking === false`（預設）時丟掉 `thoughts` / `reasoning_recap`
-- `opts.includeTools === false`（預設）時丟掉 `author.role === 'tool'` 以及
-  `recipient !== 'all'` 的 assistant 訊息（`web.run` 那些 `code` 訊息）
-- 丟掉 parts 為空字串的
-
-`textOf(message)` —— 一張 `content_type` → 抽字的小表：
-`text` / `multimodal_text`（part 是物件時輸出 `![image](<asset_pointer>)` 佔位）、
-`code`（包成 fenced block，language 取 `content.language`）、
-`thoughts`（`content.thoughts[]` 的 `summary` + `content`）、
-`reasoning_recap`、`execution_output`。
-**未知 content_type 一律 `JSON.stringify` 後包進 fence**，不要靜默丟掉 —— Deep Research
-與 canvas 之類的新型態才不會整段消失。
-
-`applyCitations(text, message)`：
-- 把 `metadata.content_references[]` 依 `start_idx` 由大到小排序，逐一
-  `text.split(ref.matched_text).join(ref.alt || '')`（實測 type 有
-  `grouped_webpages` / `url` / `hidden` / `sources_footnote`，`alt` 已是現成的 markdown 連結）
-- 收尾再用 `/[\s\S]*?/g` 掃掉沒被 `matched_text` 命中的殘留 sentinel
-  （實測會有 `url…` 這種漏網的）
-
-`mergeAdjacent()`：**連續同 role 的訊息要合併成一段**。實測一輪 assistant 會被拆成
-「開場白 → 搜尋 → 正文」好幾則，不合併的話 transcript 會出現一堆只有一行的 Assistant 區塊。
-
-### 4. 三種輸出
-
-**A. Transcript（預設）** —— frontmatter 放最前面（才是合法 YAML frontmatter），
-接著仿 SpecStory 的 body：
-
-```markdown
----
-source: chatgpt
-title: 分享聊天Context
-url: https://chatgpt.com/share/6a8d5801-…
-conversation_id: 6a8d446e-…
-model: gpt-5-6-thinking
-exported_at: 2026-08-25T16:40:00+08:00
-messages: 7
----
-
-# 分享聊天Context
-
-<!-- Generated by chatgpt-export-markdown v1.0.0 -->
-
-_**User (2026-08-25 07:45:34Z)**_
-
-…原始 markdown 原封不動…
-
----
-
-_**Assistant (gpt-5-6-thinking)**_
-
-…
-
----
+```bash
+npm run new -- copilot-export-markdown "Copilot Export Markdown" "https://copilot.microsoft.com/*" \
+  "把整段 Microsoft Copilot 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用"
 ```
 
-時間戳用 `message.create_time`（epoch 秒）轉 UTC `YYYY-MM-DD HH:mm:ssZ`，對齊
-`.specstory/history/` 現有檔案的寫法；`exported_at` 用本地時區 ISO。
+metadata 同 Claude 版（`document-start` + 同一組 grant + 兩個 `@require`）。
 
-**B. Agent Handoff** —— 在 A 前面加一段固定的英文指示，然後接完整 transcript：
+**取得資料 —— 因為 `/c/api/shares/<id>` 的回應形狀還沒看過，這裡刻意寫成「不綁死」：**
 
-```markdown
-# Prior ChatGPT Context
+1. `installNetworkCapture()`：同時 patch `fetch` **與 `XMLHttpRequest`**（Copilot 兩種都可能用），
+   URL 命中 `/\/c\/api\/(shares|conversations)\//` 就把 JSON 存起來，
+   順便把請求上的 `Authorization: Bearer …` 記下來給第 2 層用。
+2. fallback 直接打：在 `/shares/<id>` 打 `/c/api/shares/<id>`；在 `/chats/<id>` 打
+   `/c/api/conversations/<id>/history?api-version=2`；打之前先 `POST /c/api/start`
+   暖 session（公開 exporter 的做法，401 時值得再試一次）。帶 `credentials: 'include'`
+   ＋（有攔到的話）`Authorization`。
+3. **形狀辨識**（關鍵）：不假設 top-level key 是 `results`，而是深掃 JSON 找
+   「元素同時有 `author`（或 `sender`）與陣列 `content` 的陣列」，取最長的那個當訊息列表。
+   這樣 `/c/api/shares/<id>` 不管包成 `{results}`、`{messages}` 還是 `{conversation:{…}}` 都吃得到。
+4. 匯出成功時 `console.log` 印出**命中的 URL 與 top-level keys**，
+   README 也寫明「如果失敗，請把 console 這行與 Copy raw JSON 的內容回報」——
+   這是把第 8 點那個未知收斂掉的手段。
 
-The following is a prior discussion between the user and ChatGPT.
+**normalize：** `author.type: 'human' → User`、`'ai' → Assistant`；依 `createdAt` 排序；
+part `type`：`text` → 原文、`image` → `![image](url)`（有 `prompt` 就補一行斜體 caption）、
+`citation` → 收集成段末來源清單、`chainOfThought` → 受 `includeThinking` 控制、
+其他 → JSON fence（受 `includeTools` 控制，避免預設輸出被雜訊淹掉）。
 
-## Instructions for the coding agent
-- Treat established decisions as existing project decisions.
-- Do not reopen settled design questions unless implementation reveals a conflict.
-- Preserve the user's stated constraints.
-- Consult the original conversation below when necessary.
+### 5. `chatgpt-export-markdown` 改用 shared/
 
----
+刪掉本體裡的 render / UI / 拖曳段落，改成兩個 `@require` ＋ 一個把 ChatGPT JSON 轉成
+正規化 doc 的 adapter（`buildThread` / `visibleMessages` / `textOf` / `applyCitations`
+留在腳本裡，那些是 ChatGPT 專屬的）。`@version` → 1.2.0。
 
-## Conversation
-（A 的 body）
-```
+**不要動它現有的四層 fallback**，那是實測過的；這次只搬共用碼。
 
-**C. Raw JSON** —— `JSON.stringify(data, null, 2)`，給未來重新 render / 建索引用。
+### 6. 兩份 README ＋ 索引
 
-檔名：`chatgpt-<title 消毒過的 slug>-<YYYYMMDD-HHmm>.md` / `.json`。
+各自照 `userscripts/chatgpt-export-markdown/README.md` 的結構寫，並且**誠實寫下已知限制**：
 
-### 5. UI（idempotent + SPA 安全）
+- Claude：只吃頁面自己那一次請求，**沒攔到就要重新整理**；同源 iframe 與跨頁 fetch 被 CF 擋
+  （所以貼 URL 是開新分頁）；靠 app 的私有 API，改版就可能壞。
+- Copilot：share 內容需要登入；`/c/api/shares/<id>` 的欄位是靠形狀辨識吃進來的，
+  遇到沒見過的形狀請回報 console log ＋ raw JSON。
+- 兩支都只匯出目前這條 branch；`@require` 讓腳本多一個 raw.githubusercontent.com 的網路相依。
 
-- `mount()` 只掛一次（用 `document.getElementById` 檢查，照
-  `shared/dom.js:66` `addFloatingButton` 的做法**複製進腳本**，不要用 `@require` ——
-  `shared/README.md` 建議少量函式直接複製，也少一個安裝時的網路相依）。
-- 右下角按鈕點開一個小 panel：Copy Markdown / Copy Agent Handoff / Download .md /
-  Download .json ／兩個 checkbox（思考過程、工具呼叫，用 `GM_setValue` 記住）／
-  一個貼 share URL 的輸入框 + Go。
-- 同樣的動作全部另外註冊一份 `GM_registerMenuCommand`（**不要用 `accessKey`**，TM 限定）：
-  `Copy Markdown` / `Copy Agent Handoff` / `Download .md` / `Download .json` /
-  `Export from share URL…`（用 `prompt()`）/ 兩個 toggle。
-- panel 的 DOM 用高 z-index + 自己的 id prefix，避免被 ChatGPT 的樣式吃掉；
-  因為抓資料完全不碰 DOM，**注入的 UI 不可能污染抓取結果**（這正是 CLAUDE.md 警告的那個坑）。
-- URL 變化時只更新 panel 上顯示的標題，不重建按鈕。
-
-### 6. README.md
-
-照 `userscripts/page-title-tag/README.md` 的結構：一句話說明、生效網站、安裝連結、
-原始碼連結、「它做了什麼」、「為什麼不是一行就好」（放 virtualized DOM 44→4 那個實測數字
-與 `__reactRouterContext` 的位置）、使用方式（三顆按鈕 + 貼 share URL）、
-已知限制（見下）。
-
-### 已知限制（要寫進 README，不要假裝沒有）
-
-- 靠 `__reactRouterContext` 這種 app internals，ChatGPT 改版就可能失效 ——
-  `docs/06` 明講這是最脆弱的一層；選它是因為 DOM 那層根本不完整。
-- 登入中 `/c/` 的第 1/3 層來源沒辦法在 headless 驗證，要實機確認。
-- Deep Research / canvas 尚未拿到真實樣本驗證；未知 content_type 會以 JSON fence 呈現，
-  不會消失但也不會漂亮。
-- 只匯出目前選中的 branch，不含被編輯掉的其他分支。
+最後跑 `npm run index` 重新產生根 README 的腳本清單表格（**不要手改表格內容**）。
 
 ---
 
 ## 驗證
 
 ```bash
-npm run check          # metadata、@grant 交叉比對、portability
-npm run index          # 新腳本 → 重新產生 README 表格（不要手改表格）
-npm run verify         # = check + index:check，等同 CI
+npm run check      # metadata、@grant 交叉比對、新增的 @require 本機解析檢查
+npm run verify     # = check + index:check，等同 CI
+npx prettier --check .
 
-# share 頁的完整端到端（已確認 headless 拿得到 loaderData）
+# harness 冒煙測（確認 @require 有被載入、腳本能跑、選單有註冊、沒有 pageerror）
+npm run preview -- claude-export-markdown "https://claude.ai/login"
+npm run preview -- copilot-export-markdown "https://copilot.microsoft.com/"
 npm run preview -- chatgpt-export-markdown \
   "https://chatgpt.com/share/6a8d5801-10d8-83ec-b5e7-9d8dc54d48c6" \
-  --menu "Copy Markdown"
+  --menu "Copy Markdown" --wait 20000     # 重構後的回歸測，輸出要跟 v1.1.0 一致
 ```
 
-`--menu` 會把 `GM_setClipboard` 的內容整段印出來（CLAUDE.md 特別要求 exporter 類腳本
-一定要這樣看輸出，截圖看不出殘缺）。驗收標準：印出來的 transcript 有 **2 則 User + 4 則
-Assistant**（合併後）、code fence 完整、``/`` 一個都不剩、citation 變成
-`([GitHub](https://github.com/VMSTE/chatgpt-exporter…))` 這種連結。
+harness 是 `document-idle` 注入，**攔截那層在 preview 裡測不到**（`docs/13` 已寫明）——
+所以 Claude / Copilot 的 preview 只能證明「腳本載得起來、UI 掛得上」。
 
-再跑一次 `--menu "Copy Agent Handoff"` 確認前綴區塊正確。
+### 必須由使用者實機驗證（harness 沒有登入 session）
 
-`scripts/preview.mjs` 的 GM shim 只提供
-`GM_setValue/getValue/deleteValue/listValues/setClipboard/registerMenuCommand/unregisterMenuCommand/addStyle/info`
-並設 `window.unsafeWindow = window` —— 剛好夠這支腳本用；但它是 `document-idle` 注入，
-所以 **fetch 攔截那層在 preview 裡不會被測到**，這是預期內的（`docs/13` 已寫明 harness 邊界）。
-
-### 必須由使用者實機驗證的部分
-
-harness 沒有登入 session，以下只能請使用者在真的 manager 裡確認：
-
-1. 登入中的 `/c/<id>` 頁面按 Copy Markdown 有沒有東西（哪一層來源命中，console 會印）
-2. 切換到另一個對話（SPA 導航）後再按一次，是不是匯出新的那個
-3. 「貼 share URL」流程
-4. Tampermonkey 與 Violentmonkey 各跑一次（sandbox 行為不同，`unsafeWindow` 是風險點）
+1. claude.ai `/share/<id>`：Copy Markdown 有沒有東西、來源顯示 `network-capture`
+2. claude.ai 登入中的 `/chat/<uuid>`：同上，切換對話（SPA 導航）後再按一次是不是新的那個
+3. claude.ai 貼 share URL → 是否開新分頁並自動複製
+4. copilot.microsoft.com 登入後 `/shares/<id>` 與 `/chats/<id>` 各一次；
+   **把 console 那行「命中的 URL 與 top-level keys」回報**，必要時附 Copy raw JSON 的結果
+5. Tampermonkey 與 Violentmonkey 各跑一次（sandbox 行為不同，`unsafeWindow` 與 `@require` 都是風險點）
+6. 改到的三支腳本都記得 `@version` 有加（TM 只認版本號）
 
 ## 不做的事
 
-- 不寫 DOM scrape fallback（理由如上）。
-- 不動 `docs/`：這次不新增教學檔，也不改兩張目錄表。
-- 不碰 `@match` 以外的網域（不加 `chat.openai.com`）、不加 `@connect`。
+- 不寫 DOM scrape fallback（Claude / Copilot 都一樣：寧可明白失敗）
+- 不合併成一支多站腳本（維持一支腳本一個 slug、`@match` 最小範圍）
+- 不新增 `docs/NN-*.md`；只在 CLAUDE.md 與 `docs/13` 補 `@require` 那一句
+- 不 push（要不要推到 GitHub 由使用者決定）

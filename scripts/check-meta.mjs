@@ -1,7 +1,16 @@
 #!/usr/bin/env node
 // Validate every userscript's metadata block: required keys, semver-ish
 // @version, canonical @updateURL/@downloadURL, and @grant vs. actual GM_* usage.
-import { listUserscripts, first, rawUrlFor, stripCommentsAndStrings } from './lib/meta.mjs';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  listUserscripts,
+  first,
+  rawUrlFor,
+  stripCommentsAndStrings,
+  RAW_BASE,
+  REPO_ROOT,
+} from './lib/meta.mjs';
 
 // @run-at is required because the default differs between managers:
 // Tampermonkey defaults to document-idle, Violentmonkey to document-end.
@@ -11,14 +20,28 @@ const KNOWN_GM = /\bGM[._]([A-Za-z]\w*)/g;
 // GM APIs documented as supported by BOTH Tampermonkey and Violentmonkey.
 // Anything outside this set ties the script to one manager.
 const PORTABLE_GM = new Set([
-  'GM_info', 'GM_cookie',
-  'GM_getValue', 'GM_getValues', 'GM_setValue', 'GM_setValues',
-  'GM_deleteValue', 'GM_deleteValues', 'GM_listValues',
-  'GM_addValueChangeListener', 'GM_removeValueChangeListener',
-  'GM_getResourceText', 'GM_getResourceURL',
-  'GM_addElement', 'GM_addStyle', 'GM_openInTab',
-  'GM_registerMenuCommand', 'GM_unregisterMenuCommand',
-  'GM_notification', 'GM_setClipboard', 'GM_xmlhttpRequest', 'GM_download',
+  'GM_info',
+  'GM_cookie',
+  'GM_getValue',
+  'GM_getValues',
+  'GM_setValue',
+  'GM_setValues',
+  'GM_deleteValue',
+  'GM_deleteValues',
+  'GM_listValues',
+  'GM_addValueChangeListener',
+  'GM_removeValueChangeListener',
+  'GM_getResourceText',
+  'GM_getResourceURL',
+  'GM_addElement',
+  'GM_addStyle',
+  'GM_openInTab',
+  'GM_registerMenuCommand',
+  'GM_unregisterMenuCommand',
+  'GM_notification',
+  'GM_setClipboard',
+  'GM_xmlhttpRequest',
+  'GM_download',
 ]);
 
 // Metadata keys that only one manager understands.
@@ -42,7 +65,9 @@ for (const s of scripts) {
   const at = (msg) => `${s.relPath}: ${msg}`;
 
   if (s.missing) {
-    errors.push(at(`expected userscripts/${s.slug}/${s.slug}.user.js (filename must match folder)`));
+    errors.push(
+      at(`expected userscripts/${s.slug}/${s.slug}.user.js (filename must match folder)`)
+    );
     continue;
   }
   if (!s.meta) {
@@ -61,7 +86,9 @@ for (const s of scripts) {
 
   const version = first(s.meta, 'version');
   if (version && !/^\d+\.\d+\.\d+$/.test(version)) {
-    warnings.push(at(`@version "${version}" is not X.Y.Z — Tampermonkey compares versions to decide updates`));
+    warnings.push(
+      at(`@version "${version}" is not X.Y.Z — Tampermonkey compares versions to decide updates`)
+    );
   }
 
   // Violentmonkey only reads @downloadURL; Tampermonkey uses both. Write both.
@@ -93,6 +120,20 @@ for (const s of scripts) {
     errors.push(at(`declares "@grant none" but uses ${[...used].join(', ')}`));
   }
 
+  // A @require pointing at this repo must resolve to a file that actually
+  // exists — a typo here installs fine and then dies at runtime, and the
+  // manager caches the 404 body as if it were code.
+  for (const requireUrl of s.meta.require ?? []) {
+    if (!requireUrl.startsWith(`${RAW_BASE}/`)) {
+      warnings.push(at(`@require ${requireUrl} is outside this repo — extra runtime dependency`));
+      continue;
+    }
+    const relPath = requireUrl.slice(RAW_BASE.length + 1);
+    if (!existsSync(join(REPO_ROOT, relPath))) {
+      errors.push(at(`@require points at ${relPath}, which does not exist in this repo`));
+    }
+  }
+
   // A remote @icon is a runtime dependency: favicon services return 404 for
   // domains they lack an icon for, which managers surface as a fetch error on
   // the script card. scripts/lib/icon.mjs generates a data: URI instead.
@@ -108,7 +149,8 @@ for (const s of scripts) {
     }
   }
   for (const [key, manager] of Object.entries(MANAGER_SPECIFIC_KEYS)) {
-    if (s.meta[key]) warnings.push(at(`@${key} is ${manager}-only — the script will not be portable`));
+    if (s.meta[key])
+      warnings.push(at(`@${key} is ${manager}-only — the script will not be portable`));
   }
 }
 

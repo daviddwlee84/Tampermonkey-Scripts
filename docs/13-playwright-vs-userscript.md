@@ -120,6 +120,26 @@ npm run preview -- chatgpt-export-markdown "https://chatgpt.com/share/<id>" \
 
 它會在剪貼簿一有內容就往下走，`--wait` 只是上限。
 
+### 頁面的 CSP 會被繞過
+
+harness 用 Playwright 的 `bypassCSP`，因為**真的 manager 也不受頁面 CSP 管**。
+不繞的話，nonce-based CSP（claude.ai）或 Trusted Types（copilot.microsoft.com）
+會直接讓注入失敗，測不到任何東西。
+
+### `@require` 會被解析
+
+一個 manager 會把每個 `@require` 的內容放在**腳本的 scope 裡**先跑一遍，
+harness 也照做——否則靠 `shared/` 的腳本一進來就會 `xxx is not defined`。
+
+指向本 repo 的 `@require`（`raw.githubusercontent.com/.../main/...`）**會改讀工作區的檔案**，
+所以改了 `shared/` 不用先 commit 就能測；其他網域的 URL 才真的下載，抓不到會直接失敗。
+每個 require 從哪來會印在輸出上：
+
+```text
+@require       : local shared/chat-export.js
+@require       : local shared/export-ui.js
+```
+
 ### ❌ 它不能證明的事
 
 這是一個 **shim，不是 userscript manager**。以下只有真的裝進 manager 才算數：

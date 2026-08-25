@@ -85,6 +85,8 @@ code fence、表格、citation 都可能失真。
 - Deep Research 報告目前沒有真實樣本可驗；官方本來就有 Download → Markdown，混合的
   對話建議兩邊都留一份。
 - 圖片只輸出 `![image](<asset_pointer>)` 佔位，不會下載檔案。
+- 從 v1.2.0 起，render 與浮動 UI 搬到 [`shared/`](../../shared/) 用 `@require` 引入
+  （跟 claude / copilot 兩支共用），所以安裝時多一個 raw.githubusercontent.com 的網路相依。
 
 ## 測試
 

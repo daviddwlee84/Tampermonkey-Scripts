@@ -64,6 +64,9 @@ npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selec
 選單指令是 async 的（要等頁面資料就緒）就再加 `--wait <ms>`，
 否則 harness 會在它寫進剪貼簿之前就收工。
 
+`@require` 會被解析：指向本 repo 的 URL 直接讀工作區的檔案（測得到還沒 commit 的
+`shared/`），其他 URL 才走網路。`npm run check` 也會擋掉指向本 repo 但檔案不存在的 `@require`。
+
 ## 寫腳本的規範
 
 **腳本必須同時支援 Tampermonkey 與 Violentmonkey**（見 `docs/09-managers-comparison.md`）：

@@ -11,7 +11,7 @@
 //                          [--click <selector>] [--menu <caption>] [--wait <ms>]
 import { readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { listUserscripts, first, REPO_ROOT } from './lib/meta.mjs';
+import { listUserscripts, first, REPO_ROOT, RAW_BASE } from './lib/meta.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(name);
@@ -35,7 +35,10 @@ if (!script || script.missing) {
 const matchPattern = first(script.meta, 'match');
 const url =
   urlArg ??
-  matchPattern.replace(/^\*:\/\//, 'https://').replace(/\/\*$/, '/').replace('*.', '');
+  matchPattern
+    .replace(/^\*:\/\//, 'https://')
+    .replace(/\/\*$/, '/')
+    .replace('*.', '');
 
 let chromium;
 try {
@@ -78,17 +81,54 @@ const outFile = value('--out') ?? join(outDir, `${slug}.png`);
 const waitMs = Number(value('--wait') ?? 300);
 
 const browser = await chromium.launch({ headless: !flag('--headed') });
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+// bypassCSP mirrors a real manager: it injects the script outside the page's
+// Content-Security-Policy. Without it, sites with a nonce-based CSP or Trusted
+// Types (claude.ai, copilot.microsoft.com) reject the injection outright.
+const page = await browser.newPage({
+  viewport: { width: 1280, height: 800 },
+  bypassCSP: true,
+});
 
 const logs = [];
 page.on('console', (msg) => logs.push(`  [${msg.type()}] ${msg.text()}`));
 page.on('pageerror', (err) => logs.push(`  [pageerror] ${err.message}`));
+
+/**
+ * Resolve one @require URL to its source. URLs pointing at this repo are read
+ * from the working tree, so `npm run preview` tests uncommitted shared/ code
+ * instead of whatever is on main.
+ */
+async function loadRequire(requireUrl) {
+  if (requireUrl.startsWith(`${RAW_BASE}/`)) {
+    const relPath = requireUrl.slice(RAW_BASE.length + 1);
+    return { source: readFileSync(join(REPO_ROOT, relPath), 'utf8'), from: `local ${relPath}` };
+  }
+  const res = await fetch(requireUrl);
+  if (!res.ok) throw new Error(`${requireUrl} -> HTTP ${res.status}`);
+  return { source: await res.text(), from: `remote ${requireUrl}` };
+}
 
 console.log(`→ ${url}`);
 await page.goto(url, { waitUntil: 'domcontentloaded' });
 
 // @run-at document-idle roughly corresponds to after load + a beat.
 await page.addScriptTag({ content: GM_SHIM });
+
+// A manager evaluates every @require in the script's scope before the script
+// itself. Do the same, or a script built on shared/ dies on the first call.
+for (const requireUrl of script.meta.require ?? []) {
+  let loaded;
+  try {
+    loaded = await loadRequire(requireUrl);
+  } catch (err) {
+    console.error(`@require failed: ${err.message}`);
+    await browser.close();
+    process.exit(1);
+  }
+  await page.addScriptTag({ content: loaded.source });
+  console.log(`@require       : ${loaded.from}`);
+}
+
 await page.addScriptTag({ content: readFileSync(script.file, 'utf8') });
 await page.waitForTimeout(600);
 
@@ -136,7 +176,12 @@ console.log(`\ndocument.title : ${result.title}`);
 console.log(`menu commands  : ${result.menu.length ? result.menu.join(', ') : '(none)'}`);
 console.log(`GM storage     : ${JSON.stringify(result.storage)}`);
 if (result.clipboard) {
-  console.log(`clipboard      :\n${result.clipboard.split('\n').map((l) => `  | ${l}`).join('\n')}`);
+  console.log(
+    `clipboard      :\n${result.clipboard
+      .split('\n')
+      .map((l) => `  | ${l}`)
+      .join('\n')}`
+  );
 }
 if (logs.length) console.log(`\nconsole:\n${logs.join('\n')}`);
 console.log(`\nscreenshot     : ${outFile}`);
