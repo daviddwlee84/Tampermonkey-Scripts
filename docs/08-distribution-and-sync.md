@@ -80,26 +80,65 @@ remote    0.3.3
 Tampermonkey 預設每天檢查一次。要立刻拿到新版：
 Dashboard → 該腳本 → **Check for userscript updates**。
 
-## 新機器 bootstrap
+## 新機器 bootstrap：第一次怎麼把腳本裝進去
 
-只用 GitHub 的話，第一次還是要手動：
+只用 GitHub 的話，第一次要手動裝一輪，之後就全自動。所以不是
+「每次都重新匯入」，而是**每個 browser profile bootstrap 一次**。
+
+### 方法 A：Install from URL（最可靠，建議用這個）
+
+**Violentmonkey**：Dashboard → 左上角 `+` → **Install from URL** → 貼上 raw 網址
+
+**Tampermonkey**：Dashboard → **Utilities** 分頁 → **Install from URL** 欄位 → 貼上 → Install
+
+網址格式：
 
 ```text
-新電腦
-  ↓
-安裝 Tampermonkey
-  ↓
-打開 repo README
-  ↓
-點各腳本的 Install 連結
+https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/<slug>/<slug>.user.js
 ```
 
-之後就全自動了。所以不是「每次都重新匯入」，而是
-**每個 browser profile bootstrap 一次**。
+manager 會先顯示確認頁，列出這支腳本的 `@match`、`@grant`、`@connect`，
+確認後才安裝。**安裝來源會被記下來**，所以之後的自動更新直接就能運作。
 
-本 repo 的 README 有自動產生的安裝表格（`npm run index`），
-點連結就會直接跳出 manager 的安裝畫面 —— 因為網址以 `.user.js` 結尾，
-manager 會攔截它。
+### 方法 B：直接在瀏覽器打開 raw 網址
+
+manager 會攔截以 `.user.js` 結尾的網址並跳出安裝畫面。
+README 那張自動產生的表格裡，Install 連結就是這種網址。
+
+⚠️ 但這招在 Chromium 系瀏覽器上**不一定穩**——瀏覽器有時會直接把檔案下載下來
+而不是交給 manager 攔截。遇到這種情況就改用方法 A。
+
+### ⚠️ 不要用「New from file」/「Import from zip」
+
+這兩個看起來也能把腳本弄進去，但意義完全不同：
+
+| 選項                     | 實際上是                                        |
+| ------------------------ | ----------------------------------------------- |
+| **Install from URL**     | ✅ 從遠端安裝，記住來源 → 自動更新可用            |
+| New from file            | ⚠️ 從本機檔案建立一份**副本**                    |
+| Import from zip / Sync   | ⚠️ 還原 manager 自己的備份，是 **state**，不是 code |
+
+`New from file` 匯入的腳本雖然 metadata 裡有 `@downloadURL`，
+但它是「本機來源」的一份拷貝，很容易變成和 repo 各自演化的兩份。
+`Import from zip` 更是另一回事——那是還原整個 manager 的狀態（見下面的 Sync 段落）。
+
+**規則**：code 走 URL，state 走 zip / Sync。
+
+### 確認更新設定有開
+
+裝完之後到 Settings 檢查（以 Violentmonkey 為例）：
+
+```text
+Update
+  Check for script updates every [1] day(s)     ← 不要填 0，0 = 停用
+  ☑ Notify script updates                        ← 建議打開
+```
+
+`Notify script updates` 預設是關的。開起來的話，你 push 新版之後
+其他機器會主動告訴你「更新了」，不然它會安靜地更新，你不會知道版本何時生效。
+
+要立刻拉一次更新：Dashboard 上那個**重新整理圖示**（`+` 旁邊）就是
+「檢查所有腳本的更新」。
 
 ## Manager 內建同步
 

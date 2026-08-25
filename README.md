@@ -23,6 +23,11 @@
 >
 > Chromium 系瀏覽器（Chrome / Edge / Brave / Vivaldi / **Arc**）還要到
 > `<browser>://extensions` 開啟 **Developer mode**，否則腳本裝了不會執行。
+>
+> **第一次安裝**如果點 Install 沒反應（瀏覽器把檔案下載下來而不是交給 manager），
+> 改用 Dashboard 的 **Install from URL** 貼上同一個網址。
+> 不要用 `New from file` / `Import from zip` —— 那樣裝的是副本，收不到自動更新。
+> 完整說明見 [08 發佈與同步](./docs/08-distribution-and-sync.md#新機器-bootstrap第一次怎麼把腳本裝進去)。
 
 ## 教學文件
 

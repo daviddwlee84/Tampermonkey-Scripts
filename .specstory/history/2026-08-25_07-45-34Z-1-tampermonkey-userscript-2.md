@@ -6348,7 +6348,7 @@ README.md script index is up to date.
 ```
 </details></tool-use>
 
-_**Agent (claude-opus-5 2026-08-25 08:23:06Z)**_
+_**Agent (claude-opus-5 2026-08-25 08:23:29Z)**_
 
 <tool-use data-tool-type="shell" data-tool-name="Bash"><details>
 <summary>Tool use: **Bash**</summary>
@@ -6398,5 +6398,244 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_011fP1QvR8e5SHPU8Ud2oyJL
 EOF
 git push -q origin main && echo "pushed" && sleep 15 && gh run list --limit 1
+```
+
+```text
+all relative links resolve
+pushed
+completed	success	fix(docs): correct Tampermonkey-only claims, enforce cross-manager po…	CI	main	push	32826336808	10s	2026-08-25T08:23:13Z
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:23:58Z)**_
+
+CI 綠燈，已推上去。直接回答你三個問題：
+
+## 1. 現在是相容的嗎？—— 是，程式碼本來就是
+
+我實際 audit 過，而不是憑印象：三支腳本用到的 `@grant` 全部落在 Violentmonkey 官方文件列出的 API 內（`GM_addStyle`、`GM_setValue`、`GM_getValue`、`GM_setClipboard`、`GM_registerMenuCommand`），沒有任何 manager 限定的 metadata key，而且三支都明寫了 `@run-at`。
+
+**但我昨天寫的文件有幾處把 Tampermonkey 的行為當成通則了**，已修正：
+
+| 我原本寫的 | 實際情況 |
+|---|---|
+| `@run-at` 預設是 `document-idle` | 那是 TM 的預設；**VM 預設是 `document-end`** — 五個地方都改成「一律明寫」 |
+| `GM_registerMenuCommand(..., { accessKey: 'c' })` | `accessKey` 是 TM 限定 |
+| `GM_unregisterMenuCommand(register 的回傳值)` | VM 用 caption 或自訂 id，改成明寫 `{ id: 'stop' }` |
+| 只提 `@sandbox` | `@inject-into`（VM 解 CSP 的手段）原本完全沒寫到 |
+| — | `@updateURL` 不在 VM 的 metadata 文件裡，它只讀 `@downloadURL`（我們兩個都寫，所以沒踩到） |
+
+順帶更正 ChatGPT 那份表的一點：**`GM_download` Violentmonkey 現在有支援**，`GM_cookie`、`GM_addElement`、`GM.*` async 版也都有。VM 的 GM API 缺口比那份表暗示的小。
+
+**相容性現在是 linter 強制的**，不再靠自覺：`@run-at` 變成必填、GM API 會比對「兩邊都支援」的清單、用到 `@sandbox` / `@inject-into` / `@exclude-match` 會警告。我故意塞了違規進去測，三條規則都正確觸發。
+
+## 2. 推薦哪個 —— 我同意 ChatGPT 的結論，但理由要收窄
+
+**Violentmonkey 當主力，Tampermonkey 留著當相容性 / Safari target。**
+
+對你這個 repo 真正有差別的只有兩點：**它是真 OSS**（一個有「讀寫任意頁面 + 跨域請求 + 剪貼簿」完整權限的 extension，可稽核值得加分），以及**external editor workflow 更成熟**，可以設「偵測到檔案變更就 reload 分頁」——你是 Neovim/VS Code + Git 的用法，這比內建編輯器有用得多。
+
+ChatGPT 提的 TypeScript generator 和 `VM.observe` / `VM.shortcut` 我**不建議採用**：前者違背我們「零建置、raw URL 直接可安裝」的設計，後者會把腳本綁死在 VM 上。`docs/09` 把「不要用 manager 專屬 helper」列進守則了。
+
+Safari / iOS 是唯一會逼你回頭選 TM 的硬條件——VM 沒有 Safari 版。
+
+## 3. Arc 可以嗎 —— 可以，但有個坑
+
+Arc 是標準 Chromium，兩個 manager 都能從 Chrome Web Store 裝。**但 Chrome 138 之後 MV3 的 User Scripts API 需要手動開開發者模式**，Arc 也一樣：
+
+```
+arc://extensions → 右上角開啟 Developer mode
+```
+
+沒開的症狀就是「裝了完全沒反應」。這條在 `docs/09` 和 `docs/11` 都有寫。
+
+另外提醒一句：Arc 的 Chromium base 更新步調可能落後主線，遇到 extension 行為怪異時先拿一般 Chrome 對照一次，再判斷是不是腳本本身的問題。
+
+---
+
+_**User (2026-08-25 08:27:33Z)**_
+
+初次應該如何把我們的script匯入呢？[Image #2] [Image #3]
+
+---
+
+_**User (2026-08-25 08:27:33Z)**_
+
+[Image: source: /Users/david/.claude/image-cache/f9187add-bba2-45fc-9da7-e5ae51dfcc52/2.png]
+
+[Image: source: /Users/david/.claude/image-cache/f9187add-bba2-45fc-9da7-e5ae51dfcc52/3.png]
+
+---
+
+_**Agent (claude-opus-5 2026-08-25 08:27:51Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Print install URLs
+
+```bash
+node -e "
+import('./scripts/lib/meta.mjs').then(m => {
+  for (const s of m.listUserscripts()) console.log(m.rawUrlFor(s.slug));
+});"
+```
+
+```text
+https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/hello-userscript/hello-userscript.user.js
+https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/page-title-tag/page-title-tag.user.js
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:28:00Z)**_
+
+正確路徑是 `+` → **Install from URL**。你的兩個 URL：
+
+```
+https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/hello-userscript/hello-userscript.user.js
+https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/page-title-tag/page-title-tag.user.js
+```
+
+貼進去 → VM 會顯示確認頁（列出 `@match`、`@grant`）→ Confirm installation。
+
+讓我把這段補進文件，順便修掉一個我漏掉的坑：
+
+_**Agent (claude-opus-5 2026-08-25 08:28:24Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Document first-time install flow
+
+````bash
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path('docs/08-distribution-and-sync.md'); s = p.read_text()
+
+old = """## 新機器 bootstrap
+
+只用 GitHub 的話，第一次還是要手動：
+
+```text
+新電腦
+  ↓
+安裝 Tampermonkey
+  ↓
+打開 repo README
+  ↓
+點各腳本的 Install 連結
+```
+
+之後就全自動了。所以不是「每次都重新匯入」，而是
+**每個 browser profile bootstrap 一次**。
+
+本 repo 的 README 有自動產生的安裝表格（`npm run index`），
+點連結就會直接跳出 manager 的安裝畫面 —— 因為網址以 `.user.js` 結尾，
+manager 會攔截它。"""
+
+new = """## 新機器 bootstrap：第一次怎麼把腳本裝進去
+
+只用 GitHub 的話，第一次要手動裝一輪，之後就全自動。所以不是
+「每次都重新匯入」，而是**每個 browser profile bootstrap 一次**。
+
+### 方法 A：Install from URL（最可靠，建議用這個）
+
+**Violentmonkey**：Dashboard → 左上角 `+` → **Install from URL** → 貼上 raw 網址
+
+**Tampermonkey**：Dashboard → **Utilities** 分頁 → **Install from URL** 欄位 → 貼上 → Install
+
+網址格式：
+
+```text
+https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/<slug>/<slug>.user.js
+```
+
+manager 會先顯示確認頁，列出這支腳本的 `@match`、`@grant`、`@connect`，
+確認後才安裝。**安裝來源會被記下來**，所以之後的自動更新直接就能運作。
+
+### 方法 B：直接在瀏覽器打開 raw 網址
+
+manager 會攔截以 `.user.js` 結尾的網址並跳出安裝畫面。
+README 那張自動產生的表格裡，Install 連結就是這種網址。
+
+⚠️ 但這招在 Chromium 系瀏覽器上**不一定穩**——瀏覽器有時會直接把檔案下載下來
+而不是交給 manager 攔截。遇到這種情況就改用方法 A。
+
+### ⚠️ 不要用「New from file」/「Import from zip」
+
+這兩個看起來也能把腳本弄進去，但意義完全不同：
+
+| 選項                     | 實際上是                                        |
+| ------------------------ | ----------------------------------------------- |
+| **Install from URL**     | ✅ 從遠端安裝，記住來源 → 自動更新可用            |
+| New from file            | ⚠️ 從本機檔案建立一份**副本**                    |
+| Import from zip / Sync   | ⚠️ 還原 manager 自己的備份，是 **state**，不是 code |
+
+`New from file` 匯入的腳本雖然 metadata 裡有 `@downloadURL`，
+但它是「本機來源」的一份拷貝，很容易變成和 repo 各自演化的兩份。
+`Import from zip` 更是另一回事——那是還原整個 manager 的狀態（見下面的 Sync 段落）。
+
+**規則**：code 走 URL，state 走 zip / Sync。
+
+### 確認更新設定有開
+
+裝完之後到 Settings 檢查（以 Violentmonkey 為例）：
+
+```text
+Update
+  Check for script updates every [1] day(s)     ← 不要填 0，0 = 停用
+  ☑ Notify script updates                        ← 建議打開
+```
+
+`Notify script updates` 預設是關的。開起來的話，你 push 新版之後
+其他機器會主動告訴你「更新了」，不然它會安靜地更新，你不會知道版本何時生效。
+
+要立刻拉一次更新：Dashboard 上那個**重新整理圖示**（`+` 旁邊）就是
+「檢查所有腳本的更新」。"""
+
+assert old in s
+s = s.replace(old, new)
+p.write_text(s)
+print('docs/08 patched')
+PY
+grep -n "Install from URL" docs/08-distribution-and-sync.md | head -3
+````
+
+```text
+docs/08 patched
+88:### 方法 A：Install from URL（最可靠，建議用這個）
+90:**Violentmonkey**：Dashboard → 左上角 `+` → **Install from URL** → 貼上 raw 網址
+92:**Tampermonkey**：Dashboard → **Utilities** 分頁 → **Install from URL** 欄位 → 貼上 → Install
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-25 08:28:36Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Add install troubleshooting note to README
+
+```bash
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path('README.md'); s = p.read_text()
+old = """> Chromium 系瀏覽器（Chrome / Edge / Brave / Vivaldi / **Arc**）還要到
+> `<browser>://extensions` 開啟 **Developer mode**，否則腳本裝了不會執行。"""
+new = """> Chromium 系瀏覽器（Chrome / Edge / Brave / Vivaldi / **Arc**）還要到
+> `<browser>://extensions` 開啟 **Developer mode**，否則腳本裝了不會執行。
+>
+> **第一次安裝**如果點 Install 沒反應（瀏覽器把檔案下載下來而不是交給 manager），
+> 改用 Dashboard 的 **Install from URL** 貼上同一個網址。
+> 不要用 `New from file` / `Import from zip` —— 那樣裝的是副本，收不到自動更新。
+> 完整說明見 [08 發佈與同步](./docs/08-distribution-and-sync.md#新機器-bootstrap第一次怎麼把腳本裝進去)。"""
+assert old in s
+p.write_text(s.replace(old, new))
+print('README patched')
+PY
+npm run verify 2>&1 | grep -E "Checked|up to date"
+```
+
+```text
+README patched
+Checked 2 userscript(s): 0 error(s), 0 warning(s).
+README.md script index is up to date.
 ```
 </details></tool-use>
