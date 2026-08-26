@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         M365 Copilot Chat Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.5.0
+// @version      0.6.0
 // @description  【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——尚未經真實帳號驗證
 // @author       Da-Wei Lee
 // @license      MIT
@@ -62,13 +62,18 @@
  * - citation 是 `adaptiveCards[0].body[0].text` 裡的『【key】』全形括號 marker，
  *   對照 `references[key]`（`targetLink` 是 URL，`displayData.content` 是含 `label` /
  *   `Title` 的 JSON 字串）
- * - 驗證要讀 MSAL（`@azure/msal-browser`）存在 localStorage 的**加密** token cache：
- *   `msal.3.account.keys` 找帳號、`msal.3.token.keys.<clientId>`
- *   （clientId 固定 `c0ab8ce9-e9a0-42e7-b064-33d422df41f1`，M365 Copilot Chat 的第一方
- *   app id）找 scope 含 `substrate.office.com/sydney/.default` 的 token，
- *   配合 cookie `msal.cache.encryption` 做 HKDF → AES-GCM 解密。這是 MSAL 自己的公開
- *   「cache encryption」機制，不是漏洞——單純是讀使用者自己瀏覽器裡、自己帳號已登入的
- *   token 來呼叫網站自己的 API，跟另外三支腳本讀 `Authorization` header 是同一類事情。
+ * - 驗證用的 access token 有兩個來源，依可信度排序：
+ *   1. **攔截頁面自己跟 `login.microsoftonline.com` 換 token 的回應**——實測看得到這個
+ *      請求，回應裡就有明文 `access_token` 與 `scope`，不用猜 cache 格式也不用解密。
+ *   2. 讀 MSAL（`@azure/msal-browser`）存在 localStorage 的**加密** token cache：
+ *      `msal.3.account.keys` 找帳號、`msal.3.token.keys.<clientId>`（clientId 固定
+ *      `c0ab8ce9-e9a0-42e7-b064-33d422df41f1`，M365 Copilot Chat 的第一方 app id），
+ *      配合 cookie `msal.cache.encryption` 做 HKDF → AES-GCM 解密。這是 MSAL 自己的
+ *      公開「cache encryption」機制，不是漏洞——單純是讀使用者自己瀏覽器裡、自己帳號
+ *      已登入的 token 來呼叫網站自己的 API，跟另外三支腳本讀 `Authorization` header
+ *      是同一類事情。實測發現寫死的 scope 對不上任何一把 token，所以改成分層比對。
+ *   拿到的 token 一把被打回票（401/403）就換下一把再試。token 本身只存在記憶體裡，
+ *   **絕對不會進 diagnostics 或剪貼簿**（那邊只記 key 名稱與型別，不記值）。
  *
  * **Copy Diagnostics**：因為不確定真實 API 長怎樣，這支腳本會把「攔到的每一個 JSON
  * 回應」的 `{url, status, shape}` 記下來，一鍵複製——`shape` 是巢狀 key 名稱／型別／
@@ -79,7 +84,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.5.0';
+  const VERSION = '0.6.0';
   const NS = 'm365-copilot-export-md';
   const EXPORTER = `m365-copilot-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[m365-copilot-export-markdown]';
@@ -222,8 +227,26 @@
   // （實測到 EventListener/Client?EventId=ExecuteAction 被誤判成一則訊息）。
   const NON_CONVERSATION_URL_RE = /EventListener|OneCollector|\/events(\?|$)/i;
 
+  /**
+   * 頁面自己跟 login.microsoftonline.com 換 token 時，回應裡就有明文 access_token
+   * 與它的 scope——實測看得到這個請求。直接接住比去解 MSAL 的加密 cache 穩：
+   * 不用猜 cache key 格式、不用猜 scope 命名、也不用做 HKDF/AES-GCM 解密。
+   *
+   * 只放在記憶體裡給 `fromLoggedInHistory()` 用，**絕對不會進 diagnostics / 剪貼簿**
+   * （`rememberDiagnostics` 只記 key 名稱與型別，不記值）。
+   */
+  const observedTokens = []; // [{ scope, token }]，最新的排最後
+
+  function rememberTokenResponse(url, json) {
+    if (!/\/oauth2\/v2\.0\/token/i.test(url)) return;
+    if (!json || typeof json.access_token !== 'string') return;
+    observedTokens.push({ scope: String(json.scope || ''), token: json.access_token });
+    log('observed an access token for scope:', json.scope || '(none)');
+  }
+
   function rememberPayload(url, status, payload) {
     rememberDiagnostics(url, status, payload);
+    rememberTokenResponse(url, payload);
     if (NON_CONVERSATION_URL_RE.test(url)) return;
     const messages = findMessageList(payload);
     if (!messages) return;
@@ -418,13 +441,46 @@
     return new TextDecoder().decode(decrypted);
   }
 
+  /**
+   * MSAL 的 access token cache key 長這樣：
+   * `{homeAccountId}-{environment}-accesstoken-{clientId}-{realm}-{target}`，
+   * `target` 就是 scope。實測發現寫死的 `MSAL_TOKEN_SCOPE` 對不上任何一把 token，
+   * 所以改成分層比對；同時把「實際有哪些 scope」抓出來回報，才知道該對準什麼。
+   */
+  function scopeOfTokenKey(key, clientId) {
+    const marker = `-accesstoken-${clientId}-`;
+    const index = key.indexOf(marker);
+    if (index < 0) return key;
+    const rest = key.slice(index + marker.length);
+    const dash = rest.indexOf('-'); // 跳過 realm，剩下的就是 scope
+    return dash < 0 ? rest : rest.slice(dash + 1);
+  }
+
   async function getMsalAccessToken(msalIds) {
     const baseKey = await getEncryptionCookie();
     const tokenKeysRaw = pageWin.localStorage.getItem(`msal.3.token.keys.${msalIds.clientId}`);
     if (!tokenKeysRaw) throw new Error(`沒有 msal.3.token.keys.${msalIds.clientId}`);
     const tokenKeys = JSON.parse(tokenKeysRaw);
-    const scopedKey = (tokenKeys.accessToken || []).find((key) => key.includes(MSAL_TOKEN_SCOPE));
-    if (!scopedKey) throw new Error(`token cache 裡沒有 scope 含 ${MSAL_TOKEN_SCOPE} 的 token`);
+    const accessTokenKeys = tokenKeys.accessToken || [];
+
+    // 分層比對：先找寫死的那個 scope，找不到就退而求其次找 substrate.office.com 的，
+    // 再不行就拿任何一把（反正接下來 GetConversation 會自己說 token 對不對）。
+    const scopedKey =
+      accessTokenKeys.find((key) => key.includes(MSAL_TOKEN_SCOPE)) ||
+      accessTokenKeys.find((key) => key.includes('substrate.office.com')) ||
+      accessTokenKeys[0];
+
+    if (!scopedKey) {
+      throw new Error('token cache 裡一把 access token 都沒有');
+    }
+
+    // 不管有沒有命中，都把實際可用的 scope 列表記下來——這是下一輪要對準的依據。
+    // scope 是權限字串（不是 token 本身），記進 diagnostics 不會外洩 secret。
+    rememberAttempt(
+      'MSAL token cache 裡實際有的 scope',
+      accessTokenKeys.map((key) => scopeOfTokenKey(key, msalIds.clientId)).join(' | ') || '(空)'
+    );
+
     const entryRaw = pageWin.localStorage.getItem(scopedKey);
     if (!entryRaw) throw new Error('對應的 token cache entry 不見了');
     const entry = JSON.parse(entryRaw);
@@ -432,43 +488,81 @@
     return JSON.parse(decrypted).secret;
   }
 
+  /**
+   * token 候選清單，依可信度排序：
+   * 1. 攔到的、scope 含 substrate.office.com 的（頁面自己剛換來的明文 token，最對味）
+   * 2. 其他攔到的 token（audience 可能不對，但試了才知道）
+   * 3. 解 MSAL cache 解出來的（要猜 cache 格式又要解密，最容易壞）
+   *
+   * 一把被打回票（401/403）就換下一把——之前只試一把，第一把不對就整條路斷了。
+   */
+  async function tokenCandidates(msalIds) {
+    const candidates = [];
+    const sorted = [...observedTokens].reverse();
+    for (const item of sorted) {
+      if (item.scope.includes('substrate.office.com')) {
+        candidates.push({ token: item.token, source: `攔截到的 token（scope: ${item.scope}）` });
+      }
+    }
+    for (const item of sorted) {
+      if (!item.scope.includes('substrate.office.com')) {
+        candidates.push({ token: item.token, source: `攔截到的 token（scope: ${item.scope}）` });
+      }
+    }
+    try {
+      const cached = await getMsalAccessToken(msalIds);
+      candidates.push({ token: cached, source: 'MSAL cache 解出來的 token' });
+    } catch (error) {
+      rememberAttempt('MSAL cache token 取得失敗', error.message);
+    }
+    return candidates;
+  }
+
   async function fromLoggedInHistory(conversationId) {
     if (!conversationId) return null;
     let msalIds;
-    let token;
     try {
       msalIds = getMsalAccount();
-      token = await getMsalAccessToken(msalIds);
     } catch (error) {
-      log('MSAL fallback unavailable:', error.message);
-      rememberAttempt('MSAL 帳號/token 取得失敗', error.message);
+      log('MSAL account unavailable:', error.message);
+      rememberAttempt('MSAL 帳號取得失敗', error.message);
+      return null;
+    }
+
+    const candidates = await tokenCandidates(msalIds);
+    if (candidates.length === 0) {
+      rememberAttempt('沒有任何可用的 token', '攔截與 MSAL cache 兩邊都拿不到');
       return null;
     }
 
     const requestObj = { conversationId, source: 'officeweb', traceId: crypto.randomUUID() };
     const url = `https://substrate.office.com/m365Copilot/GetConversation?request=${encodeURIComponent(JSON.stringify(requestObj))}`;
-    const headers = {
-      authorization: `Bearer ${token}`,
-      'content-type': 'application/json',
-      'x-anchormailbox': `Oid:${msalIds.localAccountId}@${msalIds.tenantId}`,
-      'x-scenario': 'OfficeWebIncludedCopilot',
-    };
 
-    try {
-      const res = await fetch(url, { headers });
-      const json = await res.json();
-      rememberDiagnostics(url, res.status, json);
-      if (!res.ok) {
-        log('GetConversation fallback failed:', res.status);
-        return null;
+    for (const candidate of candidates) {
+      const headers = {
+        authorization: `Bearer ${candidate.token}`,
+        'content-type': 'application/json',
+        'x-anchormailbox': `Oid:${msalIds.localAccountId}@${msalIds.tenantId}`,
+        'x-scenario': 'OfficeWebIncludedCopilot',
+      };
+
+      try {
+        const res = await fetch(url, { headers });
+        const json = await res.json();
+        rememberDiagnostics(`${url} [${candidate.source}]`, res.status, json);
+        if (!res.ok) {
+          log('GetConversation failed:', res.status, candidate.source);
+          continue; // 換下一把 token 再試
+        }
+        const messages = findMessageList(json);
+        if (messages) return { url, data: json, messages };
+        rememberAttempt('GetConversation 回 2xx 但找不到訊息列表', candidate.source);
+      } catch (error) {
+        log('GetConversation threw:', error.message);
+        rememberAttempt(`GetConversation 呼叫失敗（${candidate.source}）`, error.message);
       }
-      const messages = findMessageList(json);
-      return messages ? { url, data: json, messages } : null;
-    } catch (error) {
-      log('GetConversation fallback threw:', error.message);
-      rememberAttempt('GetConversation 呼叫失敗', error.message);
-      return null;
     }
+    return null;
   }
 
   // ------------------------------------------------------------ 來源總調度

@@ -218,11 +218,54 @@ patch 的 `WebSocket` 建構子看不到。目前無法只憑這次資料分辨�
 帳號/token 取得失敗」，八成是 cache key 格式或 scope 猜錯；如果走到
 `GetConversation` 卻拿到非 2xx，至少能看到真正的錯誤 shape。
 
+## 第五次真實測試（v0.6.0，2026-08-26）
+
+上一輪的修正生效了——diagnostics 裡第一次出現 `[fallback]` 條目，而且指出了**確切的
+卡點**：
+
+```text
+[fallback] MSAL 帳號/token 取得失敗
+  token cache 裡沒有 scope 含 https://substrate.office.com/sydney/.default 的 token
+```
+
+這是好消息：MSAL 帳號找到了、`msal.3.token.keys.<clientId>` 也讀到了、解密那段也走到了
+——整條路只卡在**寫死的 scope 字串對不上 cache 裡任何一把 token**。也就是說
+`sydney/.default` 這個 scope 是猜錯的（那是消費版 Bing/Sydney 的命名，M365 這邊顯然
+不是用這個）。
+
+同時注意到一件之前忽略的事：diagnostics 裡一直有這筆——
+
+```text
+200  https://login.microsoftonline.com/.../oauth2/v2.0/token?...client_id=c0ab8ce9-...
+  shape: { token_type: string, scope: string, ..., access_token: string, refresh_token: string, ... }
+```
+
+**頁面自己就在換 token，而且那個回應裡就有明文 `access_token` 跟它的 `scope`**——
+與其去猜 MSAL 的 cache key 格式、猜 scope 命名、再做 HKDF/AES-GCM 解密，直接接住這個
+回應穩得多，而且我們本來就已經攔到它了。
+
+**這次改的**：
+
+1. **新增 token 來源：攔截 `oauth2/v2.0/token` 的回應**，直接拿明文 `access_token`。
+   token 只存在記憶體裡給 `GetConversation` 用，**不會進 diagnostics 或剪貼簿**
+   （那邊只記 key 名稱與型別，不記值）。
+2. **MSAL cache 的 scope 比對從「寫死一個」改成分層**：先找原本那個 scope、
+   再找任何含 `substrate.office.com` 的、最後退到「隨便拿一把」。
+3. **把 cache 裡實際有哪些 scope 記進 diagnostics**（scope 是權限字串、不是 token
+   本身，不會外洩 secret）——下一輪就知道該對準什麼。
+4. **一把 token 被打回票（401/403）就換下一把再試**，而不是第一把不對就整條路斷掉；
+   每一把試的結果（來源 + HTTP status + 回應 shape）都會記進 diagnostics。
+
+**下一步**：再跑一次 `Copy Diagnostics`。這次會看到 `GetConversation` 真正被呼叫的
+結果（帶 HTTP status 與回應 shape），以及 `[fallback] MSAL token cache 裡實際有的
+scope` 那一筆。如果 `GetConversation` 回 2xx 而且 shape 裡有 `messages` 陣列，
+那就成了，剩下只要把 `normalize()` 對準；如果回 401/403，就從那筆 scope 清單挑對的
+scope 再調。
+
 ## 已知限制
 
-- `GetConversation` + MSAL 解密那套仍是**猜測**，四輪測試下來都沒真正驗證到——
-  一開始是 `conversationId` 解析不出來，後來發現是根本沒被觸發（`Copy Diagnostics`
-  不會觸發它），這次已經讓 `Copy Diagnostics` 自己去跑一次，還需要再測一次確認。
+- `GetConversation` 這條路仍**沒有成功跑通過**：五輪測試已經確認「MSAL 帳號讀得到、
+  卡在 scope 對不上」，這次補了「直接攔 token 回應」與分層 scope 比對，還需要再測一次。
 - share 連結沒有任何已知的直接呼叫方式，完全依賴攔截；攔不到就會老實報錯，不會假裝有資料。
 - `copilot.cloud.microsoft` 與 `m365.cloud.microsoft` 是否真的共用同一套後端 API 未知。
 - 靠的是私有 API 與 MSAL 內部快取格式（`msal.3.*`），Microsoft 改版就可能整支失效
