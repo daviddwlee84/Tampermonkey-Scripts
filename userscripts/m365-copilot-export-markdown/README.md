@@ -262,10 +262,53 @@ scope` 那一筆。如果 `GetConversation` 回 2xx 而且 shape 裡有 `message
 那就成了，剩下只要把 `normalize()` 對準；如果回 401/403，就從那筆 scope 清單挑對的
 scope 再調。
 
+## 第六次真實測試（v0.7.0，2026-08-26）
+
+這輪一次解開三件事：
+
+- **token 拿到了，兩條路都通**。diagnostics 顯示 `GetConversation` 真的被呼叫了，
+  代表「攔截到的 token」與「MSAL cache 解出來的 token」**兩個來源都成功產出 token**
+  ——連 HKDF → AES-GCM 解密那段也是通的。整套 MSAL 機制的猜測到這裡算驗證完成。
+- **真正的 scope 是 `https://substrate.office.com/sydney/v2/.default`**（多一段 `v2/`）。
+  上一版寫死的 `sydney/.default` 少了這段，所以永遠對不上。這次回報的 scope 清單裡
+  還看到帳號實際持有的其他 scope（`m365.cloud.microsoft/v2/.default`、
+  `substrate.office.com/.default`、`graph.microsoft.com/.default`…），
+  攔到的那把 token 本身就帶 `sydney/v2/.default` 與 `sydney/v2/sydney.readwrite`。
+- **MSAL cache key 用 `|` 分隔，不是 `-`**：實際格式是
+  `msal.3|{homeAccountId}|{environment}|accesstoken|{clientId}|{realm}|{target}|`。
+  上一版的 key 解析假設是 `-`，所以 scope 欄位其實沒被切出來（回報裡看到的是整條
+  完整 key）——已改成用 `|` 切。
+
+**但 `GetConversation` 回了空 body**：
+
+```text
+[fallback] GetConversation 呼叫失敗（攔截到的 token（scope: .../sydney/v2/.default ...））
+  shape: Failed to execute 'json' on 'Response': Unexpected end of JSON input
+```
+
+這裡有個**診斷程式自己的 bug**：原本是 `await res.json()` 之後才把 HTTP status 記進
+diagnostics，所以 body 一空、`res.json()` 一丟例外，**status 就永遠沒被記下來**——
+根本不知道是 401、403 還是 204。
+
+**這次改的**：
+
+1. 修正 scope 常數為 `sydney/v2/.default`，MSAL cache key 解析改用 `|` 分隔。
+2. **先 `res.text()` 再自己 `JSON.parse`**，這樣空 body / 非 JSON 的情況都還是能把
+   `HTTP status`、`statusText`、`content-type`、body 長度記進 diagnostics。
+3. **加上 `GM_xmlhttpRequest` 當第二條 transport**：跨網域打 `substrate.office.com`
+   又帶自訂 header（`x-anchormailbox`、`x-scenario`）一定會觸發 CORS preflight，
+   「網站自己打得通」不代表我們的 `fetch` 打得通。GM_xhr 不受 CORS 限制。
+   每一把 token 現在會分別用 `fetch` 與 `GM_xhr` 各試一次。
+   （因此多了 `@grant GM_xmlhttpRequest` 與 `@connect substrate.office.com`。）
+
+**下一步**：再跑一次 `Copy Diagnostics`。這次空 body 的情況會連 HTTP status 一起報出來，
+而且如果先前是 CORS 擋住的，`GM_xhr` 那條應該會直接成功。
+
 ## 已知限制
 
-- `GetConversation` 這條路仍**沒有成功跑通過**：五輪測試已經確認「MSAL 帳號讀得到、
-  卡在 scope 對不上」，這次補了「直接攔 token 回應」與分層 scope 比對，還需要再測一次。
+- `GetConversation` 這條路仍**沒有成功拿到對話內容**：六輪測試已經確認「token 拿得到、
+  scope 也對了、請求真的送出去了」，但回應是空 body，status 還沒看到（這次才補上記錄）。
+  這次同時加了 GM_xhr 繞過 CORS 的第二條路，還需要再測一次。
 - share 連結沒有任何已知的直接呼叫方式，完全依賴攔截；攔不到就會老實報錯，不會假裝有資料。
 - `copilot.cloud.microsoft` 與 `m365.cloud.microsoft` 是否真的共用同一套後端 API 未知。
 - 靠的是私有 API 與 MSAL 內部快取格式（`msal.3.*`），Microsoft 改版就可能整支失效

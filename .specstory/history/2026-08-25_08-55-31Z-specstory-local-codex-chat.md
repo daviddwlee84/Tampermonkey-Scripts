@@ -22239,3 +22239,754 @@ Better still, your diagnostics had been showing all along that the page itself c
 4. **Try each candidate token in turn** on 401/403 instead of quitting after the first, logging each attempt's source, status, and response shape.
 
 **Next run of `Copy Diagnostics`** should show `GetConversation` actually being called with a real HTTP status and response shape. If it's 2xx with a `messages` array, we're basically done — just normalization left. If it's 401/403, the scope list entry will tell us exactly which scope to target.
+
+---
+
+_**User (2026-08-26 04:11:53Z)**_
+
+```
+m365-copilot-export-markdown v0.6.0 diagnostics
+page: https://m365.cloud.microsoft/chat/conversation/124e28b1-6ea4-43fe-b337-5d3eb027f354?fromcode=cmmyr718qsb&es=Click&redirfrom=cosmicRingCookie
+captured 44 JSON response(s):
+
+2026-08-26T04:11:24.922Z  200  https://res.public.onecdn.static.microsoft/midgard/versionless-v2/loc_en-us.a1fb5bf3ae94ce223ebc.json
+  shape: { edge-ntp.AutocompeteComposerAndDropdownContainer.ChatInput.AriaLabel: string, edge-ntp.AutocompeteComposerAndDropdownContainer.RemoveSuggestion.AriaLabel: string, edge-ntp.AutocompeteComposerAndDropdownContainer.Suggestions.AriaLabel: string, edge-ntp.NtpSettings.Cards.Journeys: string, edge-ntp.NtpSettings.Cards.Label: string, edge-ntp.NtpSettings.Cards.Tips: string, edge-ntp.NtpSettings.ChangeBackground: string, edge-ntp.NtpSettings.FAQ: string, edge-ntp.NtpSettings.GiveFeedback: string, edge-ntp.NtpSettings.MoreSettings: string, edge-ntp.NtpSettings.Privacy: string, edge-ntp.NtpSettings.QuickLinks.EnforcedTooltip: string, edge-ntp.NtpSettings.QuickLinks.Label: string, edge-ntp.NtpSettings.QuickLinks.Off: string, edge-ntp.NtpSettings.QuickLinks.OneRow: string, edge-ntp.NtpSettings.QuickLinks.TwoRows: string, edge-ntp.NtpSettings.Terms: string, edge-ntp.NtpSettings.Title: string, juno-feedback.juno.searchFeedback.iDontLikeThis: string, juno-feedback.juno.searchFeedback.iLikeThis: string, …+1837 more }
+2026-08-26T04:11:27.305Z  200  https://res.public.onecdn.static.microsoft/midgard/versionless-v2/loc_c_en-us.a8e87f4114c5cb47d5ea.json
+  shape: { accessibility-utils-ui.accessibility-utils.positionInSet: string, ai-hub-component-file-engagement.allTimeViewsLabel: string, ai-hub-component-file-engagement.createdByDateLabel: string, ai-hub-component-file-engagement.createdByLabel: string, ai-hub-component-file-engagement.createdByOnDateLabel: string, ai-hub-component-file-engagement.createdDateLabel: string, ai-hub-component-file-engagement.createdOnDateLabel: string, ai-hub-component-file-engagement.emailHighImportanceLabel: string, ai-hub-component-file-engagement.eventOrganizerLabel: string, ai-hub-component-file-engagement.Header: string, ai-hub-component-file-engagement.insightsHeaderText: string, ai-hub-component-file-engagement.lastModifiedByDateLabel: string, ai-hub-component-file-engagement.lastModifiedByLabel: string, ai-hub-component-file-engagement.lastModifiedByOnDateLabel: string, ai-hub-component-file-engagement.lastModifiedDateLabel: string, ai-hub-component-file-engagement.lastModifiedOnDateLabel: string, ai-hub-component-file-engagement.multipleUsersAcceptedLabel: string, ai-hub-component-file-engagement.multipleUsersDeclinedLabel: string, ai-hub-component-file-engagement.multipleUsersLeftCommentsLabel: string, ai-hub-component-file-engagement.multipleUsersRepliedLabel: string, …+16513 more }
+2026-08-26T04:11:27.430Z  200  https://m365.cloud.microsoft/chat?fromcode=cmmyr718qsb&es=Click&redirfrom=cosmicRingCookie
+  shape: { store: { conversationPageHistoryList: { chats: array(1)[{ conversationId: string, chatName: string, tone: string, createTimeUtc: number, updateTimeUtc: number, expiryTimeUtc: number, plugins: array(1), threadLevelGptId: object, isMessageless: boolean, isUnread: boolean, retentionPolicyEffect: number, threadId: string, isScheduledPromptThread: boolean, mostRecentGptIds: array(0), hasLoopPages: boolean, isLegacyWebChat: boolean, hasCopilotTasks: boolean, turnState: string, path: string }], hasRetentionPolicy: boolean, metrics: { requestPreparation: number, requestId: string, hasSyncState: boolean, hasLastMessageEnabled: boolean, middlewareTime: number, timeToFirstByte: number, statusCode: number, responseTraceId: string, serverTimingReqLatency: number, upstreamServiceTime: number, tokenAcquisition: number, apiCall: number, downloadTime: number, responseSize: number, chatCount: number, total: number, fluxVersion: string } } }, __queryState: { mutations: array(0), queries: array(0) } }
+2026-08-26T04:11:29.318Z  200  https://ecs.office.com/config/v1/Fluid/0.0.0.1?agents=FluidExperiences%2CSegmentation&audience=Production&userId=00000000-0000-0000-e3f6-ba27abeebd18&tenantId=84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa&hostName=M365Chat
+  shape: { ECS: { ClientConfigurationUpdateEvent: { DeltaLogEnabled: boolean, FullSetLogEnabled: boolean, FullSetFrequency: number } }, FluidExperiences: { boards.enableDragToCardToConnect: boolean, copilotBoard.enableMinDocumentRuntimeVersion2_40: boolean, officeContainer.enableMinDocumentRuntimeVersion2_40: boolean, notebooks.isMdSupportedInAddReferencesDialog: boolean, notebooks.isMarkdownReferenceCreationEnabled: boolean, scriptor.linkCardTitleConversion: boolean, notebooks.bizChatAppVersionOverride: string, lpc.enableMinDocumentRuntimeVersion2_40: boolean, notebooks.enableOdspLinkResolution: boolean, codeBlock.isCodePageTopBarEnabled: boolean, notebooks.isNavSortDirectionToggleEnabled: boolean, codeBlock.autoSave: boolean, conversa.agentCardSidebar: boolean, tasks.GetPlanApiWithDummyPlanId: boolean, atMentions.singleMention: boolean, loopApp.isSuggestedReferencesFilterUntitledSuggestionsEnabled: boolean, loopApp.isSuggestedReferencesFilterOverviewPagesEnabled: boolean, loopApp.treatStoragePendingInputAsLicensed: boolean, loopApp.studyGuideSummarySupportedFileTypes: string, loopApp.studyGuideTopicSupportedFileTypes: string, …+205 more }, Segmentation: { IsStickyNotesEliteProgramEngagement: string, FrontierAudience: string, LoopAppDefaultOnAllowed: string, LoopAppRing: string }, Headers: { ETag: string, Expires: string, CountryCode: string, StatusCode: string }, ConfigIDs: { ECS: string, FluidExperiences: string, Segmentation: string } }
+2026-08-26T04:11:29.369Z  200  /events
+  shape: { success: boolean, received: number }
+2026-08-26T04:11:29.604Z  200  https://m365.cloud.microsoft/chat?fromcode=cmmyr718qsb&es=Click&redirfrom=cosmicRingCookie
+  shape: { store: { appLauncherCoreAppsContent: array(1)[{ id: string, label: string, path: string, iconSrc: string }] }, __queryState: { mutations: array(0), queries: array(0) } }
+2026-08-26T04:11:29.605Z  200  https://res.cdn.office.net/teams-js/validDomains/json/validDomains.json
+  shape: { validOrigins: array(69)[string] }
+2026-08-26T04:11:29.628Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=0
+  shape: { acc: number, webResult: { msfpc: string, mc1: string } }
+2026-08-26T04:11:29.663Z  200  https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/oauth2/v2.0/token?brk_client_id=4765445b-32c6-49b0-83e6-1d93765276ca&brk_redirect_uri=https%3A%2F%2Fm365.cloud.microsoft%2Fspalanding&client_id=c0ab8ce9-e9a0-42e7-b064-33d422df41f1&client-request-id=c24e4137-d4c4-438e-887e-518f667d6bc9
+  shape: { token_type: string, scope: string, expires_in: number, ext_expires_in: number, access_token: string, refresh_token: string, refresh_token_expires_in: number, id_token: string, client_info: string }
+2026-08-26T04:11:29.671Z  200  https://ecs.office.com/config/v1/Fluid/0.0.0.1?agents=FluidExperiences%2CSegmentation&audience=Production&userId=00000000-0000-0000-e3f6-ba27abeebd18&tenantId=84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa&hostName=M365Chat
+  shape: { ECS: { ClientConfigurationUpdateEvent: { DeltaLogEnabled: boolean, FullSetLogEnabled: boolean, FullSetFrequency: number } }, FluidExperiences: { boards.enableDragToCardToConnect: boolean, copilotBoard.enableMinDocumentRuntimeVersion2_40: boolean, officeContainer.enableMinDocumentRuntimeVersion2_40: boolean, notebooks.isMdSupportedInAddReferencesDialog: boolean, notebooks.isMarkdownReferenceCreationEnabled: boolean, scriptor.linkCardTitleConversion: boolean, notebooks.bizChatAppVersionOverride: string, lpc.enableMinDocumentRuntimeVersion2_40: boolean, notebooks.enableOdspLinkResolution: boolean, codeBlock.isCodePageTopBarEnabled: boolean, notebooks.isNavSortDirectionToggleEnabled: boolean, codeBlock.autoSave: boolean, conversa.agentCardSidebar: boolean, tasks.GetPlanApiWithDummyPlanId: boolean, atMentions.singleMention: boolean, loopApp.isSuggestedReferencesFilterUntitledSuggestionsEnabled: boolean, loopApp.isSuggestedReferencesFilterOverviewPagesEnabled: boolean, loopApp.treatStoragePendingInputAsLicensed: boolean, loopApp.studyGuideSummarySupportedFileTypes: string, loopApp.studyGuideTopicSupportedFileTypes: string, …+205 more }, Segmentation: { IsStickyNotesEliteProgramEngagement: string, FrontierAudience: string, LoopAppDefaultOnAllowed: string, LoopAppRing: string }, Headers: { ETag: string, Expires: string, CountryCode: string, StatusCode: string }, ConfigIDs: { ECS: string, FluidExperiences: string, Segmentation: string } }
+2026-08-26T04:11:29.886Z  200  https://m365.cloud.microsoft/chat?fromcode=cmmyr718qsb&es=Click&redirfrom=cosmicRingCookie
+  shape: { store: { pinnedAppIds: array(9)[string], pinnedAppsContent: array(8)[{ id: string, label: string, path: string, externalUrl: string, iconSrc: string, inAppNav: boolean, isSearchable: boolean }], applicationsContent: array(25)[{ id: string, label: string, path: string, externalUrl: string, iconSrc: string, inAppNav: boolean, isSearchable: boolean }], userPinStatusModifiedState: {  } }, __queryState: { mutations: array(0), queries: array(0) } }
+2026-08-26T04:11:29.888Z  200  https://res.cdn.office.net/fluid/prod/generic-loader/versionless/manifest.en-us.json
+  shape: { metadata: { version: string }, components: array(18)[{ registrationId: string, experienceType: string, supportedHydrateModes: array(1)[string], targetUserType: string, disallowGuests: boolean, urlPatterns: array(1)[{ urlRegexes: array(2) }], ocpsPolicy: { policyId: string, valueName: string, registryDataType: string, regKeyFullPath: string } }] }
+2026-08-26T04:11:29.934Z  200  /events
+  shape: { success: boolean, received: number }
+2026-08-26T04:11:29.936Z  200  https://substrate.office.com/search/api/v1/userconfig
+  shape: { ContentSourcesConfigResponse: { Sources: array(1)[{ ContentSource: array(2)[string], SourceDisplayName: string, IconUrl: string, EntityType: string }] }, Instrumentation: { TraceId: string } }
+2026-08-26T04:11:30.227Z  200  https://admin.microsoft.com/admin/api/uxversion?bldVer=v2&locale=en-us&hostingapp=BizChatMetaOS
+  shape: { ocv-inapp-feedback: { cdnUrl: string, loaderSpec: { type: string, content: string }, version: string, enableIncrementalBuild: boolean, bundleName: string, fallbackVersion: string }, ariaLoggerId: string, euAriaLoggerId: string, hostingAppUrls: string, __hostApp_config: { ariaLoggerId: string, euAriaLoggerId: string, hostingAppUrls: string, cdnDomains: array(4)[string] } }
+2026-08-26T04:11:30.237Z  200  https://arc.msn.com/v4/api/selection/?placement=88001111%7C88001117%7C3009242350%7C3005695716%7C88001270%7C3007512837&bcnt=5%7C2%7C1%7C1%7C1%7C5&mclh=bcwbf&locale=en-us&country=us&app=officeweb&hostapp=OfficeDotCom&platform=Web&clientPlatform=web&FEATURES=BCX_32%3BBCX_38%3BBCX_48%3BBCX_49%3BBCX_51%3BBCX_54%3BBCX_55%3BBCX_59%3BBCX_60%3BBCX_62%3BBCX_72%3BBCX_74%3BBCX_82%3BBCX_76%3BBCX_79%3BBCX_84%3BBCX_85&FLIGHTS=P-R-1535739-2-15&appver=bizchat.20260823.53.1&pat=1&isBebopEnabled=true&layouttype=1&plgScenarios=PremiumPromptsUpsell&route=chat&nct=1&asid=36bfe4946803508c62a852dd38c3c6d0
+  shape: { batchrsp: { ver: string, errors: array(6)[{ placement: string, errors: array(1)[object] }] } }
+2026-08-26T04:11:30.238Z  200  https://arc.msn.com/v4/api/selection/?placement=88001111%7C88001117%7C3009242350%7C3005695716%7C88001270%7C3007512837&bcnt=5%7C2%7C1%7C1%7C1%7C5&mclh=bcwbf&locale=en-us&country=us&app=officeweb&hostapp=OfficeDotCom&platform=Web&clientPlatform=web&FEATURES=BCX_32%3BBCX_38%3BBCX_48%3BBCX_49%3BBCX_51%3BBCX_54%3BBCX_55%3BBCX_59%3BBCX_60%3BBCX_62%3BBCX_72%3BBCX_74%3BBCX_82%3BBCX_76%3BBCX_79%3BBCX_84%3BBCX_85&FLIGHTS=P-R-1535739-2-15&appver=bizchat.20260823.53.1&pat=1&isBebopEnabled=true&layouttype=1&plgScenarios=PremiumPromptsUpsell&route=chat&nct=1&asid=1324de045937655b971fdd9afd588aac
+  shape: { batchrsp: { ver: string, errors: array(6)[{ placement: string, errors: array(1)[object] }] } }
+2026-08-26T04:11:30.238Z  200  https://graph.microsoft.com/v1.0/me/drive/special/copilotuploads
+  shape: { @odata.context: string, createdDateTime: string, eTag: string, id: string, lastModifiedDateTime: string, name: string, webUrl: string, cTag: string, isAuthoritative: boolean, size: number, createdBy: { application: { id: string, displayName: string }, user: { email: string, id: string, displayName: string } }, lastModifiedBy: { application: { id: string, displayName: string }, user: { email: string, id: string, displayName: string } }, parentReference: { driveType: string, driveId: string, id: string, name: string, path: string, siteId: string }, fileSystemInfo: { createdDateTime: string, lastModifiedDateTime: string }, folder: { childCount: number, view: { sortBy: string, sortOrder: string, viewType: string } }, specialFolder: { name: string } }
+2026-08-26T04:11:30.352Z  200  https://substrate.office.com/m365Copilot/EventListener/Client?EventId=ExecuteAction
+  shape: { data: { messages: array(1)[{ status: string, executeActionResult: array(5)[object], text: string, author: string, createdAt: string, timestamp: string, messageId: string, messageType: string, offense: string, responseCode: number }] }, conversationId: string, requestId: string, telemetry: { startTime: string }, result: { value: string, message: string, serviceVersion: string } }
+2026-08-26T04:11:30.633Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2
+  shape: { acc: number, webResult: {  } }
+2026-08-26T04:11:30.788Z  200  /events
+  shape: { success: boolean, received: number }
+2026-08-26T04:11:30.932Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2
+  shape: { acc: number, webResult: {  } }
+2026-08-26T04:11:31.424Z  200  /events
+  shape: { success: boolean, received: number }
+2026-08-26T04:11:32.005Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=0
+  shape: { acc: number, webResult: { msfpc: string, mc1: string } }
+2026-08-26T04:11:32.148Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=0
+  shape: { acc: number, webResult: { msfpc: string, mc1: string } }
+2026-08-26T04:11:32.212Z  200  /events
+  shape: { success: boolean, received: number }
+2026-08-26T04:11:32.589Z  200  /events
+  shape: { success: boolean, received: number }
+2026-08-26T04:11:33.513Z  200  https://m365.cloud.microsoft/chat?fromcode=cmmyr718qsb&es=Click&redirfrom=cosmicRingCookie
+  shape: { store: { conversationPageHistoryList: { chats: array(1)[{ conversationId: string, chatName: string, tone: string, createTimeUtc: number, updateTimeUtc: number, expiryTimeUtc: number, plugins: array(1), threadLevelGptId: object, isMessageless: boolean, isUnread: boolean, retentionPolicyEffect: number, threadId: string, isScheduledPromptThread: boolean, mostRecentGptIds: array(0), hasLoopPages: boolean, isLegacyWebChat: boolean, hasCopilotTasks: boolean, turnState: string, path: string }], syncState: string, hasRetentionPolicy: boolean, metrics: { requestPreparation: number, requestId: string, hasSyncState: boolean, hasLastMessageEnabled: boolean, middlewareTime: number, timeToFirstByte: number, statusCode: number, responseTraceId: string, serverTimingReqLatency: number, upstreamServiceTime: number, tokenAcquisition: number, apiCall: number, downloadTime: number, responseSize: number, chatCount: number, total: number, fluxVersion: string } }, copilotPluginList: array(0), agentListApiError: string, tasksFlyout: { tasks: array(0), cursor: string, stats: { inProgress: number, needsAttention: number, completed: number, failed: number }, metrics: {  } } }, __queryState: { mutations: array(0), queries: array(0) } }
+2026-08-26T04:11:33.521Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2
+  shape: { acc: number, webResult: {  } }
+2026-08-26T04:11:33.692Z  200  /events
+  shape: { success: boolean, received: number }
+2026-08-26T04:11:34.614Z  200  https://m365.cloud.microsoft/chat?fromcode=cmmyr718qsb&es=Click&redirfrom=cosmicRingCookie
+  shape: { store: { conversationPageHistoryList: { chats: array(1)[{ conversationId: string, chatName: string, tone: string, createTimeUtc: number, updateTimeUtc: number, expiryTimeUtc: number, plugins: array(1), threadLevelGptId: object, isMessageless: boolean, isUnread: boolean, retentionPolicyEffect: number, threadId: string, isScheduledPromptThread: boolean, mostRecentGptIds: array(0), hasLoopPages: boolean, isLegacyWebChat: boolean, hasCopilotTasks: boolean, turnState: string, path: string }], hasRetentionPolicy: boolean, metrics: { requestPreparation: number, requestId: string, hasSyncState: boolean, hasLastMessageEnabled: boolean, middlewareTime: number, timeToFirstByte: number, statusCode: number, responseTraceId: string, serverTimingReqLatency: number, upstreamServiceTime: number, tokenAcquisition: number, apiCall: number, downloadTime: number, responseSize: number, chatCount: number, total: number, fluxVersion: string } } }, __queryState: { mutations: array(0), queries: array(0) } }
+2026-08-26T04:11:34.880Z  200  https://config.edge.skype.com/config/v1/Dime/1.0.0.0?PartnerId=officedotcom&Version=1.18.0.53931484&ClientId=2fc7ae13-4114-4dc7-bb2e-4f843a194a31&UserId=0003BFFDA3EB4D12&Browser=chrome&Environment=production
+  shape: { Dime: { EnableM365Pro: boolean, PartnerConfig: { flights: { flexTheme: boolean, agentCardOneClickLicenseRequestEnabled: boolean, UseNewCommercialLogging: boolean, EnableThrottleWin32SSP: boolean, EnableThrottleExperienceRedesign: boolean, enableOcdi: boolean, UseNewPriceBreakdownForPromos: boolean, UseBrazilMarket: boolean, UseIndiaMarket: boolean, UseTurkeyMarket: boolean, UseSaudiArabiaMarket: boolean, UseUnitedArabEmiratesMarket: boolean, UseUzbekistanMarket: boolean, UseSouthAfricaMarket: boolean, UseThailandMarket: boolean, UseMyanmarMarket: boolean, UseKazakhstanMarket: boolean, UseHungaryMarket: boolean, UseAzerbaijanMarket: boolean, UseKyrgyzstanMarket: boolean, …+15 more } }, EnablePremiumResubscribe: boolean, LFTSmbRolloutEnabled: boolean, anroysdime: boolean, EnableManagedUnmanagedUserSplitContent: boolean, agentCardOneClickLicenseRequestEnabled: boolean, EnableThrottleWin32SSP: boolean, EnableThrottleExperienceRedesign: boolean, EnableUpdatedHolidayPromoDisclaimer: boolean }, ECS: { ClientConfigurationUpdateEvent: { DeltaLogEnabled: boolean, FullSetLogEnabled: boolean, FullSetFrequency: number } }, Headers: { ETag: string, Expires: string, CountryCode: string, StatusCode: string }, ConfigIDs: { Dime: string, ECS: string } }
+2026-08-26T04:11:35.131Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2
+  shape: { acc: number, webResult: {  } }
+2026-08-26T04:11:37.047Z  200  /events
+  shape: { success: boolean, received: number }
+2026-08-26T04:11:37.123Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2
+  shape: { acc: number, webResult: {  } }
+2026-08-26T04:11:37.324Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=0
+  shape: { acc: number, webResult: { msfpc: string, mc1: string } }
+2026-08-26T04:11:37.619Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2
+  shape: { acc: number, webResult: {  } }
+2026-08-26T04:11:39.712Z  info  [fallback] MSAL token cache 裡實際有的 scope
+  shape: msal.3|00000000-0000-0000-e3f6-ba27abeebd18.9188040d-6c67-4c5b-b112-36a304b66dad|login.windows.net|accesstoken|c0ab8ce9-e9a0-42e7-b064-33d422df41f1|9188040d-6c67-4c5b-b112-36a304b66dad|https://m365.cloud.microsoft/v2/.default| | msal.3|00000000-0000-0000-e3f6-ba27abeebd18.9188040d-6c67-4c5b-b112-36a304b66dad|login.windows.net|accesstoken|c0ab8ce9-e9a0-42e7-b064-33d422df41f1|9188040d-6c67-4c5b-b112-36a304b66dad|https://substrate.office.com/.default| | msal.3|00000000-0000-0000-e3f6-ba27abeebd18.9188040d-6c67-4c5b-b112-36a304b66dad|login.windows.net|accesstoken|c0ab8ce9-e9a0-42e7-b064-33d422df41f1|9188040d-6c67-4c5b-b112-36a304b66dad|https://ic3-consumers.teams.office.com/.default| | msal.3|00000000-0000-0000-e3f6-ba27abeebd18.9188040d-6c67-4c5b-b112-36a304b66dad|login.windows.net|accesstoken|c0ab8ce9-e9a0-42e7-b064-33d422df41f1|9188040d-6c67-4c5b-b112-36a304b66dad|https://arc.msn.com/v4/.default| | msal.3|00000000-0000-0000-e3f6-ba27abeebd18.9188040d-6c67-4c5b-b112-36a304b66dad|login.windows.net|accesstoken|c0ab8ce9-e9a0-42e7-b064-33d422df41f1|9188040d-6c67-4c5b-b112-36a304b66dad|liveprofilecard.access| | msal.3|00000000-0000-0000-e3f6-ba27abeebd18.9188040d-6c67-4c5b-b112-36a304b66dad|login.windows.net|accesstoken|c0ab8ce9-e9a0-42e7-b064-33d422df41f1|9188040d-6c67-4c5b-b112-36a304b66dad|https://graph.microsoft.com/.default| | msal.3|00000000-0000-0000-e3f6-ba27abeebd18.9188040d-6c67-4c5b-b112-36a304b66dad|login.windows.net|accesstoken|c0ab8ce9-e9a0-42e7-b064-33d422df41f1|9188040d-6c67-4c5b-b112-36a304b66dad|https://substrate.office.com/sydney/v2/.default|
+2026-08-26T04:11:39.989Z  info  [fallback] GetConversation 呼叫失敗（攔截到的 token（scope: https://substrate.office.com/sydney/v2/.default https://substrate.office.com/sydney/v2/sydney.readwrite））
+  shape: Failed to execute 'json' on 'Response': Unexpected end of JSON input
+2026-08-26T04:11:40.207Z  200  /events
+  shape: { success: boolean, received: number }
+2026-08-26T04:11:40.224Z  info  [fallback] GetConversation 呼叫失敗（MSAL cache 解出來的 token）
+  shape: Failed to execute 'json' on 'Response': Unexpected end of JSON input
+2026-08-26T04:11:42.493Z  info  [fallback] MSAL token cache 裡實際有的 scope
+  shape: msal.3|00000000-0000-0000-e3f6-ba27abeebd18.9188040d-6c67-4c5b-b112-36a304b66dad|login.windows.net|accesstoken|c0ab8ce9-e9a0-42e7-b064-33d422df41f1|9188040d-6c67-4c5b-b112-36a304b66dad|https://m365.cloud.microsoft/v2/.default| | msal.3|00000000-0000-0000-e3f6-ba27abeebd18.9188040d-6c67-4c5b-b112-36a304b66dad|login.windows.net|accesstoken|c0ab8ce9-e9a0-42e7-b064-33d422df41f1|9188040d-6c67-4c5b-b112-36a304b66dad|https://substrate.office.com/.default| | msal.3|00000000-0000-0000-e3f6-ba27abeebd18.9188040d-6c67-4c5b-b112-36a304b66dad|login.windows.net|accesstoken|c0ab8ce9-e9a0-42e7-b064-33d422df41f1|9188040d-6c67-4c5b-b112-36a304b66dad|https://ic3-consumers.teams.office.com/.default| | msal.3|00000000-0000-0000-e3f6-ba27abeebd18.9188040d-6c67-4c5b-b112-36a304b66dad|login.windows.net|accesstoken|c0ab8ce9-e9a0-42e7-b064-33d422df41f1|9188040d-6c67-4c5b-b112-36a304b66dad|https://arc.msn.com/v4/.default| | msal.3|00000000-0000-0000-e3f6-ba27abeebd18.9188040d-6c67-4c5b-b112-36a304b66dad|login.windows.net|accesstoken|c0ab8ce9-e9a0-42e7-b064-33d422df41f1|9188040d-6c67-4c5b-b112-36a304b66dad|liveprofilecard.access| | msal.3|00000000-0000-0000-e3f6-ba27abeebd18.9188040d-6c67-4c5b-b112-36a304b66dad|login.windows.net|accesstoken|c0ab8ce9-e9a0-42e7-b064-33d422df41f1|9188040d-6c67-4c5b-b112-36a304b66dad|https://graph.microsoft.com/.default| | msal.3|00000000-0000-0000-e3f6-ba27abeebd18.9188040d-6c67-4c5b-b112-36a304b66dad|login.windows.net|accesstoken|c0ab8ce9-e9a0-42e7-b064-33d422df41f1|9188040d-6c67-4c5b-b112-36a304b66dad|https://substrate.office.com/sydney/v2/.default|
+2026-08-26T04:11:42.757Z  info  [fallback] GetConversation 呼叫失敗（攔截到的 token（scope: https://substrate.office.com/sydney/v2/.default https://substrate.office.com/sydney/v2/sydney.readwrite））
+  shape: Failed to execute 'json' on 'Response': Unexpected end of JSON input
+2026-08-26T04:11:42.889Z  info  [fallback] GetConversation 呼叫失敗（MSAL cache 解出來的 token）
+  shape: Failed to execute 'json' on 'Response': Unexpected end of JSON input
+```
+
+---
+
+_**Agent (claude-opus-5 2026-08-26 04:12:15Z)**_
+
+Excellent — this round is a real breakthrough. Three things landed:
+
+1. **The correct scope is `https://substrate.office.com/sydney/v2/.default`** (v2!) — my hardcoded `sydney/.default` was one path segment off, and the intercepted token already carries it plus `sydney.readwrite`.
+2. **Token acquisition now works via both paths** — including the MSAL AES-GCM decryption, which got far enough to produce a token to try.
+3. **`GetConversation` was actually called** and returned a response whose body was **empty** (`Unexpected end of JSON input`).
+
+But I have a diagnostics bug hiding the most important detail — the HTTP status is recorded *after* `.json()`, so when parsing throws we never see it. Let me fix all of this:
+
+_**Agent (claude-opus-5 2026-08-26 04:12:17Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js`
+
+```text
+440	    );
+441	    return new TextDecoder().decode(decrypted);
+442	  }
+443	
+444	  /**
+445	   * MSAL 的 access token cache key 長這樣：
+446	   * `{homeAccountId}-{environment}-accesstoken-{clientId}-{realm}-{target}`，
+447	   * `target` 就是 scope。實測發現寫死的 `MSAL_TOKEN_SCOPE` 對不上任何一把 token，
+448	   * 所以改成分層比對；同時把「實際有哪些 scope」抓出來回報，才知道該對準什麼。
+449	   */
+450	  function scopeOfTokenKey(key, clientId) {
+451	    const marker = `-accesstoken-${clientId}-`;
+452	    const index = key.indexOf(marker);
+453	    if (index < 0) return key;
+454	    const rest = key.slice(index + marker.length);
+455	    const dash = rest.indexOf('-'); // 跳過 realm，剩下的就是 scope
+456	    return dash < 0 ? rest : rest.slice(dash + 1);
+457	  }
+458	
+459	  async function getMsalAccessToken(msalIds) {
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:12:25Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:12:33Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Verify scope key parser against real key from diagnostics
+
+```bash
+cd /Users/david/Documents/Program/Tampermonkey-Scripts
+node -e "
+function scopeOfTokenKey(key) {
+  const parts = String(key).split('|');
+  const index = parts.indexOf('accesstoken');
+  return index >= 0 && parts.length > index + 3 ? parts[index + 3] : String(key);
+}
+const k = 'msal.3|00000000-0000-0000-e3f6-ba27abeebd18.9188040d-6c67-4c5b-b112-36a304b66dad|login.windows.net|accesstoken|c0ab8ce9-e9a0-42e7-b064-33d422df41f1|9188040d-6c67-4c5b-b112-36a304b66dad|https://substrate.office.com/sydney/v2/.default|';
+console.log(JSON.stringify(scopeOfTokenKey(k)));
+"
+```
+
+```text
+"https://substrate.office.com/sydney/v2/.default"
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:12:36Z)**_
+
+Parser confirmed against the real key. Now update the scope constant and fix the call sites:
+
+_**Agent (claude-opus-5 2026-08-26 04:12:40Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Update scope constant to the real v2 scope
+
+```bash
+cd /Users/david/Documents/Program/Tampermonkey-Scripts
+sed -i '' "s|const MSAL_TOKEN_SCOPE = 'https://substrate.office.com/sydney/.default';|const MSAL_TOKEN_SCOPE = 'https://substrate.office.com/sydney/v2/.default';|" userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js
+grep -n "MSAL_TOKEN_SCOPE\|scopeOfTokenKey" userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js
+```
+
+```text
+98:  const MSAL_TOKEN_SCOPE = 'https://substrate.office.com/sydney/v2/.default';
+449:  function scopeOfTokenKey(key) {
+466:      accessTokenKeys.find((key) => key.includes(MSAL_TOKEN_SCOPE)) ||
+478:      accessTokenKeys.map((key) => scopeOfTokenKey(key, msalIds.clientId)).join(' | ') || '(空)'
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:12:47Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:12:50Z)**_
+
+Now the critical fix — capture the HTTP status *before* parsing, so an empty body no longer hides it:
+
+_**Agent (claude-opus-5 2026-08-26 04:12:50Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js`
+
+```text
+535	    const requestObj = { conversationId, source: 'officeweb', traceId: crypto.randomUUID() };
+536	    const url = `https://substrate.office.com/m365Copilot/GetConversation?request=${encodeURIComponent(JSON.stringify(requestObj))}`;
+537	
+538	    for (const candidate of candidates) {
+539	      const headers = {
+540	        authorization: `Bearer ${candidate.token}`,
+541	        'content-type': 'application/json',
+542	        'x-anchormailbox': `Oid:${msalIds.localAccountId}@${msalIds.tenantId}`,
+543	        'x-scenario': 'OfficeWebIncludedCopilot',
+544	      };
+545	
+546	      try {
+547	        const res = await fetch(url, { headers });
+548	        const json = await res.json();
+549	        rememberDiagnostics(`${url} [${candidate.source}]`, res.status, json);
+550	        if (!res.ok) {
+551	          log('GetConversation failed:', res.status, candidate.source);
+552	          continue; // 換下一把 token 再試
+553	        }
+554	        const messages = findMessageList(json);
+555	        if (messages) return { url, data: json, messages };
+556	        rememberAttempt('GetConversation 回 2xx 但找不到訊息列表', candidate.source);
+557	      } catch (error) {
+558	        log('GetConversation threw:', error.message);
+559	        rememberAttempt(`GetConversation 呼叫失敗（${candidate.source}）`, error.message);
+560	      }
+561	    }
+562	    return null;
+563	  }
+564	
+565	  // ------------------------------------------------------------ 來源總調度
+566	
+567	  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+568	
+569	  /** `/chat/share/<base64url(JSON)>` → { shareId, conversationId }。 */
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:13:04Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:13:14Z)**_
+
+Now, the empty body is plausibly CORS-related. Let me check whether `GM_xmlhttpRequest` (which bypasses CORS entirely) is allowed by the repo's portability checker:
+
+_**Agent (claude-opus-5 2026-08-26 04:13:16Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check PORTABLE_GM allowlist for GM_xmlhttpRequest
+
+```bash
+cd /Users/david/Documents/Program/Tampermonkey-Scripts
+grep -n "PORTABLE_GM" -A 20 scripts/check-meta.mjs | head -30
+```
+
+```text
+22:const PORTABLE_GM = new Set([
+23-  'GM_info',
+24-  'GM_cookie',
+25-  'GM_getValue',
+26-  'GM_getValues',
+27-  'GM_setValue',
+28-  'GM_setValues',
+29-  'GM_deleteValue',
+30-  'GM_deleteValues',
+31-  'GM_listValues',
+32-  'GM_addValueChangeListener',
+33-  'GM_removeValueChangeListener',
+34-  'GM_getResourceText',
+35-  'GM_getResourceURL',
+36-  'GM_addElement',
+37-  'GM_addStyle',
+38-  'GM_openInTab',
+39-  'GM_registerMenuCommand',
+40-  'GM_unregisterMenuCommand',
+41-  'GM_notification',
+42-  'GM_setClipboard',
+--
+147:    if (!PORTABLE_GM.has(api)) {
+148-      warnings.push(at(`${api} is not supported by both Tampermonkey and Violentmonkey`));
+149-    }
+150-  }
+151-  for (const [key, manager] of Object.entries(MANAGER_SPECIFIC_KEYS)) {
+152-    if (s.meta[key])
+153-      warnings.push(at(`@${key} is ${manager}-only — the script will not be portable`));
+154-  }
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:13:20Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+See full PORTABLE_GM list
+
+```bash
+cd /Users/david/Documents/Program/Tampermonkey-Scripts
+sed -n '22,50p' scripts/check-meta.mjs
+```
+
+```text
+const PORTABLE_GM = new Set([
+  'GM_info',
+  'GM_cookie',
+  'GM_getValue',
+  'GM_getValues',
+  'GM_setValue',
+  'GM_setValues',
+  'GM_deleteValue',
+  'GM_deleteValues',
+  'GM_listValues',
+  'GM_addValueChangeListener',
+  'GM_removeValueChangeListener',
+  'GM_getResourceText',
+  'GM_getResourceURL',
+  'GM_addElement',
+  'GM_addStyle',
+  'GM_openInTab',
+  'GM_registerMenuCommand',
+  'GM_unregisterMenuCommand',
+  'GM_notification',
+  'GM_setClipboard',
+  'GM_xmlhttpRequest',
+  'GM_download',
+]);
+
+// Metadata keys that only one manager understands.
+const MANAGER_SPECIFIC_KEYS = {
+  sandbox: 'Tampermonkey',
+  'inject-into': 'Violentmonkey',
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:13:23Z)**_
+
+`GM_xmlhttpRequest` is portable. Let me add it as a CORS-bypassing retry path:
+
+_**Agent (claude-opus-5 2026-08-26 04:13:26Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js`
+
+```text
+505	      if (!item.scope.includes('substrate.office.com')) {
+506	        candidates.push({ token: item.token, source: `攔截到的 token（scope: ${item.scope}）` });
+507	      }
+508	    }
+509	    try {
+510	      const cached = await getMsalAccessToken(msalIds);
+511	      candidates.push({ token: cached, source: 'MSAL cache 解出來的 token' });
+512	    } catch (error) {
+513	      rememberAttempt('MSAL cache token 取得失敗', error.message);
+514	    }
+515	    return candidates;
+516	  }
+517	
+518	  async function fromLoggedInHistory(conversationId) {
+519	    if (!conversationId) return null;
+520	    let msalIds;
+521	    try {
+522	      msalIds = getMsalAccount();
+523	    } catch (error) {
+524	      log('MSAL account unavailable:', error.message);
+525	      rememberAttempt('MSAL 帳號取得失敗', error.message);
+526	      return null;
+527	    }
+528	
+529	    const candidates = await tokenCandidates(msalIds);
+530	    if (candidates.length === 0) {
+531	      rememberAttempt('沒有任何可用的 token', '攔截與 MSAL cache 兩邊都拿不到');
+532	      return null;
+533	    }
+534	
+535	    const requestObj = { conversationId, source: 'officeweb', traceId: crypto.randomUUID() };
+536	    const url = `https://substrate.office.com/m365Copilot/GetConversation?request=${encodeURIComponent(JSON.stringify(requestObj))}`;
+537	
+538	    for (const candidate of candidates) {
+539	      const headers = {
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:13:39Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:13:42Z)**_
+
+Now restructure the attempt loop to try both transports per token:
+
+_**Agent (claude-opus-5 2026-08-26 04:13:42Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js`
+
+```text
+560	    const requestObj = { conversationId, source: 'officeweb', traceId: crypto.randomUUID() };
+561	    const url = `https://substrate.office.com/m365Copilot/GetConversation?request=${encodeURIComponent(JSON.stringify(requestObj))}`;
+562	
+563	    for (const candidate of candidates) {
+564	      const headers = {
+565	        authorization: `Bearer ${candidate.token}`,
+566	        'content-type': 'application/json',
+567	        'x-anchormailbox': `Oid:${msalIds.localAccountId}@${msalIds.tenantId}`,
+568	        'x-scenario': 'OfficeWebIncludedCopilot',
+569	      };
+570	
+571	      try {
+572	        const res = await fetch(url, { headers });
+573	        // 先讀 text 再自己 parse：直接 `res.json()` 的話，遇到空 body 會丟
+574	        // 「Unexpected end of JSON input」，連 HTTP status 都被蓋掉看不到——
+575	        // 實測就是這樣卡住的，完全不知道到底回了 401 還是 204。
+576	        const raw = await res.text();
+577	        const contentType = res.headers.get('content-type') || '(none)';
+578	
+579	        if (!raw) {
+580	          rememberAttempt(
+581	            `GetConversation 回空 body（${candidate.source}）`,
+582	            `HTTP ${res.status} ${res.statusText} | content-type: ${contentType}`
+583	          );
+584	          continue; // 換下一把 token 再試
+585	        }
+586	
+587	        let json;
+588	        try {
+589	          json = JSON.parse(raw);
+590	        } catch {
+591	          rememberAttempt(
+592	            `GetConversation 回的不是 JSON（${candidate.source}）`,
+593	            `HTTP ${res.status} ${res.statusText} | content-type: ${contentType} | ${raw.length} bytes`
+594	          );
+595	          continue;
+596	        }
+597	
+598	        rememberDiagnostics(`${url} [${candidate.source}]`, res.status, json);
+599	        if (!res.ok) {
+600	          log('GetConversation failed:', res.status, candidate.source);
+601	          continue; // 換下一把 token 再試
+602	        }
+603	        const messages = findMessageList(json);
+604	        if (messages) return { url, data: json, messages };
+605	        rememberAttempt('GetConversation 回 2xx 但找不到訊息列表', candidate.source);
+606	      } catch (error) {
+607	        // fetch 本身丟例外通常代表 CORS 被擋（跨網域 + 自訂 header 會觸發 preflight）
+608	        log('GetConversation threw:', error.message);
+609	        rememberAttempt(`GetConversation 呼叫失敗（${candidate.source}）`, error.message);
+610	      }
+611	    }
+612	    return null;
+613	  }
+614	
+615	  // ------------------------------------------------------------ 來源總調度
+616	
+617	  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+618	
+619	  /** `/chat/share/<base64url(JSON)>` → { shareId, conversationId }。 */
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:14:01Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:14:03Z)**_
+
+Now add the required `@grant` and `@connect` metadata:
+
+_**Agent (claude-opus-5 2026-08-26 04:14:07Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:14:28Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Bump to 0.7.0, format, syntax and metadata check
+
+```bash
+cd /Users/david/Documents/Program/Tampermonkey-Scripts
+sed -i '' "s/@version      0.6.0/@version      0.7.0/; s/const VERSION = '0.6.0';/const VERSION = '0.7.0';/" userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js
+npx prettier --write userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js 2>&1 | tail -2
+node --check userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js && echo SYNTAX_OK
+npm run check 2>&1 | tail -8
+```
+
+```text
+userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js 254ms
+SYNTAX_OK
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 6 userscript(s): 0 error(s), 0 warning(s).
+[This command modified 1 file you've previously read: userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js. Call Read before editing.]
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:14:32Z)**_
+
+Now update the header doc and README, then verify:
+
+_**Agent (claude-opus-5 2026-08-26 04:14:40Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:15:12Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Syntax check, regenerate index, verify
+
+```bash
+cd /Users/david/Documents/Program/Tampermonkey-Scripts
+node --check userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js && echo SYNTAX_OK
+npm run index 2>&1 | tail -3
+npm run verify 2>&1 | tail -6
+```
+
+```text
+SYNTAX_OK
+> node scripts/build-index.mjs
+
+README.md script index updated (6 script(s)).
+Checked 6 userscript(s): 0 error(s), 0 warning(s).
+
+> tampermonkey-scripts@1.0.0 index:check
+> node scripts/build-index.mjs --check
+
+README.md script index is up to date.
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:15:15Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Find 已知限制 heading
+
+```bash
+cd /Users/david/Documents/Program/Tampermonkey-Scripts
+grep -n "^## 已知限制" userscripts/m365-copilot-export-markdown/README.md
+```
+
+```text
+265:## 已知限制
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:15:19Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./userscripts/m365-copilot-export-markdown/README.md`
+
+```text
+262	那就成了，剩下只要把 `normalize()` 對準；如果回 401/403，就從那筆 scope 清單挑對的
+263	scope 再調。
+264	
+265	## 已知限制
+266	
+267	- `GetConversation` 這條路仍**沒有成功跑通過**：五輪測試已經確認「MSAL 帳號讀得到、
+268	  卡在 scope 對不上」，這次補了「直接攔 token 回應」與分層 scope 比對，還需要再測一次。
+269	- share 連結沒有任何已知的直接呼叫方式，完全依賴攔截；攔不到就會老實報錯，不會假裝有資料。
+270	- `copilot.cloud.microsoft` 與 `m365.cloud.microsoft` 是否真的共用同一套後端 API 未知。
+271	- 靠的是私有 API 與 MSAL 內部快取格式（`msal.3.*`），Microsoft 改版就可能整支失效
+272	  （見 [`docs/06`](../../docs/06-sandbox-and-unsafewindow.md)）。
+273	- **WebSocket 攔截只解得開文字／JSON frame，而且只看得到最外層 window 的連線**：
+274	  如果對話走的是二進位協定（Fluid Framework 那種），現在只能記大小、看不到內容；
+275	  如果連線是在 iframe／Worker 裡建立的，現在的 patch 完全看不到——見上面
+276	  「第四次真實測試」。
+277	- 用 `@require` 引入 [`shared/`](../../shared/)，所以安裝時多一個
+278	  raw.githubusercontent.com 的網路相依。
+279	
+280	## 測試
+281
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:15:48Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/README.md has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:15:54Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check if README needs the new grant documented elsewhere
+
+```bash
+cd /Users/david/Documents/Program/Tampermonkey-Scripts
+grep -n "GM_xmlhttpRequest\|@connect\|不碰 M365\|網路相依" userscripts/m365-copilot-export-markdown/README.md | head
+```
+
+```text
+298:3. **加上 `GM_xmlhttpRequest` 當第二條 transport**：跨網域打 `substrate.office.com`
+302:   （因此多了 `@grant GM_xmlhttpRequest` 與 `@connect substrate.office.com`。）
+321:  raw.githubusercontent.com 的網路相依。
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:16:28Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Final verify and format check
+
+```bash
+cd /Users/david/Documents/Program/Tampermonkey-Scripts
+npm run verify 2>&1 | tail -6
+npx prettier --check userscripts/m365-copilot-export-markdown/README.md userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js 2>&1 | tail -3
+```
+
+```text
+Checked 6 userscript(s): 0 error(s), 0 warning(s).
+
+> tampermonkey-scripts@1.0.0 index:check
+> node scripts/build-index.mjs --check
+
+README.md script index is up to date.
+Checking formatting...
+All matched files use Prettier code style!
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:16:48Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Commit scope fix and GM_xhr transport
+
+```bash
+cd /Users/david/Documents/Program/Tampermonkey-Scripts
+git add README.md userscripts/m365-copilot-export-markdown/README.md userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js
+git commit -m "$(cat <<'EOF'
+fix(m365-copilot-export-markdown): correct scope/key format, add GM_xhr transport
+
+Sixth real-world test round resolved three unknowns at once:
+
+- Both token sources now work, including the MSAL HKDF -> AES-GCM cache
+  decryption. GetConversation was genuinely called.
+- The real scope is https://substrate.office.com/sydney/v2/.default —
+  the previous hardcoded sydney/.default was missing the v2/ segment, so
+  it never matched anything in the cache.
+- MSAL cache keys are pipe-delimited, not dash-delimited:
+  msal.3|{homeAccountId}|{environment}|accesstoken|{clientId}|{realm}|{target}|
+  so the previous key parser never actually extracted the scope field.
+
+GetConversation came back with an empty body, and diagnostics couldn't
+say why: the HTTP status was recorded only after await res.json(), so an
+empty body threw and took the status with it.
+
+- Read res.text() first and JSON.parse manually, so empty/non-JSON
+  responses still record status, statusText, content-type, and length.
+- Add GM_xmlhttpRequest as a second transport per token. A cross-origin
+  request to substrate.office.com carrying custom headers triggers a CORS
+  preflight; the page succeeding at it doesn't mean our fetch will. GM_xhr
+  isn't subject to CORS. Needs @grant GM_xmlhttpRequest and
+  @connect substrate.office.com.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_015g44u87L4nKmipfkpEaC9C
+EOF
+)"
+git log --oneline -3
+```
+
+```text
+[main d8b86d5] fix(m365-copilot-export-markdown): correct scope/key format, add GM_xhr transport
+ 3 files changed, 147 insertions(+), 34 deletions(-)
+d8b86d5 fix(m365-copilot-export-markdown): correct scope/key format, add GM_xhr transport
+c092bce feat(m365-copilot-export-markdown): capture access token from token endpoint
+860b1dd fix(m365-copilot-export-markdown): surface MSAL fallback attempts in diagnostics
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5 2026-08-26 04:16:57Z)**_
+
+Committed as `d8b86d5` (v0.7.0). This round resolved three unknowns at once:
+
+**Confirmed working**: Both token sources now produce tokens — including the MSAL HKDF → AES-GCM cache decryption, which was pure guesswork until now. `GetConversation` was genuinely called. That whole mechanism is validated.
+
+**Two bugs found from your data**:
+- The real scope is `.../sydney/**v2**/.default` — my hardcoded `sydney/.default` was missing a path segment, so it matched nothing.
+- MSAL cache keys are **pipe**-delimited (`msal.3|…|accesstoken|…|{scope}|`), not dash-delimited — my parser never actually extracted the scope field, which is why your report showed full raw keys instead of clean scopes.
+
+**And a bug in my own diagnostics**: the HTTP status was recorded *after* `await res.json()`, so an empty body threw and took the status with it — that's why we couldn't tell 401 from 403 from 204. Now it reads `res.text()` first and parses manually, so status/statusText/content-type/length always get recorded.
+
+**New this round**: `GM_xmlhttpRequest` as a second transport per token. Your cross-origin request to `substrate.office.com` carries custom headers (`x-anchormailbox`, `x-scenario`), which forces a CORS preflight — the page succeeding at that doesn't mean *our* `fetch` will. GM_xhr sidesteps CORS entirely. Note this adds `@grant GM_xmlhttpRequest` and `@connect substrate.office.com`, so **Tampermonkey will likely prompt you to approve the new permissions on update**.
+
+**Next run**: the empty-body case will now report its actual HTTP status, and if CORS was the blocker, the GM_xhr attempt should just succeed outright.

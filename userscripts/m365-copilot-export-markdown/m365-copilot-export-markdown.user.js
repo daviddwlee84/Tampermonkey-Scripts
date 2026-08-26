@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         M365 Copilot Chat Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.6.0
+// @version      0.7.0
 // @description  【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——尚未經真實帳號驗證
 // @author       Da-Wei Lee
 // @license      MIT
@@ -16,6 +16,8 @@
 // @grant        GM_getValue
 // @grant        GM_deleteValue
 // @grant        GM_openInTab
+// @grant        GM_xmlhttpRequest
+// @connect      substrate.office.com
 // @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/chat-export.js
 // @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/export-ui.js
 // @updateURL    https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js
@@ -71,9 +73,13 @@
  *      配合 cookie `msal.cache.encryption` 做 HKDF → AES-GCM 解密。這是 MSAL 自己的
  *      公開「cache encryption」機制，不是漏洞——單純是讀使用者自己瀏覽器裡、自己帳號
  *      已登入的 token 來呼叫網站自己的 API，跟另外三支腳本讀 `Authorization` header
- *      是同一類事情。實測發現寫死的 scope 對不上任何一把 token，所以改成分層比對。
- *   拿到的 token 一把被打回票（401/403）就換下一把再試。token 本身只存在記憶體裡，
- *   **絕對不會進 diagnostics 或剪貼簿**（那邊只記 key 名稱與型別，不記值）。
+ *      是同一類事情。實測確認真正的 scope 是
+ *      `https://substrate.office.com/sydney/v2/.default`（有 `v2/`，之前寫死的版本少了
+ *      這段所以永遠對不上），cache key 用 `|` 分隔而不是 `-`。
+ *   拿到的 token 一把被打回票就換下一把，每一把再分別用 `fetch` 與 `GM_xmlhttpRequest`
+ *   各試一次（跨網域 + 自訂 header 會觸發 CORS preflight，GM_xhr 不受此限）。
+ *   token 本身只存在記憶體裡，**絕對不會進 diagnostics 或剪貼簿**
+ *   （那邊只記 key 名稱與型別，不記值）。
  *
  * **Copy Diagnostics**：因為不確定真實 API 長怎樣，這支腳本會把「攔到的每一個 JSON
  * 回應」的 `{url, status, shape}` 記下來，一鍵複製——`shape` 是巢狀 key 名稱／型別／
@@ -84,7 +90,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.6.0';
+  const VERSION = '0.7.0';
   const NS = 'm365-copilot-export-md';
   const EXPORTER = `m365-copilot-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[m365-copilot-export-markdown]';
@@ -95,7 +101,7 @@
 
   // M365 Copilot Chat 的第一方 app id，來自 ganyuke/copilot-exporter 的反推結果。
   const MSAL_CLIENT_ID = 'c0ab8ce9-e9a0-42e7-b064-33d422df41f1';
-  const MSAL_TOKEN_SCOPE = 'https://substrate.office.com/sydney/.default';
+  const MSAL_TOKEN_SCOPE = 'https://substrate.office.com/sydney/v2/.default';
 
   // ---------------------------------------------------------------- 設定
 
@@ -442,18 +448,15 @@
   }
 
   /**
-   * MSAL 的 access token cache key 長這樣：
-   * `{homeAccountId}-{environment}-accesstoken-{clientId}-{realm}-{target}`，
-   * `target` 就是 scope。實測發現寫死的 `MSAL_TOKEN_SCOPE` 對不上任何一把 token，
-   * 所以改成分層比對；同時把「實際有哪些 scope」抓出來回報，才知道該對準什麼。
+   * MSAL 的 access token cache key 實測長這樣（用 `|` 分隔，不是 `-`）：
+   * `msal.3|{homeAccountId}|{environment}|accesstoken|{clientId}|{realm}|{target}|`
+   * ——`target` 就是 scope，最後還有一個結尾的 `|`。
    */
-  function scopeOfTokenKey(key, clientId) {
-    const marker = `-accesstoken-${clientId}-`;
-    const index = key.indexOf(marker);
-    if (index < 0) return key;
-    const rest = key.slice(index + marker.length);
-    const dash = rest.indexOf('-'); // 跳過 realm，剩下的就是 scope
-    return dash < 0 ? rest : rest.slice(dash + 1);
+  function scopeOfTokenKey(key) {
+    const parts = String(key).split('|');
+    const index = parts.indexOf('accesstoken');
+    // accesstoken 之後是 clientId、realm，再來才是 target(scope)
+    return index >= 0 && parts.length > index + 3 ? parts[index + 3] : String(key);
   }
 
   async function getMsalAccessToken(msalIds) {
@@ -478,7 +481,7 @@
     // scope 是權限字串（不是 token 本身），記進 diagnostics 不會外洩 secret。
     rememberAttempt(
       'MSAL token cache 裡實際有的 scope',
-      accessTokenKeys.map((key) => scopeOfTokenKey(key, msalIds.clientId)).join(' | ') || '(空)'
+      accessTokenKeys.map((key) => scopeOfTokenKey(key)).join(' | ') || '(空)'
     );
 
     const entryRaw = pageWin.localStorage.getItem(scopedKey);
@@ -518,6 +521,32 @@
     return candidates;
   }
 
+  /**
+   * `GM_xmlhttpRequest` 版的請求：跨網域打 substrate.office.com、又帶自訂 header，
+   * 一定會觸發 CORS preflight——頁面自己打得通不代表我們打得通（`Origin` 一樣，
+   * 但瀏覽器對 userscript 發的 `fetch` 一樣照 CORS 規則走）。GM_xhr 不受 CORS 限制，
+   * 拿來當 `fetch` 失敗後的第二條路。回傳跟 fetch 一樣的 `{status, statusText, raw}`。
+   */
+  function gmRequest(url, headers) {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method: 'GET',
+        url,
+        headers,
+        onload: (res) =>
+          resolve({
+            status: res.status,
+            statusText: res.statusText || '',
+            raw: res.responseText || '',
+            contentType:
+              /content-type:\s*(.+)/i.exec(res.responseHeaders || '')?.[1]?.trim() || '(none)',
+          }),
+        onerror: () => reject(new Error('GM_xmlhttpRequest 失敗（網路層）')),
+        ontimeout: () => reject(new Error('GM_xmlhttpRequest 逾時')),
+      });
+    });
+  }
+
   async function fromLoggedInHistory(conversationId) {
     if (!conversationId) return null;
     let msalIds;
@@ -538,6 +567,7 @@
     const requestObj = { conversationId, source: 'officeweb', traceId: crypto.randomUUID() };
     const url = `https://substrate.office.com/m365Copilot/GetConversation?request=${encodeURIComponent(JSON.stringify(requestObj))}`;
 
+    // 每一把 token 都先用 fetch 試、失敗再用 GM_xhr 試（後者不受 CORS 限制）。
     for (const candidate of candidates) {
       const headers = {
         authorization: `Bearer ${candidate.token}`,
@@ -546,20 +576,60 @@
         'x-scenario': 'OfficeWebIncludedCopilot',
       };
 
-      try {
-        const res = await fetch(url, { headers });
-        const json = await res.json();
-        rememberDiagnostics(`${url} [${candidate.source}]`, res.status, json);
-        if (!res.ok) {
-          log('GetConversation failed:', res.status, candidate.source);
-          continue; // 換下一把 token 再試
+      for (const transport of ['fetch', 'GM_xhr']) {
+        const label = `${candidate.source} / ${transport}`;
+        try {
+          let status;
+          let statusText;
+          let raw;
+          let contentType;
+
+          if (transport === 'fetch') {
+            const res = await fetch(url, { headers });
+            // 先讀 text 再自己 parse：直接 `res.json()` 的話，遇到空 body 會丟
+            // 「Unexpected end of JSON input」，連 HTTP status 都被蓋掉看不到——
+            // 實測就是這樣卡住的，完全不知道到底回了 401 還是 204。
+            raw = await res.text();
+            status = res.status;
+            statusText = res.statusText;
+            contentType = res.headers.get('content-type') || '(none)';
+          } else {
+            const res = await gmRequest(url, headers);
+            ({ status, statusText, raw, contentType } = res);
+          }
+
+          if (!raw) {
+            rememberAttempt(
+              `GetConversation 回空 body（${label}）`,
+              `HTTP ${status} ${statusText} | content-type: ${contentType}`
+            );
+            continue; // 換下一個 transport / 下一把 token
+          }
+
+          let json;
+          try {
+            json = JSON.parse(raw);
+          } catch {
+            rememberAttempt(
+              `GetConversation 回的不是 JSON（${label}）`,
+              `HTTP ${status} ${statusText} | content-type: ${contentType} | ${raw.length} bytes`
+            );
+            continue;
+          }
+
+          rememberDiagnostics(`${url} [${label}]`, status, json);
+          if (status < 200 || status >= 300) {
+            log('GetConversation failed:', status, label);
+            continue;
+          }
+          const messages = findMessageList(json);
+          if (messages) return { url, data: json, messages };
+          rememberAttempt('GetConversation 回 2xx 但找不到訊息列表', label);
+        } catch (error) {
+          // fetch 丟例外通常代表 CORS 被擋（跨網域 + 自訂 header 會觸發 preflight）
+          log('GetConversation threw:', error.message);
+          rememberAttempt(`GetConversation 呼叫失敗（${label}）`, error.message);
         }
-        const messages = findMessageList(json);
-        if (messages) return { url, data: json, messages };
-        rememberAttempt('GetConversation 回 2xx 但找不到訊息列表', candidate.source);
-      } catch (error) {
-        log('GetConversation threw:', error.message);
-        rememberAttempt(`GetConversation 呼叫失敗（${candidate.source}）`, error.message);
       }
     }
     return null;
