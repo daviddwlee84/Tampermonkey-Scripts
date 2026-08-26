@@ -2,15 +2,18 @@
 
 ## ⚠️ 這支是實驗性的
 
-已經在真實帳號上實測過七輪（見下面各次紀錄），結論是：**Microsoft 的 API 這條路走不通**
-（`GetConversation` 一律回 403，換 token、換 transport 都一樣），所以 v0.8.0 起改成
-**直接讀畫面上 render 出來的內容**。這代表：
+已經在真實帳號上實測八輪（見下面各次紀錄）。結論：**Microsoft 的 API 這條路走不通**
+（`GetConversation` 一律回 403，換 token、換 transport 都一樣；拿別的 token 會回 401，
+所以 403 是「這個 endpoint 不接受非官方前端」而不是 token 有問題）。
+v0.8.0 起改成**直接讀畫面上 render 出來的內容**，v0.9.0 已經對準真實版面、
+在使用者的帳號上成功匯出過。這代表：
 
 - 匯出的內容**可能不完整**——如果訊息列表是 virtualized 的，沒 render 出來的抓不到。
   輸出會標示「從畫面擷取，可能不完整」，但腳本沒辦法自己知道少了幾則。
-- 讀畫面的啟發式**還沒在真實 M365 Copilot DOM 上驗證過**（只用合成頁面測過），
-  實際的 `data-testid` / class 可能對不上。抓不到或抓歪時，`Copy Diagnostics` 會列出
-  掃到的候選節點群組，回報那個就能對準。
+  **長對話請先整串捲到最上面再匯出。**
+- 靠的是 M365 Copilot 的 class 名稱（`fai-UserMessage` / `fai-CopilotMessage`），
+  Microsoft 改版就可能失效；失效時會退回通用啟發式，再不行就老實報錯。
+  抓歪時 `Copy Diagnostics` 會列出掃到的候選節點群組，回報那個就能重新對準。
 
 把一整段 Microsoft 365 Copilot Chat 對話匯成 Markdown，格式跟
 [`chatgpt-export-markdown`](../chatgpt-export-markdown/) 一致（仿 SpecStory 的 chat history），
@@ -381,6 +384,42 @@ HTML 反推回來會失真）。但那是**在 API 走得通的前提下**的取
 所以啟發式有可能對不上。如果 `Copy Markdown` 抓不到或抓歪了，`Copy Diagnostics` 裡
 會有一筆 `[fallback] DOM 掃描找到的候選群組`，列出掃到哪些節點群組與數量——
 把那個回報就能對準真實結構調。
+
+## 第八次真實測試：讀畫面成功（v0.9.0，2026-08-26）
+
+**`Copy Markdown` 第一次真的匯出了對話內容**（來源顯示 `dom-scrape (可能不完整)`）。
+API 那邊依舊全滅，而且這次多了一個資訊：拿 Graph 的 token 去打會回 **401**、
+拿 sydney 的 token 回 **403**——代表 403 不是「token 不對」而是
+「token 對、但這個 endpoint 不接受非官方前端」，API 這條路可以確定放棄了。
+
+不過第一版的輸出有三個問題，diagnostics 剛好把真實 class 名稱吐出來了：
+
+```text
+[fallback] DOM 掃描找到的候選群組
+  div[MessageListContainer] ×1 | div[m365-chat-llm-web-ui-chat-message] ×1
+  | div[fai-UserMessage] ×1 | h5[fai-UserMessage__accessibleHeading] ×1
+  | div[fai-UserMessage__message] ×1 | div[fai-CopilotMessage] ×1
+  | h6[fai-CopilotMessage__accessibleHeading] ×1 | div[fai-CopilotMessage__content] ×1
+  | div[fai-CopilotMessage__actions] ×1 | …
+```
+
+1. **整串對話被折成一則訊息**（標成 Assistant，裡面同時有「You said:」與
+   「Copilot said:」）。原因是通用啟發式的「往下拆一層」只拆了一層，但真實結構是
+   容器裡還有容器（`MessageListContainer` → `m365-chat-llm-web-ui-chat-message` →
+   訊息），拆一層之後還是只有一個節點就停了。**改成一路往下拆到同一層有多個候選為止。**
+2. **`##### You said:` / `###### Copilot said:` 跑進正文**——那是給螢幕閱讀器用的
+   `__accessibleHeading`，角色我們自己判斷得出來，不需要它。連同訊息底下那排
+   複製／讚／倒讚按鈕（`__actions`）一起在轉 Markdown 前先拆掉。
+3. **一堆孤兒 `**`**：畫面上的 icon / spacer 是空的 `<b>` `<i>`，轉出來變成 `****`。
+   改成內容為空時整個丟掉。
+
+**同時針對真實版面加了精準選擇器**（不再只靠猜）：
+`.fai-UserMessage` / `.fai-CopilotMessage` 是訊息外框，
+`.fai-UserMessage__message` / `.fai-CopilotMessage__content` 是內文，
+角色直接從 class 判斷。通用啟發式保留在後面當退路，萬一 Microsoft 改 class 名稱還能撐。
+
+用 Playwright 照上面回報的真實結構重建頁面驗證：**兩條路（精準選擇器、通用啟發式）
+都正確輸出 2 則訊息、角色正確、沒有 a11y 標題、沒有按鈕、沒有孤兒 `**`。**
 
 ## 已知限制
 

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         M365 Copilot Chat Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.8.0
-// @description  【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——尚未經真實帳號驗證
+// @version      0.9.0
+// @description  【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——改讀畫面，內容可能不完整
 // @author       Da-Wei Lee
 // @license      MIT
 // @match        https://m365.cloud.microsoft/*
@@ -27,7 +27,10 @@
 /* global createExportPanel, downloadText, filenameFor, jsonFence, renderTranscript, sourcesBlock */
 
 /**
- * ⚠️ 實驗性：這支腳本完全沒有在真實 M365 Copilot 帳號上跑過，隨時可能整支不能用。
+ * ⚠️ 實驗性：已在真實帳號上實測八輪。結論是 Microsoft 的 API 這條路走不通
+ * （`GetConversation` 一律回 403，換 token、換 transport 都一樣），所以實際能用的是
+ * 最後那條「讀畫面」——見下面 `fromDom`。匯出內容可能不完整（virtualized 列表），
+ * 輸出會標示清楚。
  *
  * 背景：這是 `copilot-export-markdown`（消費版 copilot.microsoft.com）的姊妹腳本，
  * 目標是 Microsoft 365 的企業版／個人版 Copilot Chat。這兩個產品**不是同一個 API**：
@@ -96,7 +99,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.8.0';
+  const VERSION = '0.9.0';
   const NS = 'm365-copilot-export-md';
   const EXPORTER = `m365-copilot-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[m365-copilot-export-markdown]';
@@ -800,27 +803,35 @@
         return '\n';
       case 'hr':
         return '\n\n---\n\n';
+      // 空的行內標記要整個丟掉，不然畫面上的 icon/spacer 會變成一堆孤兒 `**`
       case 'strong':
-      case 'b':
-        return `**${kids().trim()}**`;
+      case 'b': {
+        const text = kids().trim();
+        return text ? `**${text}**` : '';
+      }
       case 'em':
-      case 'i':
-        return `*${kids().trim()}*`;
+      case 'i': {
+        const text = kids().trim();
+        return text ? `*${text}*` : '';
+      }
       case 'del':
-      case 's':
-        return `~~${kids().trim()}~~`;
+      case 's': {
+        const text = kids().trim();
+        return text ? `~~${text}~~` : '';
+      }
       case 'a': {
         const href = node.getAttribute('href') || '';
         const text = kids().trim();
-        return href ? `[${text}](${href})` : text;
+        return href && text ? `[${text}](${href})` : text;
       }
       case 'img':
         return `![image](${node.getAttribute('src') || ''})`;
-      case 'code':
+      case 'code': {
         // <pre><code> 由 pre 那邊整塊處理，這裡只管行內的
-        return node.parentElement && node.parentElement.tagName.toLowerCase() === 'pre'
-          ? kids()
-          : `\`${kids().trim()}\``;
+        if (node.parentElement && node.parentElement.tagName.toLowerCase() === 'pre') return kids();
+        const text = kids().trim();
+        return text ? `\`${text}\`` : '';
+      }
       case 'pre': {
         const className = node.querySelector('code')?.className || '';
         const lang = /language-([\w+-]+)/.exec(className)?.[1] || '';
@@ -875,8 +886,20 @@
     }
   }
 
+  /**
+   * 這些是「畫面上有、但不是對話內容」的東西，轉 Markdown 之前要先拆掉：
+   * - `__accessibleHeading`：給螢幕閱讀器的「You said:」「Copilot said:」，
+   *   角色我們自己會判斷，留著只會變成多餘的 `##### You said:`
+   * - `__actions`：訊息底下那排複製／讚／倒讚按鈕
+   */
+  const DOM_NOISE_SELECTOR =
+    '[class*="accessibleHeading"], [class*="__actions"], button, [role="button"], [aria-hidden="true"]';
+
   function htmlToMarkdown(el) {
-    return nodeToMarkdown(el)
+    // 在 clone 上動刀，不要碰到真的頁面
+    const clone = el.cloneNode(true);
+    for (const noise of clone.querySelectorAll(DOM_NOISE_SELECTOR)) noise.remove();
+    return nodeToMarkdown(clone)
       .replace(/[ \t]+\n/g, '\n')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
@@ -906,8 +929,49 @@
     return `${el.tagName.toLowerCase()}[${token}]`;
   }
 
+  /**
+   * 真實 M365 Copilot Chat 的 class 名稱（v0.8.0 的 diagnostics 回報出來的）：
+   * `fai-UserMessage` / `fai-CopilotMessage` 就是一則訊息的外框，
+   * 裡面 `fai-UserMessage__message` / `fai-CopilotMessage__content` 才是內文。
+   * 有明確的選擇器就不要靠啟發式猜——猜出來的會把整串對話折成一則。
+   */
+  const M365_MESSAGE_SELECTOR = '.fai-UserMessage, .fai-CopilotMessage';
+  const M365_BODY_SELECTOR = '.fai-UserMessage__message, .fai-CopilotMessage__content';
+
+  function fromKnownDomLayout(ownRoot) {
+    const nodes = Array.from(document.querySelectorAll(M365_MESSAGE_SELECTOR)).filter(
+      (el) => !(ownRoot && ownRoot.contains(el))
+    );
+    if (nodes.length === 0) return null;
+
+    const messages = nodes
+      .map((el) => {
+        const className = typeof el.className === 'string' ? el.className : '';
+        const author = /fai-UserMessage/.test(className) ? 'user' : 'assistant';
+        // 內文在專屬的子節點裡；找不到就退回整個訊息框
+        const body = el.querySelector(M365_BODY_SELECTOR) || el;
+        return { author, text: htmlToMarkdown(body), createdAt: '' };
+      })
+      .filter((message) => message.text.trim());
+
+    if (messages.length === 0) return null;
+    rememberAttempt('DOM 掃描', `用 M365 Copilot 已知的 class 抓到 ${messages.length} 則訊息`);
+    return messages;
+  }
+
   function fromDom() {
     const ownRoot = document.getElementById(`${NS}-root`);
+
+    // 先走已知版面（準確），不行才退回通用啟發式（可能歪）
+    const known = fromKnownDomLayout(ownRoot);
+    if (known) {
+      return {
+        url: location.href,
+        data: { chatName: document.title || '', domScrape: true },
+        messages: known,
+      };
+    }
+
     const hits = [];
     for (const el of document.querySelectorAll('*')) {
       // 一定要排掉自己注入的 UI，否則會把自己的按鈕文字當成對話內容
@@ -941,14 +1005,16 @@
     // 取「最外層」的候選：被其他候選包住的都丟掉，避免同一則訊息被算很多次。
     let nodes = hits.filter((el) => !hits.some((other) => other !== el && other.contains(el)));
 
-    // 但如果最外層只剩一個、裡面還有別的候選，那個八成是整串對話的容器
-    // （例如 class 含 "messages"），要再往下拆一層，否則整篇會變成一則訊息。
-    if (nodes.length === 1) {
-      const inner = hits.filter((el) => el !== nodes[0] && nodes[0].contains(el));
-      const innerOuter = inner.filter(
-        (el) => !inner.some((other) => other !== el && other.contains(el))
-      );
-      if (innerOuter.length > 1) nodes = innerOuter;
+    // 最外層只剩一個時，那是整串對話的容器（`MessageListContainer` 之類），
+    // 要一路往下拆到「同一層有多個候選」為止——實測時只拆一層不夠，
+    // 容器外面還包著容器，結果整篇被折成一則訊息。
+    let guard = 0;
+    while (nodes.length === 1 && guard < 10) {
+      guard += 1;
+      const parent = nodes[0];
+      const inner = hits.filter((el) => el !== parent && parent.contains(el));
+      if (inner.length === 0) break;
+      nodes = inner.filter((el) => !inner.some((other) => other !== el && other.contains(el)));
     }
 
     // 照 DOM 順序排（就是畫面上的順序）
