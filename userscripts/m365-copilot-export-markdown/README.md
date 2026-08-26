@@ -188,16 +188,49 @@ JSON.parse 攔，只能看到 `binaryFrame: true, bytes: N`），要嘛這個對
 SSR/hydration 埋在初始 HTML 裡、載入後不再額外請求——那種情況攔截這條路本質上就
 攔不到，必須另外想辦法（例如讀頁面自己的 in-memory store/DOM）。
 
+## 第四次真實測試（v0.5.0，2026-08-26）
+
+再跑一次 `Copy Diagnostics`（沒有另外按 `Copy Markdown`），這次攔到 35 筆——
+**完全沒有出現任何 `[ws] wss://...` 條目**。
+
+這件事本身是個很有用的負面訊號。追查後發現一個之前沒注意到的盲點：**`Copy
+Diagnostics` 只回報「被動攔到的網路回應」，不會觸發 `Copy Markdown` 才會用到的
+MSAL / `GetConversation` fallback**——三輪下來 diagnostics 裡都沒出現
+`GetConversation`，不代表那條路失敗了，而是**根本沒被嘗試過**，因為使用者一直只按
+`Copy Diagnostics`。而 fallback 失敗時原本只有 `console.log`，`Copy Diagnostics`
+也看不到，等於這條路徑完全是黑箱。
+
+沒有 `[ws]` 條目本身有兩種可能：(a) 這個 conversation 頁面只是**查看歷史**，
+Chathub／SignalR 這類即時連線可能只在「主動傳訊息、等串流回覆」時才建立，單純看歷史
+不會開；或 (b) 連線是在 iframe／Worker 裡建立的，我們在最外層 `unsafeWindow` 上
+patch 的 `WebSocket` 建構子看不到。目前無法只憑這次資料分辨是哪一種。
+
+**這次修的**：
+
+1. `Copy Diagnostics` 現在會**自己 best-effort 跑一次 MSAL fallback**（不拋錯、
+   不影響剪貼簿內容），這樣單按一次就能同時看到「攔截到的東西」跟「fallback 到底有
+   沒有被嘗試、失敗在哪一步」，不用再另外按 `Copy Markdown` 或開 DevTools console。
+2. MSAL 帳號／token 取得失敗、`GetConversation` 呼叫本身丟例外，這兩種情況現在都會
+   多記一筆 `[fallback] ...` 進 diagnostics（只有錯誤訊息，不含 token 內容）。
+
+**下一步**：再跑一次 `Copy Diagnostics`。這次應該會出現一筆 `[fallback] ...` 的條目
+（不管成功或失敗），才能真的知道 MSAL 這條路走到哪一步卡住——如果卡在「MSAL
+帳號/token 取得失敗」，八成是 cache key 格式或 scope 猜錯；如果走到
+`GetConversation` 卻拿到非 2xx，至少能看到真正的錯誤 shape。
+
 ## 已知限制
 
-- `GetConversation` + MSAL 解密那套仍是**猜測**，三輪測試都沒能驗證到它
-  （`conversationId` 一開始解析不出來，fallback 沒被觸發），還需要再測一次。
+- `GetConversation` + MSAL 解密那套仍是**猜測**，四輪測試下來都沒真正驗證到——
+  一開始是 `conversationId` 解析不出來，後來發現是根本沒被觸發（`Copy Diagnostics`
+  不會觸發它），這次已經讓 `Copy Diagnostics` 自己去跑一次，還需要再測一次確認。
 - share 連結沒有任何已知的直接呼叫方式，完全依賴攔截；攔不到就會老實報錯，不會假裝有資料。
 - `copilot.cloud.microsoft` 與 `m365.cloud.microsoft` 是否真的共用同一套後端 API 未知。
 - 靠的是私有 API 與 MSAL 內部快取格式（`msal.3.*`），Microsoft 改版就可能整支失效
   （見 [`docs/06`](../../docs/06-sandbox-and-unsafewindow.md)）。
-- **WebSocket 攔截只解得開文字／JSON frame**：如果對話走的是二進位協定
-  （Fluid Framework 那種），現在只能記大小、看不到內容——見上面「第三次真實測試」。
+- **WebSocket 攔截只解得開文字／JSON frame，而且只看得到最外層 window 的連線**：
+  如果對話走的是二進位協定（Fluid Framework 那種），現在只能記大小、看不到內容；
+  如果連線是在 iframe／Worker 裡建立的，現在的 patch 完全看不到——見上面
+  「第四次真實測試」。
 - 用 `@require` 引入 [`shared/`](../../shared/)，所以安裝時多一個
   raw.githubusercontent.com 的網路相依。
 

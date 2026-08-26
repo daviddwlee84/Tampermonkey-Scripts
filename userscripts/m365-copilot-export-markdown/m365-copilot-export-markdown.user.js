@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         M365 Copilot Chat Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.4.0
+// @version      0.5.0
 // @description  【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——尚未經真實帳號驗證
 // @author       Da-Wei Lee
 // @license      MIT
@@ -79,7 +79,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.4.0';
+  const VERSION = '0.5.0';
   const NS = 'm365-copilot-export-md';
   const EXPORTER = `m365-copilot-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[m365-copilot-export-markdown]';
@@ -188,8 +188,7 @@
       if (depth <= 0) return 'object';
       const entries = Object.entries(value);
       const shown = entries.slice(0, DIAGNOSTICS_KEYS_LIMIT);
-      const more =
-        entries.length > shown.length ? `, …+${entries.length - shown.length} more` : '';
+      const more = entries.length > shown.length ? `, …+${entries.length - shown.length} more` : '';
       const inner = shown.map(([key, v]) => `${key}: ${describeShape(v, depth - 1)}`).join(', ');
       return `{ ${inner}${more} }`;
     }
@@ -201,6 +200,19 @@
       url,
       status,
       shape: describeShape(json, SHAPE_DEPTH),
+      at: new Date().toISOString(),
+    });
+    if (diagnostics.length > DIAGNOSTICS_LIMIT) diagnostics.shift();
+  }
+
+  // MSAL fallback（`fromLoggedInHistory`）任何一步失敗之前只有 console.log，
+  // Copy Diagnostics 完全看不到——之前測了三輪都不確定這條路到底有沒有被嘗試過。
+  // 這裡把失敗原因也記進同一份 diagnostics，不用開 DevTools 就看得到。
+  function rememberAttempt(label, detail) {
+    diagnostics.push({
+      url: `[fallback] ${label}`,
+      status: 'info',
+      shape: String(detail),
       at: new Date().toISOString(),
     });
     if (diagnostics.length > DIAGNOSTICS_LIMIT) diagnostics.shift();
@@ -317,7 +329,9 @@
 
     function PatchedWebSocket(url, protocols) {
       const ws =
-        protocols === undefined ? new OriginalWebSocket(url) : new OriginalWebSocket(url, protocols);
+        protocols === undefined
+          ? new OriginalWebSocket(url)
+          : new OriginalWebSocket(url, protocols);
       ws.addEventListener('message', (event) => {
         try {
           handleWsMessage(String(url), event.data);
@@ -427,6 +441,7 @@
       token = await getMsalAccessToken(msalIds);
     } catch (error) {
       log('MSAL fallback unavailable:', error.message);
+      rememberAttempt('MSAL 帳號/token 取得失敗', error.message);
       return null;
     }
 
@@ -451,6 +466,7 @@
       return messages ? { url, data: json, messages } : null;
     } catch (error) {
       log('GetConversation fallback threw:', error.message);
+      rememberAttempt('GetConversation 呼叫失敗', error.message);
       return null;
     }
   }
@@ -681,7 +697,19 @@
     }
   }
 
-  function copyDiagnostics() {
+  async function copyDiagnostics() {
+    // 之前測試發現：只按 Copy Diagnostics 看不出 MSAL/GetConversation fallback 有沒有
+    // 被嘗試過、失敗在哪一步——那條路只有 Copy Markdown 才會觸發。這裡先 best-effort
+    // 跑一次（不拋錯、不影響剪貼簿內容），讓單一個 Copy Diagnostics 就看得到完整資訊。
+    const ids = currentIds();
+    if (!ids.shareId && ids.conversationId) {
+      try {
+        await fromLoggedInHistory(ids.conversationId);
+      } catch {
+        /* 失敗原因已經在 fromLoggedInHistory 內部記進 diagnostics 了 */
+      }
+    }
+
     if (diagnostics.length === 0) {
       GM_setClipboard('（這次頁面存活期間沒有攔到任何 JSON 回應）', 'text');
       ui.setStatus('沒有攔到任何 JSON 回應——把這個結果回報也是有用的資訊。');
