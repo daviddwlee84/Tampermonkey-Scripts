@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         M365 Copilot Chat Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.1.0
+// @version      0.2.0
 // @description  【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——尚未經真實帳號驗證
 // @author       Da-Wei Lee
 // @license      MIT
@@ -72,7 +72,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.1.0';
+  const VERSION = '0.2.0';
   const NS = 'm365-copilot-export-md';
   const EXPORTER = `m365-copilot-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[m365-copilot-export-markdown]';
@@ -111,11 +111,26 @@
     const seen = new Set();
     let best = null;
 
+    // 實測中被 EventListener/telemetry 回應誤判成「一則訊息」：那類回應也常有
+    // 一個看起來像 author/content 的欄位，所以除了形狀，還要求有 id 或時間戳
+    // 這種訊息才會有的欄位，降低誤判機率。
+    const hasMessageIdentity = (item) =>
+      'messageId' in item ||
+      'id' in item ||
+      'createdAt' in item ||
+      'timestamp' in item ||
+      'create_time' in item;
+
     const isMessage = (item) =>
       !!item &&
       typeof item === 'object' &&
       (item.author || item.sender || item.role) &&
-      (Array.isArray(item.content) || typeof item.content === 'string' || 'text' in item);
+      (Array.isArray(item.content) || typeof item.content === 'string' || 'text' in item) &&
+      hasMessageIdentity(item);
+
+    // 已知的 telemetry / event-listener key：底下不管形狀多像都不要當成對話內容
+    // （實測到 EventListener/Client?EventId=ExecuteAction 的 result 欄位誤判過一次）。
+    const SKIP_KEYS = new Set(['telemetry', 'instrumentation', 'diagnostics']);
 
     const walk = (node, depth) => {
       if (!node || typeof node !== 'object' || depth > maxDepth || seen.has(node)) return;
@@ -128,7 +143,10 @@
         for (const item of node) walk(item, depth + 1);
         return;
       }
-      for (const value of Object.values(node)) walk(value, depth + 1);
+      for (const [key, value] of Object.entries(node)) {
+        if (SKIP_KEYS.has(key)) continue;
+        walk(value, depth + 1);
+      }
     };
 
     walk(root, 0);
@@ -141,18 +159,29 @@
   const diagnostics = [];
   const DIAGNOSTICS_LIMIT = 100;
 
+  // 實測中撞到一個扁平的 i18n 字典回應，Object.keys() 有上千個 key，
+  // 整份 Copy Diagnostics 因此爆量。這裡只留前 N 個 key + 總數。
+  const DIAGNOSTICS_KEYS_LIMIT = 20;
+
   function rememberDiagnostics(url, status, json) {
+    const allKeys = json && typeof json === 'object' ? Object.keys(json) : [];
     diagnostics.push({
       url,
       status,
-      keys: json && typeof json === 'object' ? Object.keys(json) : [],
+      keys: allKeys.slice(0, DIAGNOSTICS_KEYS_LIMIT),
+      keyCount: allKeys.length,
       at: new Date().toISOString(),
     });
     if (diagnostics.length > DIAGNOSTICS_LIMIT) diagnostics.shift();
   }
 
+  // 已知只是 telemetry / event-listener 回應的 URL：形狀再像也不當成對話內容
+  // （實測到 EventListener/Client?EventId=ExecuteAction 被誤判成一則訊息）。
+  const NON_CONVERSATION_URL_RE = /EventListener|OneCollector|\/events(\?|$)/i;
+
   function rememberPayload(url, status, payload) {
     rememberDiagnostics(url, status, payload);
+    if (NON_CONVERSATION_URL_RE.test(url)) return;
     const messages = findMessageList(payload);
     if (!messages) return;
     captured.push({ url, data: payload, messages });
@@ -356,6 +385,10 @@
       if (decoded)
         return { shareId: decoded.shareId || null, conversationId: decoded.conversationId || null };
     }
+    // 真實 URL 長這樣：/chat/conversation/<uuid>（之前只認得 /chat/share/<...>，
+    // 使用者實測後發現這條沒被認到，conversationId 一直是 null）。
+    const conversation = location.pathname.match(/\/chat\/conversation\/([^/?#]+)/);
+    if (conversation) return { shareId: null, conversationId: conversation[1] };
     return { shareId: null, conversationId: null };
   }
 
@@ -564,9 +597,10 @@
       ui.setStatus('沒有攔到任何 JSON 回應——把這個結果回報也是有用的資訊。');
       return;
     }
-    const lines = diagnostics.map(
-      (entry) => `${entry.at}  ${entry.status}  ${entry.url}\n  keys: [${entry.keys.join(', ')}]`
-    );
+    const lines = diagnostics.map((entry) => {
+      const more = entry.keyCount > entry.keys.length ? `, …+${entry.keyCount - entry.keys.length} more` : '';
+      return `${entry.at}  ${entry.status}  ${entry.url}\n  keys (${entry.keyCount}): [${entry.keys.join(', ')}${more}]`;
+    });
     const report = [
       `${EXPORTER} diagnostics`,
       `page: ${location.href}`,

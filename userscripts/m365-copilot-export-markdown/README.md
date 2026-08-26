@@ -93,14 +93,52 @@ base64 解出來是 `{"shareId":"…","conversationId":"…"}`——純前端路
 2. 如果 Diagnostics 顯示有攔到東西，再試 **Copy Markdown**，把結果（或錯誤訊息）回報。
 3. Tampermonkey / Violentmonkey 各跑一次。
 
+## 第一次真實測試（v0.2.0，2026-08-26）
+
+使用者在自己登入中的 `m365.cloud.microsoft/chat/conversation/<id>` 頁面上跑了一次：
+
+- **UI／攔截機制本身沒問題**：面板正常掛載、`Copy Diagnostics` 正確攔到 42 筆 JSON 回應。
+- **`Copy Markdown` 匯出出來的是垃圾**：只有一則
+  `Assistant: Execute action succeeded`——這其實是
+  `substrate.office.com/m365Copilot/EventListener/Client?EventId=ExecuteAction`
+  這個 telemetry 回應被形狀辨識誤判成「一則訊息」，不是真正的對話內容。
+- 42 筆 diagnostics 裡**沒有任何一筆長得像「取得對話訊息」的回應**——都是 telemetry
+  （`/events`、OneCollector）、設定（ECS Fluid config、search userconfig）、
+  Graph 特殊資料夾、Fluid Framework loader manifest 之類。這代表 M365 Copilot Chat
+  的即時對話內容很可能**不是走一般 fetch/XHR JSON**，而是走檔頭註解提過的 WebSocket
+  BizChat 協定（`wss://substrate.svc.cloud.microsoft/m365Copilot/Chathub/...`），
+  或是 Fluid Framework 的即時協作同步（診斷裡出現的
+  `res.cdn.office.net/fluid/prod/generic-loader/...manifest...json` 與
+  `ecs.office.com/config/v1/Fluid/...` 是這個假設的佐證）——這兩者都是攔 `fetch`/`XHR`
+  完全看不到的傳輸層。
+- 也確認了一個網址格式的認知落差：真實頁面走的是 `/chat/conversation/<uuid>`，
+  之前的 `currentIds()` 只認得 `/chat/share/<...>`，導致 `conversationId` 一直是
+  `null`、`GetConversation` fallback 根本沒機會被嘗試。
+
+**這次已經修的兩個 bug**：
+
+1. `currentIds()` 補上 `/chat/conversation/<id>` 的解析。
+2. `findMessageList()` 收緊：要求候選訊息額外有 `messageId`/`id`/`createdAt` 之類的
+   識別欄位、跳過 `telemetry`/`instrumentation` 這幾個 key 底下的內容、
+   `EventListener`/`OneCollector`/`/events` 這類 URL 直接排除在形狀辨識之外——
+   同時也修了 `Copy Diagnostics` 遇到超大扁平字典回應（上千個 key）時輸出爆量的問題。
+
+**還沒解的**：如果真正的對話走 WebSocket 或 Fluid 同步，光靠攔 `fetch`/`XHR`
+本質上看不到內容，這支腳本的核心策略對「即時查看自己的對話」這個情境可能就是不可行——
+需要再跑一次 `Copy Diagnostics` 確認上面兩個修正有沒有讓誤判消失，並且麻煩檢查瀏覽器
+Network 分頁裡同一個 session 有沒有 `wss://` 開頭的連線，才能確認是不是真的要另外攔
+WebSocket。
+
 ## 已知限制
 
-- 完全沒有實測過；`GetConversation` + MSAL 解密那套只是有真實佐證的**猜測**，不保證能跑。
+- `GetConversation` + MSAL 解密那套仍是**猜測**，這次測試沒能驗證到它（`conversationId`
+  之前解析不出來，fallback 沒被觸發），還需要再測一次。
 - share 連結沒有任何已知的直接呼叫方式，完全依賴攔截；攔不到就會老實報錯，不會假裝有資料。
 - `copilot.cloud.microsoft` 與 `m365.cloud.microsoft` 是否真的共用同一套後端 API 未知。
 - 靠的是私有 API 與 MSAL 內部快取格式（`msal.3.*`），Microsoft 改版就可能整支失效
   （見 [`docs/06`](../../docs/06-sandbox-and-unsafewindow.md)）。
-- 不碰 M365 Copilot 的 WebSocket 即時對話協定，只處理歷史紀錄／分享的 REST 資料。
+- **不碰 WebSocket / Fluid Framework 即時同步**——第一次真實測試顯示這很可能才是
+  M365 Copilot Chat 對話內容真正的傳輸層，見上面「第一次真實測試」。
 - 用 `@require` 引入 [`shared/`](../../shared/)，所以安裝時多一個
   raw.githubusercontent.com 的網路相依。
 
