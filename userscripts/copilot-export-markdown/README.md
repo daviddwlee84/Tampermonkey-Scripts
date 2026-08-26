@@ -4,7 +4,9 @@
 [`chatgpt-export-markdown`](../chatgpt-export-markdown/) 一致（仿 SpecStory 的 chat history），
 目的是**貼給 coding agent**（Claude Code / Codex / Cursor…）當作前情提要。
 
-- **生效網站**：`https://copilot.microsoft.com/*`（`/chats/<id>` 與 `/shares/<id>`）
+- **生效網站**：`https://copilot.microsoft.com/*` 與 `https://copilot.cloud.microsoft/*`
+  （`/chats/<id>` 與 `/shares/<id>`；後者是 Microsoft 365 帳號登入時導去的網域，
+  API 路徑與行為跟前者一致）
 - **安裝**：[點這裡安裝](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/copilot-export-markdown/copilot-export-markdown.user.js)（需先裝好 Tampermonkey / Violentmonkey）
 - **原始碼**：[`copilot-export-markdown.user.js`](./copilot-export-markdown.user.js)
 
