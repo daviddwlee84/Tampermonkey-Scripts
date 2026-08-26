@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.1.0
+// @version      0.1.1
 // @description  把整段 Gemini 對話匯成 Markdown（含 share 頁與 Agent Handoff），貼給 coding agent 用
 // @author       Da-Wei Lee
 // @license      MIT
@@ -47,7 +47,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.1.0';
+  const VERSION = '0.1.1';
   const NS = 'gemini-export-md';
   const EXPORTER = `gemini-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[gemini-export-markdown]';
@@ -782,7 +782,9 @@
     return {
       source: 'gemini',
       sourceLabel: 'Gemini',
-      title: (typeof meta?.[1] === 'string' && meta[1].trim()) || DEFAULT_TITLE,
+      // app 頁載歷史的 RPC 沒有 meta 那格，標題只能退回頁面本身；
+      // domTitle() 找不到可用的標題時一樣回 DEFAULT_TITLE，所以這條退路不會更糟。
+      title: (typeof meta?.[1] === 'string' && meta[1].trim()) || domTitle(),
       url: ctx.url,
       ids: {
         conversation_id: conversationId || ctx.conversationId || '',
