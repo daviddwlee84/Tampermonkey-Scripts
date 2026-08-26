@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         M365 Copilot Chat Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.2.0
+// @version      0.3.0
 // @description  【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——尚未經真實帳號驗證
 // @author       Da-Wei Lee
 // @license      MIT
@@ -65,14 +65,15 @@
  *   token 來呼叫網站自己的 API，跟另外三支腳本讀 `Authorization` header 是同一類事情。
  *
  * **Copy Diagnostics**：因為不確定真實 API 長怎樣，這支腳本會把「攔到的每一個 JSON
- * 回應」的 `{url, status, top-level keys}`（不含任何內容）記下來，一鍵複製。
- * 拿到真實帳號測試的人請先按這個，把結果回報，才能把 `findMessageList` / `normalize()`
- * 對準真實形狀微調。
+ * 回應」的 `{url, status, shape}` 記下來，一鍵複製——`shape` 是巢狀 key 名稱／型別／
+ * 陣列長度，最多五層，絕對不含任何實際內容/字串值，用來在不洩漏對話內容的前提下
+ * 找出訊息列表實際藏在哪一層。拿到真實帳號測試的人請先按這個，把結果回報，
+ * 才能把 `findMessageList` / `normalize()` 對準真實形狀微調。
  */
 (function () {
   'use strict';
 
-  const VERSION = '0.2.0';
+  const VERSION = '0.3.0';
   const NS = 'm365-copilot-export-md';
   const EXPORTER = `m365-copilot-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[m365-copilot-export-markdown]';
@@ -163,13 +164,37 @@
   // 整份 Copy Diagnostics 因此爆量。這裡只留前 N 個 key + 總數。
   const DIAGNOSTICS_KEYS_LIMIT = 20;
 
+  // 只回報「形狀」（key 名稱、型別、陣列長度），絕對不含任何實際內容/字串值——
+  // 目的是在不洩漏對話內容的前提下，多看幾層巢狀結構，才找得到訊息列表實際藏在哪裡
+  // （例如頂層只有 `store` / `__queryState` 這種泛用 wrapper 時，光看 top-level keys 沒用）。
+  // 5 層才夠看到 store → chats → item → author/content 這種常見巢狀深度；
+  // 每層最多列 DIAGNOSTICS_KEYS_LIMIT 個 key、陣列只展開第一個元素，所以深度加大
+  // 不會讓輸出爆量。
+  const SHAPE_DEPTH = 5;
+
+  function describeShape(value, depth) {
+    if (value === null || value === undefined) return String(value);
+    if (Array.isArray(value)) {
+      if (depth <= 0 || value.length === 0) return `array(${value.length})`;
+      return `array(${value.length})[${describeShape(value[0], depth - 1)}]`;
+    }
+    if (typeof value === 'object') {
+      if (depth <= 0) return 'object';
+      const entries = Object.entries(value);
+      const shown = entries.slice(0, DIAGNOSTICS_KEYS_LIMIT);
+      const more =
+        entries.length > shown.length ? `, …+${entries.length - shown.length} more` : '';
+      const inner = shown.map(([key, v]) => `${key}: ${describeShape(v, depth - 1)}`).join(', ');
+      return `{ ${inner}${more} }`;
+    }
+    return typeof value; // 只回型別（'string' / 'number' / 'boolean'），不含值本身
+  }
+
   function rememberDiagnostics(url, status, json) {
-    const allKeys = json && typeof json === 'object' ? Object.keys(json) : [];
     diagnostics.push({
       url,
       status,
-      keys: allKeys.slice(0, DIAGNOSTICS_KEYS_LIMIT),
-      keyCount: allKeys.length,
+      shape: describeShape(json, SHAPE_DEPTH),
       at: new Date().toISOString(),
     });
     if (diagnostics.length > DIAGNOSTICS_LIMIT) diagnostics.shift();
@@ -197,7 +222,14 @@
       return promise.then((response) => {
         try {
           const input = args[0];
-          const url = typeof input === 'string' ? input : input?.url || '';
+          // input 可能是 string／Request／URL 三種——URL 物件沒有 .url，只有 .href，
+          // 之前漏判這個，導致這類請求在 diagnostics 裡的 url 是空字串。
+          const url =
+            typeof input === 'string'
+              ? input
+              : input instanceof URL
+                ? input.href
+                : input?.url || '';
           if (!/json/.test(response.headers.get('content-type') || '')) return response;
           // body 只能讀一次，一定要 clone，否則網站自己就讀不到了。
           response
@@ -597,10 +629,9 @@
       ui.setStatus('沒有攔到任何 JSON 回應——把這個結果回報也是有用的資訊。');
       return;
     }
-    const lines = diagnostics.map((entry) => {
-      const more = entry.keyCount > entry.keys.length ? `, …+${entry.keyCount - entry.keys.length} more` : '';
-      return `${entry.at}  ${entry.status}  ${entry.url}\n  keys (${entry.keyCount}): [${entry.keys.join(', ')}${more}]`;
-    });
+    const lines = diagnostics.map(
+      (entry) => `${entry.at}  ${entry.status}  ${entry.url}\n  shape: ${entry.shape}`
+    );
     const report = [
       `${EXPORTER} diagnostics`,
       `page: ${location.href}`,

@@ -129,6 +129,34 @@ base64 解出來是 `{"shareId":"…","conversationId":"…"}`——純前端路
 Network 分頁裡同一個 session 有沒有 `wss://` 開頭的連線，才能確認是不是真的要另外攔
 WebSocket。
 
+## 第二次真實測試（v0.3.0，2026-08-26）
+
+同一個 session 再跑一次，這次攔到 35 筆：
+
+- **誤判修好了**：這次沒有再匯出「Execute action succeeded」那種垃圾，腳本老實回報
+  「抓不到對話資料」——代表上一輪的兩個修正有效。
+- **35 筆裡還是沒有任何一筆長得像對話內容**，但多了一個線索：出現了好幾筆 URL 是空字串、
+  `keys (2): [store, __queryState]` 的回應。追查後發現這其實是**攔截層自己的 bug**：
+  頁面用 `fetch(new URL(...))` 呼叫時，程式碼只認得 `input.url`（`Request` 物件才有這個
+  屬性），`URL` 物件其實是 `.href`，所以這幾筆的 `url` 一直被記成空字串——已修好。
+  `store` / `__queryState` 這個組合很像前端框架（React Query / RTK Query 之類）的
+  client-side store 序列化，**很可能是目前為止最有希望藏著對話資料的候選**，
+  但目前的 `keys` 只看得到最外層兩個 key，看不出裡面長怎樣。
+- 為了在不洩漏對話內容的前提下往裡面多看幾層，`Copy Diagnostics` 從「只列 top-level
+  key」升級成 **`shape`**：巢狀 key 名稱／型別（`string`/`number`/`array(N)`/`object`）
+  的樹狀結構，最多五層、陣列只展開第一個元素當樣本——完全不含任何字串值本身。
+
+**這次修的**：
+
+1. `fetch` 攔截修正 `URL` 物件的 `url` 判斷（之前漏掉，導致這幾筆網址是空字串）。
+2. `Copy Diagnostics` 從「top-level keys」升級成五層深的 `shape` 摘要。
+
+**下一步**：麻煩在同一個對話上**再跑一次 `Copy Diagnostics`**——這次 `store` /
+`__queryState`（以及所有空 URL 的回應）應該會有正確的網址、而且能看到裡面的巢狀結構，
+這樣才知道對話訊息到底是不是真的藏在 `store` 底下、藏在哪一層、欄位叫什麼名字。
+如果 `shape` 顯示 `store` 底下確實有一個訊息陣列，下一步就是把 `findMessageList()`
+對準那個真實形狀調整；如果還是沒有，才需要認真考慮 WebSocket／Fluid 那條路。
+
 ## 已知限制
 
 - `GetConversation` + MSAL 解密那套仍是**猜測**，這次測試沒能驗證到它（`conversationId`
