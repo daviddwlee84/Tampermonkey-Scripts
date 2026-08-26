@@ -157,16 +157,47 @@ WebSocket。
 如果 `shape` 顯示 `store` 底下確實有一個訊息陣列，下一步就是把 `findMessageList()`
 對準那個真實形狀調整；如果還是沒有，才需要認真考慮 WebSocket／Fluid 那條路。
 
+## 第三次真實測試（v0.4.0，2026-08-26）
+
+同一個 session 再跑一次，這次攔到 34 筆，`URL` 物件的修正生效了（`store`/`__queryState`
+那幾筆這次有正確的網址）：
+
+- **`store`/`__queryState` 是死路**：`url` 修好之後看到真正的網址是
+  `https://m365.cloud.microsoft/chat?...`，`shape` 也攤開了——裡面是
+  `conversationPageHistoryList.chats`，也就是**左側對話清單**（`conversationId`、
+  `chatName`、`createTimeUtc`… 這種每個對話一筆的 metadata），不是這個對話裡的訊息。
+- **意外撿到真正的訊息 schema**：`EventListener/Client?EventId=ExecuteAction`（那個
+  之前誤判成假對話、後來被過濾掉的 telemetry 回應）這次用 `shape` 攤開後，裡面剛好有
+  `data.messages: array(1)[{ status, executeActionResult, text, author, createdAt,
+  timestamp, messageId, messageType, offense, responseCode }]`——這證實了檔頭註解裡
+  從 `ganyuke/copilot-exporter` 反推的欄位命名（`messageId` / `author` / `text` /
+  `createdAt`）猜對了，只是這個特定 endpoint 不是我們要的那個。
+- **34 筆裡依然沒有任何一筆是「這個對話的訊息列表」**——三輪下來都一樣，加上
+  `Chathub`（SignalR hub 常見命名）與 `bizchat` app version 的線索，現在傾向認為
+  對話內容真的是走 WebSocket、不是 fetch/XHR 能看到的 JSON API。
+
+**這次加的**：不再只等使用者手動去 DevTools 的 Network → WS 分頁看，腳本直接
+**patch `WebSocket`**，把攔到的每個 frame 一樣拆開（SignalR 的 JSON Hub Protocol
+用 `\x1e` 分隔同一個 frame 裡的多筆訊息）丟進同一套形狀辨識／`Copy Diagnostics`，
+跟 `fetch`/`XHR` 那兩條路共用邏輯，不用另外實作。
+
+**下一步**：再跑一次 `Copy Diagnostics`——如果對話內容真的走 WebSocket，這次應該會
+出現 `[ws] wss://...` 開頭的條目，`shape` 就能直接看到訊息長怎樣；如果還是沒有，
+代表要嘛連 WebSocket 都不是（也許是 Fluid Framework 的二進位同步協定，這個沒辦法用
+JSON.parse 攔，只能看到 `binaryFrame: true, bytes: N`），要嘛這個對話本身就是純
+SSR/hydration 埋在初始 HTML 裡、載入後不再額外請求——那種情況攔截這條路本質上就
+攔不到，必須另外想辦法（例如讀頁面自己的 in-memory store/DOM）。
+
 ## 已知限制
 
-- `GetConversation` + MSAL 解密那套仍是**猜測**，這次測試沒能驗證到它（`conversationId`
-  之前解析不出來，fallback 沒被觸發），還需要再測一次。
+- `GetConversation` + MSAL 解密那套仍是**猜測**，三輪測試都沒能驗證到它
+  （`conversationId` 一開始解析不出來，fallback 沒被觸發），還需要再測一次。
 - share 連結沒有任何已知的直接呼叫方式，完全依賴攔截；攔不到就會老實報錯，不會假裝有資料。
 - `copilot.cloud.microsoft` 與 `m365.cloud.microsoft` 是否真的共用同一套後端 API 未知。
 - 靠的是私有 API 與 MSAL 內部快取格式（`msal.3.*`），Microsoft 改版就可能整支失效
   （見 [`docs/06`](../../docs/06-sandbox-and-unsafewindow.md)）。
-- **不碰 WebSocket / Fluid Framework 即時同步**——第一次真實測試顯示這很可能才是
-  M365 Copilot Chat 對話內容真正的傳輸層，見上面「第一次真實測試」。
+- **WebSocket 攔截只解得開文字／JSON frame**：如果對話走的是二進位協定
+  （Fluid Framework 那種），現在只能記大小、看不到內容——見上面「第三次真實測試」。
 - 用 `@require` 引入 [`shared/`](../../shared/)，所以安裝時多一個
   raw.githubusercontent.com 的網路相依。
 

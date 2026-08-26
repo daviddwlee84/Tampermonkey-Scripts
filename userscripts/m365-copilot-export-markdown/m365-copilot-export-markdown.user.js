@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         M365 Copilot Chat Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.3.0
+// @version      0.4.0
 // @description  【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——尚未經真實帳號驗證
 // @author       Da-Wei Lee
 // @license      MIT
@@ -44,6 +44,12 @@
  * `window.fetch`，跟目標 API 在哪個網域無關（不受同源限制：是頁面自己發的跨網域請求，
  * 我們只是攔截再照樣呼叫原本的）。
  *
+ * 兩輪真實測試下來，`fetch`/`XHR` 攔到的東西裡沒有任何一筆像「這個對話的訊息」，
+ * 卻看到 `Chathub`（SignalR hub 常見命名）與 `bizchat` app version 的線索，懷疑對話
+ * 內容真正是走 WebSocket。因此額外 patch `WebSocket`——攔到的每個 frame 一樣拆開
+ * （SignalR JSON Hub Protocol 用 `\x1e` 分隔同一個 frame 裡的多筆訊息）丟進同一套
+ * 形狀辨識／diagnostics，跟 `fetch`/`XHR` 那兩條路共用邏輯。
+ *
  * 次要 fallback（只給「登入中查看自己的歷史紀錄」用，覆蓋不到 share 連結）是從公開專案
  * ganyuke/copilot-exporter（MIT license，github.com/ganyuke/copilot-exporter）的 build
  * 產物反推出來的真實 API 事實——不是抄它的程式碼，是照這個 repo 一貫的風格自己刻，
@@ -73,7 +79,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.3.0';
+  const VERSION = '0.4.0';
   const NS = 'm365-copilot-export-md';
   const EXPORTER = `m365-copilot-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[m365-copilot-export-markdown]';
@@ -278,6 +284,58 @@
     };
 
     XHR.prototype.__m365ExportPatched = true;
+  }
+
+  // ------------------------------------------- 來源 1b：攔截 WebSocket（Chathub 猜測）
+  //
+  // 兩輪實測下來，fetch/XHR 攔到的東西裡沒有任何一筆像「這個對話的訊息」，反而看到
+  // `Chathub`（SignalR hub 常見命名）與 `bizchat` app version，懷疑對話內容真正是走
+  // WebSocket，而不是一般的 JSON API。SignalR 的 JSON Hub Protocol 用 `\x1e`
+  // （record separator）分隔同一個 frame 裡的多筆訊息，這裡照樣拆開再各自丟進
+  // `rememberPayload`（一樣會跑形狀辨識、一樣會被 telemetry URL 過濾）。
+
+  function handleWsMessage(url, data) {
+    if (typeof data === 'string') {
+      for (const part of data.split('\x1e')) {
+        if (!part) continue;
+        try {
+          rememberPayload(`[ws] ${url}`, 'message', JSON.parse(part));
+        } catch {
+          /* 不是 JSON（例如 SignalR 的 keepalive）就算了 */
+        }
+      }
+      return;
+    }
+    // 二進位 frame（例如 MessagePack）沒有額外的 lib 沒辦法解，只記大小當線索。
+    const bytes = data instanceof ArrayBuffer ? data.byteLength : data?.size;
+    rememberDiagnostics(`[ws] ${url}`, 'message', { binaryFrame: true, bytes });
+  }
+
+  function installWebSocketCapture() {
+    const OriginalWebSocket = pageWin.WebSocket;
+    if (typeof OriginalWebSocket !== 'function' || OriginalWebSocket.__m365ExportPatched) return;
+
+    function PatchedWebSocket(url, protocols) {
+      const ws =
+        protocols === undefined ? new OriginalWebSocket(url) : new OriginalWebSocket(url, protocols);
+      ws.addEventListener('message', (event) => {
+        try {
+          handleWsMessage(String(url), event.data);
+        } catch {
+          /* 攔截失敗不能影響網站本身 */
+        }
+      });
+      return ws;
+    }
+
+    PatchedWebSocket.prototype = OriginalWebSocket.prototype;
+    PatchedWebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
+    PatchedWebSocket.OPEN = OriginalWebSocket.OPEN;
+    PatchedWebSocket.CLOSING = OriginalWebSocket.CLOSING;
+    PatchedWebSocket.CLOSED = OriginalWebSocket.CLOSED;
+    PatchedWebSocket.__m365ExportPatched = true;
+
+    pageWin.WebSocket = PatchedWebSocket;
   }
 
   // --------------------------------------------- 來源 2：登入中歷史紀錄的 fallback
@@ -743,6 +801,7 @@
 
   installFetchCapture(); // 必須在網站發出請求之前，所以 @run-at document-start
   installXhrCapture();
+  installWebSocketCapture();
   registerMenu();
 
   function start() {

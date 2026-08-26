@@ -20164,3 +20164,551 @@ Committed as `944283d` (v0.3.0). Summary of this round:
 - Upgraded `Copy Diagnostics` from a flat top-level key list to a 5-level-deep structural "shape" (key names + types + array lengths, never actual string values) — this is needed to see past generic wrappers like `store` down to whatever's actually inside.
 
 **Next step for you**: run `Copy Diagnostics` again on the same conversation. This time the blank-URL entries should show their real URL, and the `store`/`__queryState` shape should reveal whether a message array is hiding in there (and what its fields are called). That'll either give me a real shape to target, or rule it out and point more firmly at WebSocket/Fluid.
+
+---
+
+_**User (2026-08-26 03:51:10Z)**_
+
+```
+m365-copilot-export-markdown v0.3.0 diagnostics
+page: https://m365.cloud.microsoft/chat/conversation/124e28b1-6ea4-43fe-b337-5d3eb027f354?fromcode=cmmyr718qsb&es=Click&redirfrom=cosmicRingCookie
+captured 34 JSON response(s):
+
+2026-08-26T03:49:52.243Z  200  https://res.public.onecdn.static.microsoft/midgard/versionless-v2/loc_en-us.a1fb5bf3ae94ce223ebc.json
+  shape: { edge-ntp.AutocompeteComposerAndDropdownContainer.ChatInput.AriaLabel: string, edge-ntp.AutocompeteComposerAndDropdownContainer.RemoveSuggestion.AriaLabel: string, edge-ntp.AutocompeteComposerAndDropdownContainer.Suggestions.AriaLabel: string, edge-ntp.NtpSettings.Cards.Journeys: string, edge-ntp.NtpSettings.Cards.Label: string, edge-ntp.NtpSettings.Cards.Tips: string, edge-ntp.NtpSettings.ChangeBackground: string, edge-ntp.NtpSettings.FAQ: string, edge-ntp.NtpSettings.GiveFeedback: string, edge-ntp.NtpSettings.MoreSettings: string, edge-ntp.NtpSettings.Privacy: string, edge-ntp.NtpSettings.QuickLinks.EnforcedTooltip: string, edge-ntp.NtpSettings.QuickLinks.Label: string, edge-ntp.NtpSettings.QuickLinks.Off: string, edge-ntp.NtpSettings.QuickLinks.OneRow: string, edge-ntp.NtpSettings.QuickLinks.TwoRows: string, edge-ntp.NtpSettings.Terms: string, edge-ntp.NtpSettings.Title: string, juno-feedback.juno.searchFeedback.iDontLikeThis: string, juno-feedback.juno.searchFeedback.iLikeThis: string, …+1837 more }
+2026-08-26T03:49:54.774Z  200  https://res.public.onecdn.static.microsoft/midgard/versionless-v2/loc_c_en-us.a8e87f4114c5cb47d5ea.json
+  shape: { accessibility-utils-ui.accessibility-utils.positionInSet: string, ai-hub-component-file-engagement.allTimeViewsLabel: string, ai-hub-component-file-engagement.createdByDateLabel: string, ai-hub-component-file-engagement.createdByLabel: string, ai-hub-component-file-engagement.createdByOnDateLabel: string, ai-hub-component-file-engagement.createdDateLabel: string, ai-hub-component-file-engagement.createdOnDateLabel: string, ai-hub-component-file-engagement.emailHighImportanceLabel: string, ai-hub-component-file-engagement.eventOrganizerLabel: string, ai-hub-component-file-engagement.Header: string, ai-hub-component-file-engagement.insightsHeaderText: string, ai-hub-component-file-engagement.lastModifiedByDateLabel: string, ai-hub-component-file-engagement.lastModifiedByLabel: string, ai-hub-component-file-engagement.lastModifiedByOnDateLabel: string, ai-hub-component-file-engagement.lastModifiedDateLabel: string, ai-hub-component-file-engagement.lastModifiedOnDateLabel: string, ai-hub-component-file-engagement.multipleUsersAcceptedLabel: string, ai-hub-component-file-engagement.multipleUsersDeclinedLabel: string, ai-hub-component-file-engagement.multipleUsersLeftCommentsLabel: string, ai-hub-component-file-engagement.multipleUsersRepliedLabel: string, …+16513 more }
+2026-08-26T03:49:56.013Z  200  /events
+  shape: { success: boolean, received: number }
+2026-08-26T03:49:56.248Z  200  https://m365.cloud.microsoft/chat?fromcode=cmmyr718qsb&es=Click&redirfrom=cosmicRingCookie
+  shape: { store: { conversationPageHistoryList: { chats: array(1)[{ conversationId: string, chatName: string, tone: string, createTimeUtc: number, updateTimeUtc: number, expiryTimeUtc: number, plugins: array(1), threadLevelGptId: object, isMessageless: boolean, isUnread: boolean, retentionPolicyEffect: number, threadId: string, isScheduledPromptThread: boolean, mostRecentGptIds: array(0), hasLoopPages: boolean, isLegacyWebChat: boolean, hasCopilotTasks: boolean, turnState: string, path: string }], hasRetentionPolicy: boolean, metrics: { requestPreparation: number, requestId: string, hasSyncState: boolean, hasLastMessageEnabled: boolean, middlewareTime: number, timeToFirstByte: number, statusCode: number, responseTraceId: string, serverTimingReqLatency: number, upstreamServiceTime: number, tokenAcquisition: number, apiCall: number, downloadTime: number, responseSize: number, chatCount: number, total: number, fluxVersion: string } } }, __queryState: { mutations: array(0), queries: array(0) } }
+2026-08-26T03:49:58.980Z  200  https://m365.cloud.microsoft/chat?fromcode=cmmyr718qsb&es=Click&redirfrom=cosmicRingCookie
+  shape: { store: { conversationPageHistoryList: { chats: array(1)[{ conversationId: string, chatName: string, tone: string, createTimeUtc: number, updateTimeUtc: number, expiryTimeUtc: number, plugins: array(1), threadLevelGptId: object, isMessageless: boolean, isUnread: boolean, retentionPolicyEffect: number, threadId: string, isScheduledPromptThread: boolean, mostRecentGptIds: array(0), hasLoopPages: boolean, isLegacyWebChat: boolean, hasCopilotTasks: boolean, turnState: string, path: string }], syncState: string, hasRetentionPolicy: boolean, metrics: { requestPreparation: number, requestId: string, hasSyncState: boolean, hasLastMessageEnabled: boolean, middlewareTime: number, timeToFirstByte: number, statusCode: number, responseTraceId: string, serverTimingReqLatency: number, upstreamServiceTime: number, tokenAcquisition: number, apiCall: number, downloadTime: number, responseSize: number, chatCount: number, total: number, fluxVersion: string } }, copilotPluginList: array(0), agentListApiError: string, tasksFlyout: { tasks: array(0), cursor: string, stats: { inProgress: number, needsAttention: number, completed: number, failed: number }, metrics: {  } } }, __queryState: { mutations: array(0), queries: array(0) } }
+2026-08-26T03:49:58.985Z  200  https://graph.microsoft.com/v1.0/me/drive/special/copilotuploads
+  shape: { @odata.context: string, createdDateTime: string, eTag: string, id: string, lastModifiedDateTime: string, name: string, webUrl: string, cTag: string, isAuthoritative: boolean, size: number, createdBy: { application: { id: string, displayName: string }, user: { email: string, id: string, displayName: string } }, lastModifiedBy: { application: { id: string, displayName: string }, user: { email: string, id: string, displayName: string } }, parentReference: { driveType: string, driveId: string, id: string, name: string, path: string, siteId: string }, fileSystemInfo: { createdDateTime: string, lastModifiedDateTime: string }, folder: { childCount: number, view: { sortBy: string, sortOrder: string, viewType: string } }, specialFolder: { name: string } }
+2026-08-26T03:49:59.373Z  200  https://m365.cloud.microsoft/chat?fromcode=cmmyr718qsb&es=Click&redirfrom=cosmicRingCookie
+  shape: { store: { pinnedAppIds: array(9)[string], pinnedAppsContent: array(8)[{ id: string, label: string, path: string, externalUrl: string, iconSrc: string, inAppNav: boolean, isSearchable: boolean }], applicationsContent: array(25)[{ id: string, label: string, path: string, externalUrl: string, iconSrc: string, inAppNav: boolean, isSearchable: boolean }], userPinStatusModifiedState: {  } }, __queryState: { mutations: array(0), queries: array(0) } }
+2026-08-26T03:49:59.625Z  200  https://m365.cloud.microsoft/chat?fromcode=cmmyr718qsb&es=Click&redirfrom=cosmicRingCookie
+  shape: { store: { appLauncherCoreAppsContent: array(1)[{ id: string, label: string, path: string, iconSrc: string }] }, __queryState: { mutations: array(0), queries: array(0) } }
+2026-08-26T03:49:59.655Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=0
+  shape: { acc: number, webResult: { msfpc: string, mc1: string } }
+2026-08-26T03:49:59.928Z  200  https://ecs.office.com/config/v1/Fluid/0.0.0.1?agents=FluidExperiences%2CSegmentation&audience=Production&userId=00000000-0000-0000-e3f6-ba27abeebd18&tenantId=84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa&hostName=M365Chat
+  shape: { ECS: { ClientConfigurationUpdateEvent: { DeltaLogEnabled: boolean, FullSetLogEnabled: boolean, FullSetFrequency: number } }, FluidExperiences: { boards.enableDragToCardToConnect: boolean, copilotBoard.enableMinDocumentRuntimeVersion2_40: boolean, officeContainer.enableMinDocumentRuntimeVersion2_40: boolean, notebooks.isMdSupportedInAddReferencesDialog: boolean, notebooks.isMarkdownReferenceCreationEnabled: boolean, scriptor.linkCardTitleConversion: boolean, notebooks.bizChatAppVersionOverride: string, lpc.enableMinDocumentRuntimeVersion2_40: boolean, notebooks.enableOdspLinkResolution: boolean, codeBlock.isCodePageTopBarEnabled: boolean, notebooks.isNavSortDirectionToggleEnabled: boolean, codeBlock.autoSave: boolean, conversa.agentCardSidebar: boolean, tasks.GetPlanApiWithDummyPlanId: boolean, atMentions.singleMention: boolean, loopApp.isSuggestedReferencesFilterUntitledSuggestionsEnabled: boolean, loopApp.isSuggestedReferencesFilterOverviewPagesEnabled: boolean, loopApp.treatStoragePendingInputAsLicensed: boolean, loopApp.studyGuideSummarySupportedFileTypes: string, loopApp.studyGuideTopicSupportedFileTypes: string, …+205 more }, Segmentation: { IsStickyNotesEliteProgramEngagement: string, FrontierAudience: string, LoopAppDefaultOnAllowed: string, LoopAppRing: string }, Headers: { ETag: string, Expires: string, CountryCode: string, StatusCode: string }, ConfigIDs: { ECS: string, FluidExperiences: string, Segmentation: string } }
+2026-08-26T03:49:59.928Z  200  /events
+  shape: { success: boolean, received: number }
+2026-08-26T03:49:59.937Z  200  https://substrate.office.com/search/api/v1/userconfig
+  shape: { ContentSourcesConfigResponse: { Sources: array(1)[{ ContentSource: array(2)[string], SourceDisplayName: string, IconUrl: string, EntityType: string }] }, Instrumentation: { TraceId: string } }
+2026-08-26T03:49:59.939Z  200  https://res.cdn.office.net/teams-js/validDomains/json/validDomains.json
+  shape: { validOrigins: array(69)[string] }
+2026-08-26T03:50:00.171Z  200  https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/oauth2/v2.0/token?brk_client_id=4765445b-32c6-49b0-83e6-1d93765276ca&brk_redirect_uri=https%3A%2F%2Fm365.cloud.microsoft%2Fspalanding&client_id=c0ab8ce9-e9a0-42e7-b064-33d422df41f1&client-request-id=06f5a8ef-0e1f-4624-978b-5831427d8b66
+  shape: { token_type: string, scope: string, expires_in: number, ext_expires_in: number, access_token: string, refresh_token: string, refresh_token_expires_in: number, id_token: string, client_info: string }
+2026-08-26T03:50:00.354Z  200  https://substrate.office.com/m365Copilot/EventListener/Client?EventId=ExecuteAction
+  shape: { data: { messages: array(1)[{ status: string, executeActionResult: array(5)[object], text: string, author: string, createdAt: string, timestamp: string, messageId: string, messageType: string, offense: string, responseCode: number }] }, conversationId: string, requestId: string, telemetry: { startTime: string }, result: { value: string, message: string, serviceVersion: string } }
+2026-08-26T03:50:00.384Z  200  https://ecs.office.com/config/v1/Fluid/0.0.0.1?agents=FluidExperiences%2CSegmentation&audience=Production&userId=00000000-0000-0000-e3f6-ba27abeebd18&tenantId=84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa&hostName=M365Chat
+  shape: { ECS: { ClientConfigurationUpdateEvent: { DeltaLogEnabled: boolean, FullSetLogEnabled: boolean, FullSetFrequency: number } }, FluidExperiences: { boards.enableDragToCardToConnect: boolean, copilotBoard.enableMinDocumentRuntimeVersion2_40: boolean, officeContainer.enableMinDocumentRuntimeVersion2_40: boolean, notebooks.isMdSupportedInAddReferencesDialog: boolean, notebooks.isMarkdownReferenceCreationEnabled: boolean, scriptor.linkCardTitleConversion: boolean, notebooks.bizChatAppVersionOverride: string, lpc.enableMinDocumentRuntimeVersion2_40: boolean, notebooks.enableOdspLinkResolution: boolean, codeBlock.isCodePageTopBarEnabled: boolean, notebooks.isNavSortDirectionToggleEnabled: boolean, codeBlock.autoSave: boolean, conversa.agentCardSidebar: boolean, tasks.GetPlanApiWithDummyPlanId: boolean, atMentions.singleMention: boolean, loopApp.isSuggestedReferencesFilterUntitledSuggestionsEnabled: boolean, loopApp.isSuggestedReferencesFilterOverviewPagesEnabled: boolean, loopApp.treatStoragePendingInputAsLicensed: boolean, loopApp.studyGuideSummarySupportedFileTypes: string, loopApp.studyGuideTopicSupportedFileTypes: string, …+205 more }, Segmentation: { IsStickyNotesEliteProgramEngagement: string, FrontierAudience: string, LoopAppDefaultOnAllowed: string, LoopAppRing: string }, Headers: { ETag: string, Expires: string, CountryCode: string, StatusCode: string }, ConfigIDs: { ECS: string, FluidExperiences: string, Segmentation: string } }
+2026-08-26T03:50:00.828Z  200  https://res.cdn.office.net/fluid/prod/generic-loader/versionless/manifest.en-us.json
+  shape: { metadata: { version: string }, components: array(18)[{ registrationId: string, experienceType: string, supportedHydrateModes: array(1)[string], targetUserType: string, disallowGuests: boolean, urlPatterns: array(1)[{ urlRegexes: array(2) }], ocpsPolicy: { policyId: string, valueName: string, registryDataType: string, regKeyFullPath: string } }] }
+2026-08-26T03:50:00.849Z  200  /events
+  shape: { success: boolean, received: number }
+2026-08-26T03:50:00.850Z  200  https://arc.msn.com/v4/api/selection/?placement=88001111%7C88001117%7C3009242350%7C3005695716%7C88001270%7C3007512837&bcnt=5%7C2%7C1%7C1%7C1%7C5&mclh=bcwbf&locale=en-us&country=us&app=officeweb&hostapp=OfficeDotCom&platform=Web&clientPlatform=web&FEATURES=BCX_32%3BBCX_38%3BBCX_48%3BBCX_49%3BBCX_51%3BBCX_54%3BBCX_55%3BBCX_59%3BBCX_60%3BBCX_62%3BBCX_72%3BBCX_74%3BBCX_82%3BBCX_76%3BBCX_79%3BBCX_84%3BBCX_85&FLIGHTS=P-R-1535739-2-15&appver=bizchat.20260823.53.1&pat=1&isBebopEnabled=true&layouttype=1&plgScenarios=PremiumPromptsUpsell&route=chat&nct=1&asid=c89cb78d17f72249e742ac4a69c95898
+  shape: { batchrsp: { ver: string, errors: array(6)[{ placement: string, errors: array(1)[object] }] } }
+2026-08-26T03:50:01.008Z  200  https://arc.msn.com/v4/api/selection/?placement=88001111%7C88001117%7C3009242350%7C3005695716%7C88001270%7C3007512837&bcnt=5%7C2%7C1%7C1%7C1%7C5&mclh=bcwbf&locale=en-us&country=us&app=officeweb&hostapp=OfficeDotCom&platform=Web&clientPlatform=web&FEATURES=BCX_32%3BBCX_38%3BBCX_48%3BBCX_49%3BBCX_51%3BBCX_54%3BBCX_55%3BBCX_59%3BBCX_60%3BBCX_62%3BBCX_72%3BBCX_74%3BBCX_82%3BBCX_76%3BBCX_79%3BBCX_84%3BBCX_85&FLIGHTS=P-R-1535739-2-15&appver=bizchat.20260823.53.1&pat=1&isBebopEnabled=true&layouttype=1&plgScenarios=PremiumPromptsUpsell&route=chat&nct=1&asid=630f2e82a703438dba74cf5c646ebfd7
+  shape: { batchrsp: { ver: string, errors: array(6)[{ placement: string, errors: array(1)[object] }] } }
+2026-08-26T03:50:01.185Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2
+  shape: { acc: number, webResult: {  } }
+2026-08-26T03:50:01.741Z  200  https://admin.microsoft.com/admin/api/uxversion?bldVer=v2&locale=en-us&hostingapp=BizChatMetaOS
+  shape: { ocv-inapp-feedback: { cdnUrl: string, loaderSpec: { type: string, content: string }, version: string, enableIncrementalBuild: boolean, bundleName: string, fallbackVersion: string }, ariaLoggerId: string, euAriaLoggerId: string, hostingAppUrls: string, __hostApp_config: { ariaLoggerId: string, euAriaLoggerId: string, hostingAppUrls: string, cdnDomains: array(4)[string] } }
+2026-08-26T03:50:02.538Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2
+  shape: { acc: number, webResult: {  } }
+2026-08-26T03:50:02.572Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=0
+  shape: { acc: number, webResult: { msfpc: string, mc1: string } }
+2026-08-26T03:50:02.573Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=0
+  shape: { acc: number, webResult: { msfpc: string, mc1: string } }
+2026-08-26T03:50:03.086Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2
+  shape: { acc: number, webResult: {  } }
+2026-08-26T03:50:03.087Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2
+  shape: { acc: number, webResult: {  } }
+2026-08-26T03:50:03.747Z  200  https://config.edge.skype.com/config/v1/Dime/1.0.0.0?PartnerId=officedotcom&Version=1.18.0.53931484&ClientId=2fc7ae13-4114-4dc7-bb2e-4f843a194a31&UserId=0003BFFDA3EB4D12&Browser=chrome&Environment=production
+  shape: { Dime: { EnableM365Pro: boolean, PartnerConfig: { flights: { flexTheme: boolean, agentCardOneClickLicenseRequestEnabled: boolean, UseNewCommercialLogging: boolean, EnableThrottleWin32SSP: boolean, EnableThrottleExperienceRedesign: boolean, enableOcdi: boolean, UseNewPriceBreakdownForPromos: boolean, UseBrazilMarket: boolean, UseIndiaMarket: boolean, UseTurkeyMarket: boolean, UseSaudiArabiaMarket: boolean, UseUnitedArabEmiratesMarket: boolean, UseUzbekistanMarket: boolean, UseSouthAfricaMarket: boolean, UseThailandMarket: boolean, UseMyanmarMarket: boolean, UseKazakhstanMarket: boolean, UseHungaryMarket: boolean, UseAzerbaijanMarket: boolean, UseKyrgyzstanMarket: boolean, …+15 more } }, EnablePremiumResubscribe: boolean, LFTSmbRolloutEnabled: boolean, anroysdime: boolean, EnableManagedUnmanagedUserSplitContent: boolean, agentCardOneClickLicenseRequestEnabled: boolean, EnableThrottleWin32SSP: boolean, EnableThrottleExperienceRedesign: boolean, EnableUpdatedHolidayPromoDisclaimer: boolean }, ECS: { ClientConfigurationUpdateEvent: { DeltaLogEnabled: boolean, FullSetLogEnabled: boolean, FullSetFrequency: number } }, Headers: { ETag: string, Expires: string, CountryCode: string, StatusCode: string }, ConfigIDs: { Dime: string, ECS: string } }
+2026-08-26T03:50:04.331Z  200  /events
+  shape: { success: boolean, received: number }
+2026-08-26T03:50:05.428Z  200  /events
+  shape: { success: boolean, received: number }
+2026-08-26T03:50:06.475Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2
+  shape: { acc: number, webResult: {  } }
+2026-08-26T03:50:06.768Z  200  https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=0
+  shape: { acc: number, webResult: { msfpc: string, mc1: string } }
+2026-08-26T03:50:08.850Z  200  /events
+  shape: { success: boolean, received: number }
+2026-08-26T03:50:14.974Z  200  /events
+  shape: { success: boolean, received: number }
+```
+
+似乎blank-URL並沒有work 依然 抓不到對話資料
+
+---
+
+_**Agent (claude-sonnet-5 2026-08-26 03:52:03Z)**_
+
+This is a big lead. Notice the `EventListener/Client?EventId=ExecuteAction` response actually reveals the real message shape: `{status, executeActionResult, text, author, createdAt, timestamp, messageId, messageType, offense, responseCode}` — that confirms the schema I'd guessed from the public reverse-engineering research. But the `store`/`__queryState` responses turned out to just be the **chat list sidebar** (`conversationPageHistoryList.chats`), not message content — so that lead is a dead end. And still nothing in 34 responses looks like "get this conversation's messages."
+
+That, plus the `Chathub` naming (classic SignalR hub pattern) and `bizchat` app version, points strongly at WebSocket. Since fetch/XHR patching structurally can't see WebSocket frames, let me add WebSocket interception to the script itself rather than asking you to manually dig through DevTools:
+
+_**Agent (claude-sonnet-5 2026-08-26 03:52:06Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Find where capture installers are invoked
+
+`grep -n "installFetchCapture()\|installXhrCapture()\|function installXhrCapture\|function installFetchCapture" /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js`
+
+```text
+216:  function installFetchCapture() {
+251:  function installXhrCapture() {
+744:  installFetchCapture(); // 必須在網站發出請求之前，所以 @run-at document-start
+745:  installXhrCapture();
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:52:10Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js`
+
+```text
+251	  function installXhrCapture() {
+252	    const XHR = pageWin.XMLHttpRequest;
+253	    if (!XHR || XHR.prototype.__m365ExportPatched) return;
+254	
+255	    const { open, send } = XHR.prototype;
+256	
+257	    XHR.prototype.open = function (method, url, ...rest) {
+258	      this.__m365ExportUrl = String(url || '');
+259	      return open.call(this, method, url, ...rest);
+260	    };
+261	
+262	    XHR.prototype.send = function (...args) {
+263	      this.addEventListener('load', () => {
+264	        try {
+265	          const contentType = this.getResponseHeader('content-type') || '';
+266	          if (!/json/.test(contentType)) return;
+267	          const raw =
+268	            this.responseType === '' || this.responseType === 'text'
+269	              ? this.responseText
+270	              : this.response;
+271	          const json = typeof raw === 'string' ? JSON.parse(raw) : raw;
+272	          rememberPayload(this.__m365ExportUrl || '', this.status, json);
+273	        } catch {
+274	          /* 不是 JSON 就算了 */
+275	        }
+276	      });
+277	      return send.apply(this, args);
+278	    };
+279	
+280	    XHR.prototype.__m365ExportPatched = true;
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:52:29Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js`
+
+```text
+280	    XHR.prototype.__m365ExportPatched = true;
+281	  }
+282	
+283	  // --------------------------------------------- 來源 2：登入中歷史紀錄的 fallback
+284	  //
+285	  // 只覆蓋「登入中查看自己的對話」這個情境，share 連結目前沒有已知的直接呼叫方式，
+286	  // 所以這條路不會對 share 連結生效（見 resolveConversation）。
+287	
+288	  function base64UrlDecode(value) {
+289	    const padded = value.replace(/-/g, '+').replace(/_/g, '/');
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:52:42Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:52:44Z)**_
+
+Now wire up the installer call and update the header doc comment:
+
+_**Agent (claude-sonnet-5 2026-08-26 03:52:47Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Find installer call site
+
+`grep -n "installFetchCapture();\|installXhrCapture();" /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js`
+
+```text
+796:  installFetchCapture(); // 必須在網站發出請求之前，所以 @run-at document-start
+797:  installXhrCapture();
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:52:51Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:52:57Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+View header doc comment for update
+
+`sed -n '27,71p' /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js`
+
+```text
+/**
+ * ⚠️ 實驗性：這支腳本完全沒有在真實 M365 Copilot 帳號上跑過，隨時可能整支不能用。
+ *
+ * 背景：這是 `copilot-export-markdown`（消費版 copilot.microsoft.com）的姊妹腳本，
+ * 目標是 Microsoft 365 的企業版／個人版 Copilot Chat。這兩個產品**不是同一個 API**：
+ *
+ * - `copilot.cloud.microsoft` —— 使用者確認是他們公司帳號用的「for organization」網域
+ * - `m365.cloud.microsoft` —— 個人版，有公開分享連結，例如
+ *   `https://m365.cloud.microsoft/chat/share/<base64url(JSON)>`，base64 解出來是
+ *   `{"shareId":"…","conversationId":"…"}`——但**這個連結需要登入才看得到內容**
+ *   （匿名開會被導去 login.microsoftonline.com），跟 ChatGPT / Claude 的「匿名可看」不同，
+ *   所以沒辦法在沒有帳號的情況下探到真正的 API 回應。
+ *
+ * 因為不確定兩個網域、甚至「登入中的歷史紀錄」與「share 連結」是不是打同一套 API，
+ * 這支腳本的**主要來源是攔截**（跟 chatgpt / claude / copilot 三支同一個模式）：
+ * `document-start` 攔 `fetch` / `XMLHttpRequest`，攔到的 JSON **不限定 URL host**，
+ * 用形狀辨識找訊息列表——不管網站實際上打的是哪個 endpoint 都攔得到，因為攔截是包一層
+ * `window.fetch`，跟目標 API 在哪個網域無關（不受同源限制：是頁面自己發的跨網域請求，
+ * 我們只是攔截再照樣呼叫原本的）。
+ *
+ * 次要 fallback（只給「登入中查看自己的歷史紀錄」用，覆蓋不到 share 連結）是從公開專案
+ * ganyuke/copilot-exporter（MIT license，github.com/ganyuke/copilot-exporter）的 build
+ * 產物反推出來的真實 API 事實——不是抄它的程式碼，是照這個 repo 一貫的風格自己刻，
+ * 只是 token 這段沒辦法憑空猜出來，來源列在下面：
+ *
+ * - `GET https://substrate.office.com/m365Copilot/GetConversation?request={"conversationId":…}`
+ *   → `{ chatName, createTimeUtc, updateTimeUtc, conversationId,
+ *        messages: [{ messageId, author: 'user'|'assistant', createdAt|timestamp, text,
+ *                      adaptiveCards?, references? }] }`
+ * - citation 是 `adaptiveCards[0].body[0].text` 裡的『【key】』全形括號 marker，
+ *   對照 `references[key]`（`targetLink` 是 URL，`displayData.content` 是含 `label` /
+ *   `Title` 的 JSON 字串）
+ * - 驗證要讀 MSAL（`@azure/msal-browser`）存在 localStorage 的**加密** token cache：
+ *   `msal.3.account.keys` 找帳號、`msal.3.token.keys.<clientId>`
+ *   （clientId 固定 `c0ab8ce9-e9a0-42e7-b064-33d422df41f1`，M365 Copilot Chat 的第一方
+ *   app id）找 scope 含 `substrate.office.com/sydney/.default` 的 token，
+ *   配合 cookie `msal.cache.encryption` 做 HKDF → AES-GCM 解密。這是 MSAL 自己的公開
+ *   「cache encryption」機制，不是漏洞——單純是讀使用者自己瀏覽器裡、自己帳號已登入的
+ *   token 來呼叫網站自己的 API，跟另外三支腳本讀 `Authorization` header 是同一類事情。
+ *
+ * **Copy Diagnostics**：因為不確定真實 API 長怎樣，這支腳本會把「攔到的每一個 JSON
+ * 回應」的 `{url, status, shape}` 記下來，一鍵複製——`shape` 是巢狀 key 名稱／型別／
+ * 陣列長度，最多五層，絕對不含任何實際內容/字串值，用來在不洩漏對話內容的前提下
+ * 找出訊息列表實際藏在哪一層。拿到真實帳號測試的人請先按這個，把結果回報，
+ * 才能把 `findMessageList` / `normalize()` 對準真實形狀微調。
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:53:09Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:53:13Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:53:20Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Find all WebSocket-related claims in README to update
+
+`grep -n "WebSocket\|不碰" userscripts/m365-copilot-export-markdown/README.md`
+
+```text
+108:  的即時對話內容很可能**不是走一般 fetch/XHR JSON**，而是走檔頭註解提過的 WebSocket
+126:**還沒解的**：如果真正的對話走 WebSocket 或 Fluid 同步，光靠攔 `fetch`/`XHR`
+130:WebSocket。
+158:對準那個真實形狀調整；如果還是沒有，才需要認真考慮 WebSocket／Fluid 那條路。
+168:- **不碰 WebSocket / Fluid Framework 即時同步**——第一次真實測試顯示這很可能才是
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:53:24Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./userscripts/m365-copilot-export-markdown/README.md`
+
+```text
+130	WebSocket。
+131	
+132	## 第二次真實測試（v0.3.0，2026-08-26）
+133	
+134	同一個 session 再跑一次，這次攔到 35 筆：
+135	
+136	- **誤判修好了**：這次沒有再匯出「Execute action succeeded」那種垃圾，腳本老實回報
+137	  「抓不到對話資料」——代表上一輪的兩個修正有效。
+138	- **35 筆裡還是沒有任何一筆長得像對話內容**，但多了一個線索：出現了好幾筆 URL 是空字串、
+139	  `keys (2): [store, __queryState]` 的回應。追查後發現這其實是**攔截層自己的 bug**：
+140	  頁面用 `fetch(new URL(...))` 呼叫時，程式碼只認得 `input.url`（`Request` 物件才有這個
+141	  屬性），`URL` 物件其實是 `.href`，所以這幾筆的 `url` 一直被記成空字串——已修好。
+142	  `store` / `__queryState` 這個組合很像前端框架（React Query / RTK Query 之類）的
+143	  client-side store 序列化，**很可能是目前為止最有希望藏著對話資料的候選**，
+144	  但目前的 `keys` 只看得到最外層兩個 key，看不出裡面長怎樣。
+145	- 為了在不洩漏對話內容的前提下往裡面多看幾層，`Copy Diagnostics` 從「只列 top-level
+146	  key」升級成 **`shape`**：巢狀 key 名稱／型別（`string`/`number`/`array(N)`/`object`）
+147	  的樹狀結構，最多五層、陣列只展開第一個元素當樣本——完全不含任何字串值本身。
+148	
+149	**這次修的**：
+150	
+151	1. `fetch` 攔截修正 `URL` 物件的 `url` 判斷（之前漏掉，導致這幾筆網址是空字串）。
+152	2. `Copy Diagnostics` 從「top-level keys」升級成五層深的 `shape` 摘要。
+153	
+154	**下一步**：麻煩在同一個對話上**再跑一次 `Copy Diagnostics`**——這次 `store` /
+155	`__queryState`（以及所有空 URL 的回應）應該會有正確的網址、而且能看到裡面的巢狀結構，
+156	這樣才知道對話訊息到底是不是真的藏在 `store` 底下、藏在哪一層、欄位叫什麼名字。
+157	如果 `shape` 顯示 `store` 底下確實有一個訊息陣列，下一步就是把 `findMessageList()`
+158	對準那個真實形狀調整；如果還是沒有，才需要認真考慮 WebSocket／Fluid 那條路。
+159	
+160	## 已知限制
+161	
+162	- `GetConversation` + MSAL 解密那套仍是**猜測**，這次測試沒能驗證到它（`conversationId`
+163	  之前解析不出來，fallback 沒被觸發），還需要再測一次。
+164	- share 連結沒有任何已知的直接呼叫方式，完全依賴攔截；攔不到就會老實報錯，不會假裝有資料。
+165	- `copilot.cloud.microsoft` 與 `m365.cloud.microsoft` 是否真的共用同一套後端 API 未知。
+166	- 靠的是私有 API 與 MSAL 內部快取格式（`msal.3.*`），Microsoft 改版就可能整支失效
+167	  （見 [`docs/06`](../../docs/06-sandbox-and-unsafewindow.md)）。
+168	- **不碰 WebSocket / Fluid Framework 即時同步**——第一次真實測試顯示這很可能才是
+169	  M365 Copilot Chat 對話內容真正的傳輸層，見上面「第一次真實測試」。
+170	- 用 `@require` 引入 [`shared/`](../../shared/)，所以安裝時多一個
+171	  raw.githubusercontent.com 的網路相依。
+172	
+173	## 測試
+174
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:53:27Z)**_
+
+Now let me add a third-round section documenting the `store`/`__queryState` dead-end, the message-shape confirmation, and the new WebSocket capture, and fix the now-stale "不碰 WebSocket" limitation line:
+
+_**Agent (claude-sonnet-5 2026-08-26 03:53:52Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/README.md has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:53:54Z)**_
+
+Now bump the version to 0.4.0 and verify:
+
+_**Agent (claude-sonnet-5 2026-08-26 03:53:58Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Bump version to 0.4.0 and syntax-check
+
+```bash
+cd /Users/david/Documents/Program/Tampermonkey-Scripts
+sed -i '' "s/@version      0.3.0/@version      0.4.0/; s/const VERSION = '0.3.0';/const VERSION = '0.4.0';/" userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js
+grep -n "@version\|const VERSION" userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js
+node --check userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js && echo SYNTAX_OK
+```
+
+```text
+4:// @version      0.4.0
+82:  const VERSION = '0.4.0';
+SYNTAX_OK
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:54:30Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Run metadata check, regenerate index, run full verify
+
+`npm run check 2>&1 | tail -10 && npm run index 2>&1 | tail -5 && npm run verify 2>&1 | tail -15`
+
+```text
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 6 userscript(s): 0 error(s), 0 warning(s).
+
+> tampermonkey-scripts@1.0.0 index
+> node scripts/build-index.mjs
+
+README.md script index updated (6 script(s)).
+
+> tampermonkey-scripts@1.0.0 verify
+> npm run check && npm run index:check
+
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 6 userscript(s): 0 error(s), 0 warning(s).
+
+> tampermonkey-scripts@1.0.0 index:check
+> node scripts/build-index.mjs --check
+
+README.md script index is up to date.
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:54:39Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Sanity-check SignalR frame splitting logic
+
+```bash
+node -e "
+function testSplit(data) {
+  const out = [];
+  for (const part of data.split('\x1e')) {
+    if (!part) continue;
+    try { out.push(JSON.parse(part)); } catch {}
+  }
+  return out;
+}
+console.log(testSplit('{\"protocol\":\"json\",\"version\":1}\x1e'));
+console.log(testSplit('{}\x1e{\"type\":1,\"target\":\"OnMessage\",\"arguments\":[{\"messageId\":\"m1\"}]}\x1e'));
+"
+
+```
+
+```text
+[ { protocol: 'json', version: 1 } ]
+[ {}, { type: 1, target: 'OnMessage', arguments: [ [Object] ] } ]
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:54:44Z)**_
+
+All checks pass. Let's commit:
+
+_**Agent (claude-sonnet-5 2026-08-26 03:54:47Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check status before staging
+
+`git status`
+
+```text
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   .specstory/history/2026-08-25_08-55-31Z-specstory-local-codex-chat.md
+	modified:   .specstory/statistics.json
+	modified:   README.md
+	modified:   userscripts/m365-copilot-export-markdown/README.md
+	modified:   userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js
+
+no changes added to commit (use "git add" and/or "git commit -a")
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:55:05Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Commit the WebSocket capture addition
+
+```bash
+git add README.md userscripts/m365-copilot-export-markdown/README.md userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js
+git commit -m "$(cat <<'EOF'
+feat(m365-copilot-export-markdown): intercept WebSocket, confirm store/queryState is a dead end
+
+Third real-world test round. The URL-object fix from last commit worked:
+the store/__queryState responses now show their real URL
+(m365.cloud.microsoft/chat?...) and their shape turned out to be the
+conversation list sidebar (conversationPageHistoryList.chats), not this
+conversation's messages — a dead end, but it incidentally confirmed the
+real message schema (messageId/author/text/createdAt/timestamp) via the
+EventListener telemetry response's shape.
+
+Three rounds in a row, none of the captured fetch/XHR responses look like
+"get this conversation's messages." Combined with the Chathub (SignalR
+hub) naming and bizchat app version spotted in captured URLs, the working
+hypothesis is now that conversation content is delivered over WebSocket,
+which fetch/XHR patching structurally cannot see.
+
+Added installWebSocketCapture(): patches the WebSocket constructor,
+splits incoming frames on SignalR's \x1e record separator, and feeds each
+parsed JSON message through the same findMessageList()/diagnostics
+pipeline already used for fetch/XHR — so the next Copy Diagnostics run
+should surface `[ws] wss://...` entries if this hypothesis is right.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_015g44u87L4nKmipfkpEaC9C
+EOF
+)"
+git status
+```
+
+```text
+[main 51aef6f] feat(m365-copilot-export-markdown): intercept WebSocket, confirm store/queryState is a dead end
+ 3 files changed, 97 insertions(+), 7 deletions(-)
+On branch main
+Your branch is ahead of 'origin/main' by 1 commit.
+  (use "git push" to publish your local commits)
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   .specstory/history/2026-08-25_08-55-31Z-specstory-local-codex-chat.md
+	modified:   .specstory/statistics.json
+
+no changes added to commit (use "git add" and/or "git commit -a")
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 03:55:11Z)**_
+
+Committed as `51aef6f` (v0.4.0). Recap:
+
+- The `store`/`__queryState` lead was a dead end — it's just the conversation-list sidebar, not this conversation's messages. But it incidentally confirmed the real message schema (`messageId`/`author`/`text`/`createdAt`/`timestamp`) via the telemetry response's shape.
+- Three rounds straight, zero plausible "get conversation messages" fetch/XHR response. Combined with `Chathub` (SignalR) and `bizchat` naming in the captures, the script now **patches `WebSocket` directly** — splits frames on SignalR's `\x1e` separator and feeds them through the same shape-detection/diagnostics pipeline.
+
+**Next step for you**: run `Copy Diagnostics` once more on the same conversation. If the WebSocket hypothesis is right, you should see `[ws] wss://...` entries this time with a `shape` showing message-like content. If nothing shows up at all (no `[ws]` entries), that itself is informative — it'd mean either the WS connection was already open before the script's patch installed (a timing/reconnect issue), or the real mechanism is something else entirely (e.g. Fluid's binary sync, which we can only see as opaque byte counts, or content already embedded in the initial page HTML).
