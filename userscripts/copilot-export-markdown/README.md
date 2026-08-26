@@ -4,9 +4,7 @@
 [`chatgpt-export-markdown`](../chatgpt-export-markdown/) 一致（仿 SpecStory 的 chat history），
 目的是**貼給 coding agent**（Claude Code / Codex / Cursor…）當作前情提要。
 
-- **生效網站**：`https://copilot.microsoft.com/*` 與 `https://copilot.cloud.microsoft/*`
-  （`/chats/<id>` 與 `/shares/<id>`；後者是 Microsoft 365 帳號登入時導去的網域，
-  API 路徑與行為跟前者一致）
+- **生效網站**：`https://copilot.microsoft.com/*`（`/chats/<id>` 與 `/shares/<id>`）
 - **安裝**：[點這裡安裝](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/copilot-export-markdown/copilot-export-markdown.user.js)（需先裝好 Tampermonkey / Violentmonkey）
 - **原始碼**：[`copilot-export-markdown.user.js`](./copilot-export-markdown.user.js)
 
@@ -60,6 +58,11 @@ Copilot 自己的 API：
 
 ## 已知限制
 
+- **`copilot.cloud.microsoft` 不是這支腳本的目標**：那是 Microsoft 365 for organization
+  用的網域，跟這裡鎖定的消費版是不同產品、不同 API（曾經誤加過 `@match`，已移除）。
+  M365 Copilot Chat（`copilot.cloud.microsoft` / `m365.cloud.microsoft`）另外用
+  [`m365-copilot-export-markdown`](../m365-copilot-export-markdown/) 處理，目前是實驗性、
+  尚未驗證。
 - **Copilot 有區域限制**：某些網路 / 地區直接連會拿到「Not available in your region」，
   那是網站層面的事，跟腳本無關。
 - **share 內容要登入才看得到**：沒登入的話那一頁本身就只有 sign-in 擋頁，腳本也拿不到東西。

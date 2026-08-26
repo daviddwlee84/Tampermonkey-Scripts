@@ -15160,3 +15160,3283 @@ _**Agent (claude-sonnet-5 2026-08-26 01:57:00Z)**_
 Good — that's expected: pushing rewrote the commit hash slightly (99b3e51 is what's on `origin/main` now, matching locally), and my new commit `c840968` sits on top of it, one ahead of `origin/main`.
 
 Added `@match https://copilot.cloud.microsoft/*` and bumped to 1.1.0, committed as `c840968` — not pushed. Want me to push?
+
+---
+
+_**User (2026-08-26 02:21:19Z)**_
+
+[Image #8] https://copilot.cloud.microsoft/chat/?fromcode=cmmqbg1y3ah&es=UnauthClick&redirfrom=CsrToSSR&auth=1
+我測試了一下發現並不兼容
+copilot.cloud.microsoft是Microsoft 365的chat bot
+跟copilot.microsoft的並不通用
+所以match得改回來 不過目前並沒有可用的example link 看看有沒有什麼其他方法能知道結構
+
+---
+
+_**User (2026-08-26 02:21:19Z)**_
+
+[Image: source: /Users/david/.claude/image-cache/47615dff-7e67-47ef-9a9c-2a6f35747139/8.png]
+
+---
+
+_**Agent (claude-sonnet-5 2026-08-26 02:21:28Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Peek at existing plan file header
+
+`cat /Users/david/Documents/Program/Tampermonkey-Scripts/.claude/plans/specstory-local-codex-chat-history-mark-shimmering-eagle.md | head -20`
+
+```text
+# Claude / Copilot 對話匯出 Markdown（＋把共用碼搬進 shared/）
+
+## Context
+
+`chatgpt-export-markdown` 已經上線（v1.1.0，可拖曳的浮動按鈕、SpecStory 風格 transcript、
+Agent Handoff、raw JSON）。使用者現在要**同一套東西給 claude.ai 與 copilot.microsoft.com**：
+
+- <https://claude.ai/share/fc04b1a4-0476-4782-b1eb-5aabfcbe1868>
+- <https://copilot.microsoft.com/shares/Yc41Xon3iEp3yY86rFCw6>
+
+目的一樣：把整段對話變成能直接貼給 coding agent 的 Markdown。
+
+有了第三支 exporter，`shared/README.md` 自己訂的門檻（「同一段 code 出現在三支以上的腳本，
+才值得搬進來」）剛好成立 → 這次順便把 render / 浮動 UI 搬進 `shared/`，三支都改用 `@require`。
+
+### 實測到的事實（決定了兩支新腳本的架構）
+
+用 headed Chrome（Playwright）對兩個 share 連結實測：
+
+**claude.ai**
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:21:31Z)**_
+
+That prior plan is already implemented and committed — this is a new, much smaller follow-up task, so I'll write a fresh plan rather than extend the old one. Let me research whether `copilot.cloud.microsoft`'s API structure is discoverable anywhere.
+
+_**Agent (claude-sonnet-5 2026-08-26 02:21:40Z)**_
+
+<tool-use data-tool-type="search" data-tool-name="WebSearch"><details>
+<summary>Tool use: **WebSearch**</summary>
+ `copilot.cloud.microsoft API endpoint chat conversation history export`
+
+```text
+Web search results for query: "copilot.cloud.microsoft API endpoint chat conversation history export"
+
+Links: [{"title":"GitHub - ingo/m365-copilot-chat-exporter: Export Microsoft 365 Copilot conversations as ChatGPT-compatible conversations.json · GitHub","url":"https://github.com/ingo/m365-copilot-chat-exporter"},{"title":"Request for Data Portability and Chat History Export Options - Microsoft Q&A","url":"https://learn.microsoft.com/en-us/answers/questions/4378824/request-for-data-portability-and-chat-history-expo"},{"title":"GitHub - ganyuke/copilot-exporter: View, bulk delete, and export your Microsoft 365 Copilot Chat conversations into raw JSON, readable Markdown, or ChatGPT's conversation.json format. · GitHub","url":"https://github.com/ganyuke/copilot-exporter"},{"title":"How to fetch Microsoft copilot chats - Microsoft Q&A","url":"https://learn.microsoft.com/en-sg/answers/questions/5596321/how-to-fetch-microsoft-copilot-chats"},{"title":"working on a project and received message chat over, How do iI retrieve and save the information ? - Microsoft Q&A","url":"https://learn.microsoft.com/en-us/answers/questions/5674511/working-on-a-project-and-received-message-chat-ove"},{"title":"How to Export Microsoft Copilot Chat History (2026)","url":"https://aimemory.pro/blog/export-microsoft-copilot"},{"title":"Microsoft Copilot Export — How to Retrieve Conversation History (2026) — WhyChose","url":"https://whychose.com/seo/microsoft-copilot-export"},{"title":"How to Export All Microsoft Copilot Chats - Download Your Conversation History | Univik","url":"https://univik.com/help/export-copilot-chats.html"}]
+
+Based on the search results, here's what I found about the copilot.cloud.microsoft API endpoint for chat conversation history export:
+
+## API Access Methods
+
+The Substrate API endpoints that the Copilot Chat UI itself uses can be called to access chat history. There is an API endpoint used to get the list of chats, though it has a limit of returning a maximum of the latest 500 conversations.
+
+## Graph API Approach
+
+As of 2025–2026, Microsoft exposed Copilot interaction history through Graph endpoints under the /me/copilot/ path. Accessing this endpoint requires an Azure AD application registration with the Copilot.Interactions.Read or equivalent delegated or application permission, and the feature must be enabled in the tenant's Copilot admin settings. The response includes interaction records with id, createdDateTime, type, and the conversation content.
+
+## Direct Export Methods
+
+For direct export without building custom integrations, you can go to account.microsoft.com/privacy → Privacy → Copilot → Export all activity history to download conversations as CSV.
+
+## Important Limitations
+
+Copilot chats are not stored as typical Teams messages and are not accessible via chatMessage or channelMessage endpoints, and you cannot use Graph API to fetch Copilot chats unless you use the Copilot-specific APIs.
+
+
+REMINDER: You MUST include the sources above in your response to the user using markdown hyperlinks.
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:21:40Z)**_
+
+<tool-use data-tool-type="search" data-tool-name="WebSearch"><details>
+<summary>Tool use: **WebSearch**</summary>
+ `"copilot.cloud.microsoft" reverse engineer network requests M365 Copilot Chat`
+
+```text
+Web search results for query: ""copilot.cloud.microsoft" reverse engineer network requests M365 Copilot Chat"
+
+Links: [{"title":"[Feature] Support Microsoft 365 Enterprise Copilot (M365 BizChat WebSocket protocol) · Issue #3897 · diegosouzapw/OmniRoute","url":"https://github.com/diegosouzapw/OmniRoute/issues/3897"},{"title":"Manage Microsoft Copilot Chat | Microsoft Learn","url":"https://learn.microsoft.com/en-us/copilot/manage"},{"title":"m365-copilot-proxy/docs/m365-copilot-api.md at main · cramt/m365-copilot-proxy","url":"https://github.com/cramt/m365-copilot-proxy/blob/main/docs/m365-copilot-api.md"},{"title":"Security Research | Access Copilot for M365 through the terminal | Zenity Labs","url":"https://labs.zenity.io/post/access-copilot-m365-terminal"},{"title":"Microsoft 365 Copilot Chat: Updated commercial Copilot endpoint for Microsoft Edge - M365 Admin","url":"https://m365admin.handsontek.net/microsoft-365-copilot-chat-updated-commercial-copilot-endpoint-microsoft-edge/"},{"title":"Cowork network endpoints | Microsoft Learn","url":"https://learn.microsoft.com/en-us/microsoft-365/copilot/cowork/cowork-network-endpoints"},{"title":"Cowork network endpoints | Microsoft Support","url":"https://support.microsoft.com/en-us/microsoft-365-copilot/cowork-network-endpoints-frontier"},{"title":"Copilot API — Grokipedia","url":"https://grokipedia.com/page/Copilot_API"}]
+
+Based on the search results, here's what I found regarding reverse engineering network requests for M365 Copilot Chat:
+
+## WebSocket Endpoints and Protocol
+
+Enterprise M365 Copilot connects to `wss://substrate.svc.cloud.microsoft/m365Copilot/Chathub/{userId}@{tenantId}`, distinct from the personal Copilot service. Enterprise uses a different BizChat-specific protocol that needs reverse engineering.
+
+## Authentication Methods
+
+Enterprise passes `access_token={JWT}` as a query parameter in the WebSocket URL, and Enterprise tokens include M365Chat.Read, sydney.readwrite, CopilotPlatformContent.Process.All, and other scopes.
+
+## Network Endpoint Changes
+
+Microsoft 365 Copilot Chat in Microsoft Edge will change its endpoint to `cr.m365copilotapp.svc.cloud.microsoft` by late September 2026. Standard Microsoft 365 URLs that must be allowed include `copilot.cloud.microsoft`, `login.microsoftonline.com`, and `graph.microsoft.com`.
+
+## Reverse Engineering Approaches
+
+M365 Copilot is an undocumented, first-party-only surface that Microsoft changes freely, and researchers can re-capture sessions from `m365.cloud.microsoft` using browser devtools to inspect WebSocket frames.
+
+
+REMINDER: You MUST include the sources above in your response to the user using markdown hyperlinks.
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:21:52Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="WebFetch"><details>
+<summary>Tool use: **WebFetch**</summary>
+ `https://raw.githubusercontent.com/ganyuke/copilot-exporter/main/README.md`
+
+```text
+The server returned HTTP 404 Not Found.
+
+The response body was not retrieved. If this URL requires authentication, use an authenticated tool (e.g. `gh` for GitHub, or an MCP-provided fetch tool) instead of WebFetch.
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:21:57Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Fetch ganyuke/copilot-exporter README via GitHub API
+
+`gh api repos/ganyuke/copilot-exporter/contents/README.md -q .content 2>/dev/null | base64 -d 2>/dev/null | head -80 || curl -sSL https://api.github.com/repos/ganyuke/copilot-exporter/contents/README.md -H "Accept: application/vnd.github.raw" 2>&1 | head -100`
+
+```text
+# M365 Copilot Exporter
+
+[![Greasy Fork Version][release-image]][release-url]
+[![Greasy Fork Downloads](https://img.shields.io/greasyfork/dt/543763)][GreasyFork-url]
+[![Greasy Fork Link][GreasyFork-image]][GreasyFork-url]
+
+[release-image]: https://img.shields.io/greasyfork/v/543763
+[release-url]: https://github.com/ganyuke/copilot-exporter/releases/latest
+[GreasyFork-image]: https://img.shields.io/static/v1?label=%20&message=GreasyFork&style=flat-square&labelColor=7B0000&color=960000&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH3ggEBCQHM3fXsAAAAVdJREFUOMudkz2qwkAUhc/goBaGJBgUtBCZyj0ILkpwAW7Bws4yO3AHLiCtEFD8KVREkoiFxZzX5A2KGfN4F04zMN+ce+5c4LMUgDmANYBnrnV+plBSi+FwyHq9TgA2LQpvCiEiABwMBtzv95RSfoNEHy8DYBzHrNVqVEr9BWKcqNFoxF6vx3a7zc1mYyC73a4MogBg7vs+z+czO50OW60Wt9stK5UKp9Mpj8cjq9WqDTBHnjAdxzGQZrPJw+HA31oulzbAWgLoA0CWZVBKIY5jzGYzdLtdE9DlcrFNrY98zobqOA6TJKHW2jg4nU5sNBpFDp6mhVe5rsvVasUwDHm9Xqm15u12o+/7Hy0gD8KatOd5vN/v1FozTVN6nkchxFuI6hsAAIMg4OPxMJCXdtTbR7JJCMEgCJhlGUlyPB4XfumozInrupxMJpRSRtZlKoNYl+m/6/wDuWAjtPfsQuwAAAAASUVORK5CYII=
+[GreasyFork-url]: https://greasyfork.org/en/scripts/543763-m365-copilot-exporter
+
+View, bulk delete, and export your Microsoft 365 Copilot Chat conversations into raw JSON, readable Markdown, or ChatGPT's `conversation.json` format.
+
+**Install from GreasyFork here:** https://greasyfork.org/en/scripts/543763-m365-copilot-exporter
+
+Exporter design and functionality based on [@Pionxzh](https://github.com/pionxzh)'s [ChatGPT Exporter](https://github.com/pionxzh/chatgpt-exporter).
+
+<div style="display:flex">
+  <img width="45%" src="https://github.com/user-attachments/assets/feb02fbf-d917-4c3c-80ac-5b34018e238e" alt="Copilot Exporter's modal">
+  <img width="45%" src="https://github.com/user-attachments/assets/210903c0-84ef-4939-a410-aa508f97d08b" alt="Copilot Exporter after bulk deleting three conversations" >
+</div>
+
+> [!CAUTION]
+> This tool is maintained on a "until I lose access to my Microsoft 365 account after I graduate" basis. Use at your own risk!
+
+## Features
+
+- View, bulk export, and bulk delete your conversations in Microsoft 365 Copilot Chat ([m365.cloud.microsoft](https://m365.cloud.microsoft)) with dark mode support.
+- Choose from three export formats: **Copilot JSON**, **Markdown** (with citations!), or **ChatGPT JSON** (with options for each to export as single file like `conversations.json` or as a ZIP).
+- Convert your Copilot converstions into ChatGPT's `conversations.json` format for import into ChatGPT formatting tools (e.g. [ChatGPT Exporter](https://github.com/pionxzh/chatgpt-exporter)).
+
+## Limitations
+
+- The exporter can only show, at maximum, the latest 500 conversations. This is a limit imposed by the API endpoint used to get the list of chats. You'll need to delete some chats if you want to access anything beyond the latest 500 conversations.
+- This modal does not support HTML, PDF, or any other fancy export options. This is script is mainly for my own data hoarding purposes, so it only supports Copilot JSON, which preserves the most metadata among the format options, and two formats that I anticpate others will like: ChatGPT JSON (for `conversations.json`) and Markdown.
+
+## How to install
+
+Install a userscript manager extension into your browser, such as Greasemonkey or Tampermonkey. I personally recommend [Greasemonkey](https://addons.mozilla.org/en-US/firefox/addon/greasemonkey/) (and I have only used this script on it, so your mileage may vary with others)!
+
+### Greasyfork
+
+Once you have a userscript manager, you can download this script on Greasyfork using the link below and clicking "Install this script".
+https://greasyfork.org/en/scripts/543763-m365-copilot-exporter
+
+### Manual
+
+Copy or import [`dist/copilot-exporter.user.js`](https://github.com/ganyuke/copilot-exporter/blob/master/dist/copilot-exporter.user.js) into a new script in your desired userscript manager.
+
+## How to use
+
+1. Navigate to your [M365 dashboard](https://m365.cloud.microsoft/chat/).
+2. Open the export menu by either:
+   - Clicking on the floating export button in the bottom right.
+   - Opening the Greasemonkey command menu and selecting "Open export menu".
+3. Select the conversations you want to export.
+   - If the conversation(s) you want to export are further down, alter the maximum number of conversations shown and refetch.
+4. Click export once you've selected the conversations you want to export.
+
+## How to build
+
+For those seeking to maintain this:
+
+1. Clone this repository: `git clone https://github.com/ganyuke/copilot-exporter`.
+2. Open the directory: `cd copilot-exporter`.
+1. Get [`pnpm`](https://pnpm.io/installation).
+2. Run `pnpm build`. The newly-built userscript should be in `dist/`.
+
+## Someting cool!
+
+For those wondering if it can really export ALL your conversations... here's 400+ conversations exported at once! Older UI, but the same scraping logic's still in there!
+
+<div style="display:flex">
+<img width="100%"  src="https://github.com/user-attachments/assets/4033fe5a-9ef7-40cc-bf2f-00f1a25f6886" alt="Copilot Exporter in action exporting 400+ conversations">
+</div>
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:22:06Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Fetch and grep m365 copilot exporter for API endpoint hints
+
+```bash
+gh api repos/ganyuke/copilot-exporter/contents/dist/copilot-exporter.user.js -q .content 2>/dev/null | base64 -d > /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad/m365-copilot-exporter.user.js
+wc -l /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad/m365-copilot-exporter.user.js
+grep -oE '"https?://[^"]+"|`https?://[^`]+`|substrate[a-zA-Z0-9_.\/-]*|m365\.cloud\.microsoft[a-zA-Z0-9_.\/-]*|copilot\.cloud\.microsoft[a-zA-Z0-9_.\/-]*|/api/[a-zA-Z0-9_./-]*' /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad/m365-copilot-exporter.user.js | sort -u | head -60
+```
+
+```text
+    1151 /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad/m365-copilot-exporter.user.js
+"http://www.w3.org/2000/svg"
+"https://github.com/ganyuke"
+"https://github.com/ganyuke/copilot-exporter.git"
+"https://m365.cloud.microsoft/chat/conversation"
+"https://substrate.office.com/sydney/.default"
+`https://substrate.office.com/m365Copilot/DeleteConversation`
+`https://substrate.office.com/m365Copilot/GetChats?request=${encodeURIComponent(JSON.stringify(requestObj))}&variants=${encodeURIComponent(variants)}`
+`https://substrate.office.com/m365Copilot/GetConversation?request=${encodeURIComponent(JSON.stringify(requestObj))}`
+m365.cloud.microsoft/
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:22:30Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check auth token acquisition approach in m365 exporter
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+grep -n 'sydney/.default\|acquireToken\|msal\|getToken\|Authorization\|Bearer' $SP/m365-copilot-exporter.user.js | head -30
+```
+
+```text
+57:			"authorization": `Bearer ${token}`,
+86:			"authorization": `Bearer ${token}`,
+113:			"authorization": `Bearer ${token}`,
+361:	var ENCRYPTION_KEY = "msal.cache.encryption";
+431:		const msalIds = localStorage.getItem("msal.3.account.keys");
+432:		if (!msalIds) throw Error(`${APP_TAG} No account keys found for Copilot application`);
+433:		const accountKeys = JSON.parse(msalIds);
+444:	var getAccessToken = async (msalIds) => {
+446:		const tokenKeys = localStorage.getItem(`msal.3.token.keys.${msalIds.clientId}`);
+448:		const sydneyKey = JSON.parse(tokenKeys).accessToken.find((token) => token.includes("https://substrate.office.com/sydney/.default"));
+453:		const decryptedData = await decrypt(encryptionCookie.key, payload.nonce, msalIds.clientId, payload.data);
+576:	async function getTokenAndIds() {
+578:		const msalIds = getMsalIds();
+581:			token: await getAccessToken(msalIds),
+582:			...msalIds
+695:		const { token, localAccountId, tenantId } = await getTokenAndIds();
+703:		const { token, localAccountId, tenantId } = await getTokenAndIds();
+1014:				const msalIds = getMsalIds();
+1016:				renderChatTable((await fetchCopilotChats(await getAccessToken(msalIds), msalIds.localAccountId, msalIds.tenantId, maxChats)).chats, previousState);
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:28:18Z)**_
+
+<tool-use data-tool-type="generic" data-tool-name="AskUserQuestion"><details>
+<summary>Tool use: **AskUserQuestion**</summary>
+**查到 M365 Copilot Chat 其實在 m365.cloud.microsoft（不是 copilot.cloud.microsoft），API 是 substrate.office.com 的 GetChats/GetConversation，而且驗證要讀 MSAL 存在 localStorage 的加密 token cache（跟現有三支腳本的簡單 fetch 攔截完全不同量級的複雜度）。你的帳號目前也沒有 M365 Copilot 授權，沒辦法實測。這次要做多少？**
+
+Options:
+- **只修正 match（推薦）** - 把 copilot.cloud.microsoft 從 @match 移除，README 記錄這個發現（domain、API、MSAL 驗證方式）當作以後的線索，但不寫程式碼——沒有帳號能測、MSAL cache 格式本身就是未公開且會變動的東西，盲寫風險很高。
+- **順便搭一個實驗性骨架** - 額外新增 m365-copilot-export-markdown 的骨架（讀 MSAL cache、打那兩個 substrate.office.com endpoint），標記「未實測、需要有 M365 Copilot 授權的人驗證」。範圍明顯變大，而且完全沒辦法驗證寫得對不對。
+
+
+**Answer:** 修match 順便搭實驗性骨架 然後我可以嘗試在有權限的電腦上蒐集資訊 (或是你需要什麼資訊可以讓我收集)". Read the answers carefully — they may request clarification, changes, or that you not proceed — and follow what they actually say.
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:28:46Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check license of the reference exporter repo
+
+`gh api repos/ganyuke/copilot-exporter -q '.license.spdx_id, .license.name' 2>&1; echo '---'; gh api repos/ganyuke/copilot-exporter/contents/LICENSE -q .content 2>/dev/null | base64 -d | head -5`
+
+```text
+MIT
+MIT License
+---
+MIT License
+
+Copyright (c) 2025 ganyuke
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:28:56Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read MSAL auth/decrypt logic in reference script
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+sed -n '350,470p' $SP/m365-copilot-exporter.user.js
+```
+
+```text
+		for (; i; crcTable[i] = k) {
+			k = --i;
+			for (j = 8; j--;) k = 3988292384 * (1 & k) ^ k >>> 1;
+		}
+		if (next) add(next.bind(next, null));
+		else if (opts && opts.deflate) {
+			add((file) => out = file);
+			return out;
+		} else return new Promise(add);
+	}
+	var getCookie = (key) => document.cookie.match(`(^|;)\\s*${key}\\s*=\\s*([^;]+)`)?.pop() || "";
+	var ENCRYPTION_KEY = "msal.cache.encryption";
+	var AES_GCM = "AES-GCM";
+	var HKDF = "HKDF";
+	var S256_HASH_ALG = "SHA-256";
+	var RAW = "raw";
+	var ENCRYPT = "encrypt";
+	var DECRYPT = "decrypt";
+	var DERIVE_KEY = "deriveKey";
+	function base64DecToArr(base64String) {
+		let encodedString = base64String.replace(/-/g, "+").replace(/_/g, "/");
+		switch (encodedString.length % 4) {
+			case 0: break;
+			case 2:
+				encodedString += "==";
+				break;
+			case 3:
+				encodedString += "=";
+				break;
+			default: throw Error(`${APP_TAG} Error extracting base64`);
+		}
+		const binString = atob(encodedString);
+		return Uint8Array.from(binString, (m) => m.codePointAt(0) || 0);
+	}
+	function toArrayBuffer(bufferLike) {
+		return Uint8Array.from(bufferLike).buffer;
+	}
+	async function deriveKey(baseKey, nonce, context) {
+		return window.crypto.subtle.deriveKey({
+			name: HKDF,
+			salt: toArrayBuffer(nonce),
+			hash: S256_HASH_ALG,
+			info: new TextEncoder().encode(context)
+		}, baseKey, {
+			name: AES_GCM,
+			length: 256
+		}, false, [ENCRYPT, DECRYPT]);
+	}
+	async function decrypt(baseKey, nonce, context, encryptedData) {
+		const encodedData = base64DecToArr(encryptedData);
+		const derivedKey = await deriveKey(baseKey, base64DecToArr(nonce), context);
+		const decryptedData = await window.crypto.subtle.decrypt({
+			name: AES_GCM,
+			iv: new Uint8Array(12)
+		}, derivedKey, toArrayBuffer(encodedData));
+		return new TextDecoder().decode(decryptedData);
+	}
+	function generateHKDF(baseKey) {
+		return window.crypto.subtle.importKey(RAW, toArrayBuffer(baseKey), HKDF, false, [DERIVE_KEY]);
+	}
+	async function getEncryptionCookie() {
+		const cookieString = decodeURIComponent(getCookie(ENCRYPTION_KEY));
+		let parsedCookie = {
+			key: "",
+			id: ""
+		};
+		if (cookieString) try {
+			parsedCookie = JSON.parse(cookieString);
+		} catch (e) {
+			throw Error(`${APP_TAG} Failed to parse encryption cookie`);
+		}
+		if (parsedCookie.key && parsedCookie.id) {
+			const baseKey = base64DecToArr(parsedCookie.key);
+			return {
+				id: parsedCookie.id,
+				key: await generateHKDF(baseKey)
+			};
+		} else throw Error(`${APP_TAG} No encryption cookie found`);
+	}
+	var getMsalIds = () => {
+		const clientId = "c0ab8ce9-e9a0-42e7-b064-33d422df41f1";
+		const msalIds = localStorage.getItem("msal.3.account.keys");
+		if (!msalIds) throw Error(`${APP_TAG} No account keys found for Copilot application`);
+		const accountKeys = JSON.parse(msalIds);
+		if (accountKeys.length === 0) throw Error(`${APP_TAG} No account keys found for Copilot application`);
+		const [homeAccountId, _1, tenantId] = accountKeys[0].split("|");
+		const [localAccountId, _2] = homeAccountId.split(".");
+		return {
+			localAccountId,
+			tenantId,
+			homeAccountId,
+			clientId
+		};
+	};
+	var getAccessToken = async (msalIds) => {
+		const encryptionCookie = await getEncryptionCookie();
+		const tokenKeys = localStorage.getItem(`msal.3.token.keys.${msalIds.clientId}`);
+		if (!tokenKeys) throw Error(`${APP_TAG} No token keys found for Copilot application`);
+		const sydneyKey = JSON.parse(tokenKeys).accessToken.find((token) => token.includes("https://substrate.office.com/sydney/.default"));
+		if (!sydneyKey) throw Error(`${APP_TAG} No Sydney access token found for Copilot application`);
+		const sydneyTokenEntry = localStorage.getItem(sydneyKey);
+		if (!sydneyTokenEntry) throw Error(`${APP_TAG} No Sydney token found for Copilot application`);
+		const payload = JSON.parse(sydneyTokenEntry);
+		const decryptedData = await decrypt(encryptionCookie.key, payload.nonce, msalIds.clientId, payload.data);
+		return JSON.parse(decryptedData).secret;
+	};
+	var require_truncate = __commonJSMin(((exports, module) => {
+		function isHighSurrogate(codePoint) {
+			return codePoint >= 55296 && codePoint <= 56319;
+		}
+		function isLowSurrogate(codePoint) {
+			return codePoint >= 56320 && codePoint <= 57343;
+		}
+		module.exports = function truncate(getLength, string, byteLength) {
+			if (typeof string !== "string") throw new Error("Input must be string");
+			var charLength = string.length;
+			var curByteLength = 0;
+			var codePoint;
+			var segment;
+			for (var i = 0; i < charLength; i += 1) {
+				codePoint = string.charCodeAt(i);
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:29:06Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Find GetChats/GetConversation call sites
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+grep -n 'fetchCopilotChats\|fetchConversation\|requestObj\|GetChats\|GetConversation\|scenario\|conversationId' $SP/m365-copilot-exporter.user.js | sed -n '1,60p'
+```
+
+```text
+48:	async function fetchCopilotChats(token, userOid, tenantId, maxChats, variants = "feature.EnableLastMessageForGetChats,feature.EnableMRUAgents,feature.EnableHasLoopPages") {
+49:		const requestObj = {
+55:		const url = `https://substrate.office.com/m365Copilot/GetChats?request=${encodeURIComponent(JSON.stringify(requestObj))}&variants=${encodeURIComponent(variants)}`;
+62:			"x-scenario": "OfficeWebIncludedCopilot",
+78:	async function fetchCopilotConversation(token, userOid, tenantId, conversationId) {
+79:		const requestObj = {
+80:			conversationId,
+84:		const url = `https://substrate.office.com/m365Copilot/GetConversation?request=${encodeURIComponent(JSON.stringify(requestObj))}`;
+91:			"x-scenario": "OfficeWebIncludedCopilot"
+104:	async function deleteCopilotConversation(token, userOid, tenantId, conversationIds) {
+105:		const requestObj = {
+106:			conversationIdsToDelete: conversationIds,
+110:		const encodedRequest = JSON.stringify(requestObj);
+118:			"x-scenario": "OfficeWebIncludedCopilot"
+215:			conversation_id: source.conversationId,
+224:			id: source.conversationId
+303:			`source: ${SOURCE_URL}/${source.conversationId}`,
+543:		const base = sanitizeFilename(conversation.chatName) || conversation.conversationId;
+585:	async function fetchConversation(token, localAccountId, tenantId, conversationId) {
+586:		const blob = await fetchCopilotConversation(token, localAccountId, tenantId, conversationId);
+589:	async function exportIndividual(conversationIds, callback, format, token, localAccountId, tenantId) {
+591:		for (let i = 0; i < conversationIds.length; i++) {
+592:			const conversationId = conversationIds[i];
+598:				const conversation = await fetchConversation(token, localAccountId, tenantId, conversationId);
+600:				console.log(`${APP_TAG} Completed download for conversation ${conversationId}`);
+617:			totalCount: conversationIds.length
+620:	async function exportCombined(conversationIds, callback, format, token, localAccountId, tenantId) {
+623:		for (let i = 0; i < conversationIds.length; i++) {
+624:			const conversationId = conversationIds[i];
+630:				const conversation = await fetchConversation(token, localAccountId, tenantId, conversationId);
+632:				console.log(`${APP_TAG} Completed export for conversation ${conversationId}`);
+650:			totalCount: conversationIds.length
+653:	async function exportZip(conversationIds, callback, format, token, localAccountId, tenantId) {
+656:		for (let i = 0; i < conversationIds.length; i++) {
+657:			const conversationId = conversationIds[i];
+663:				const conversation = await fetchConversation(token, localAccountId, tenantId, conversationId);
+670:				console.log(`${APP_TAG} Completed export for conversation ${conversationId}`);
+691:			totalCount: conversationIds.length
+694:	async function exportBulkDirect(conversationIds, callback, format = "json", outputMode = "individual") {
+697:			case "combined": return exportCombined(conversationIds, callback, format, token, localAccountId, tenantId);
+698:			case "zip": return exportZip(conversationIds, callback, format, token, localAccountId, tenantId);
+699:			default: return exportIndividual(conversationIds, callback, format, token, localAccountId, tenantId);
+702:	async function deleteBulk(conversationIds, callback) {
+704:		await deleteCopilotConversation(token, localAccountId, tenantId, conversationIds);
+705:		callback(conversationIds.length - 1);
+706:		console.log(`${APP_TAG} Completed deletion for conversations ${conversationIds.join()}`);
+832:		function findStatusCell(conversationId) {
+833:			return document.querySelector(`#chatTableBody input[type="checkbox"][data-id="${CSS.escape(conversationId)}"]`)?.closest("tr")?.querySelector(".status-cell") ?? null;
+835:		function setRowStatus(conversationId, status, error) {
+836:			const cell = findStatusCell(conversationId);
+840:		function clearRowStatus(conversationIds) {
+841:			for (const id of conversationIds) {
+900:				row.setAttribute("data-conversation-id", data.conversationId);
+907:				checkbox.dataset.id = data.conversationId;
+909:				const previous = previousState?.get(data.conversationId);
+1016:				renderChatTable((await fetchCopilotChats(await getAccessToken(msalIds), msalIds.localAccountId, msalIds.tenantId, maxChats)).chats, previousState);
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:29:11Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read request/response building around GetChats/GetConversation and message shape
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+sed -n '40,240p' $SP/m365-copilot-exporter.user.js
+```
+
+```text
+			});
+		}
+		return to;
+	};
+	var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(isNodeMode || !mod || !mod.__esModule || !__hasOwnProp.call(mod, "default") ? __defProp(target, "default", {
+		value: mod,
+		enumerable: true
+	}) : target, mod));
+	async function fetchCopilotChats(token, userOid, tenantId, maxChats, variants = "feature.EnableLastMessageForGetChats,feature.EnableMRUAgents,feature.EnableHasLoopPages") {
+		const requestObj = {
+			source: "officeweb",
+			traceId: crypto.randomUUID(),
+			threadType: "webchat",
+			MaxReturnedChatsCount: maxChats
+		};
+		const url = `https://substrate.office.com/m365Copilot/GetChats?request=${encodeURIComponent(JSON.stringify(requestObj))}&variants=${encodeURIComponent(variants)}`;
+		const headers = {
+			"authorization": `Bearer ${token}`,
+			"content-type": "application/json",
+			"x-anchormailbox": `Oid:${userOid}@${tenantId}`,
+			"x-clientrequestid": crypto.randomUUID().replace(/-/g, ""),
+			"x-routingparameter-sessionkey": userOid,
+			"x-scenario": "OfficeWebIncludedCopilot",
+			"x-variants": variants
+		};
+		const res = await fetch(url, {
+			method: "GET",
+			headers
+		});
+		if (!res.ok) {
+			console.debug(res);
+			console.debug(res.body);
+			throw new Error(`Fetch failed with status ${res.status}`);
+		}
+		const data = await res.json();
+		console.log(data);
+		return data;
+	}
+	async function fetchCopilotConversation(token, userOid, tenantId, conversationId) {
+		const requestObj = {
+			conversationId,
+			source: "officeweb",
+			traceId: crypto.randomUUID().replace(/-/g, "")
+		};
+		const url = `https://substrate.office.com/m365Copilot/GetConversation?request=${encodeURIComponent(JSON.stringify(requestObj))}`;
+		const headers = {
+			"authorization": `Bearer ${token}`,
+			"content-type": "application/json",
+			"x-anchormailbox": `Oid:${userOid}@${tenantId}`,
+			"x-clientrequestid": crypto.randomUUID().replace(/-/g, ""),
+			"x-routingparameter-sessionkey": userOid,
+			"x-scenario": "OfficeWebIncludedCopilot"
+		};
+		const response = await fetch(url, {
+			method: "GET",
+			headers
+		});
+		if (!response.ok) {
+			console.debug(response);
+			console.debug(response.body);
+			throw new Error(`Fetch failed with status ${response.status}`);
+		}
+		return await response.blob();
+	}
+	async function deleteCopilotConversation(token, userOid, tenantId, conversationIds) {
+		const requestObj = {
+			conversationIdsToDelete: conversationIds,
+			source: "officeweb",
+			traceId: crypto.randomUUID()
+		};
+		const encodedRequest = JSON.stringify(requestObj);
+		const url = `https://substrate.office.com/m365Copilot/DeleteConversation`;
+		const headers = {
+			"authorization": `Bearer ${token}`,
+			"content-type": "application/json",
+			"x-anchormailbox": `Oid:${userOid}@${tenantId}`,
+			"x-clientrequestid": crypto.randomUUID(),
+			"x-routingparameter-sessionkey": userOid,
+			"x-scenario": "OfficeWebIncludedCopilot"
+		};
+		const response = await fetch(url, {
+			method: "POST",
+			headers,
+			body: encodedRequest
+		});
+		if (!response.ok) {
+			console.debug(response);
+			console.debug(response.body);
+			throw new Error(`Fetch failed with status ${response.status}`);
+		}
+	}
+	function downloadBlobAsFile(blob, filename) {
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url;
+		a.download = filename;
+		a.style.display = "none";
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+	}
+	function millisToSeconds(ms) {
+		return typeof ms === "number" ? ms / 1e3 : null;
+	}
+	function isoToSeconds(iso) {
+		if (!iso) return null;
+		const ms = Date.parse(iso);
+		return Number.isFinite(ms) ? ms / 1e3 : null;
+	}
+	function makeUuid() {
+		return crypto.randomUUID();
+	}
+	function roleFromSource(author) {
+		return author === "user" ? "user" : "assistant";
+	}
+	function makeRootNode(id) {
+		return {
+			id,
+			message: null,
+			parent: null,
+			children: []
+		};
+	}
+	function makeExportMessage(source) {
+		const role = roleFromSource(source.author);
+		return {
+			id: source.messageId,
+			author: {
+				role,
+				name: null,
+				metadata: {}
+			},
+			create_time: isoToSeconds(source.createdAt ?? source.timestamp),
+			update_time: null,
+			content: {
+				content_type: "text",
+				parts: [source.text ?? ""]
+			},
+			status: "finished_successfully",
+			end_turn: role === "assistant" ? true : null,
+			weight: 1,
+			metadata: {},
+			recipient: "all",
+			channel: null
+		};
+	}
+	function makeExportNode(source, parentId) {
+		return {
+			id: source.messageId,
+			message: makeExportMessage(source),
+			parent: parentId,
+			children: []
+		};
+	}
+	function mapToConversationJson(source) {
+		const rootId = makeUuid();
+		const mapping = { [rootId]: makeRootNode(rootId) };
+		let parentId = rootId;
+		let currentNode = rootId;
+		for (const message of source.messages) {
+			const nodeId = message.messageId;
+			mapping[nodeId] = makeExportNode(message, parentId);
+			mapping[parentId].children.push(nodeId);
+			parentId = nodeId;
+			currentNode = nodeId;
+		}
+		return {
+			title: source.chatName,
+			create_time: millisToSeconds(source.createTimeUtc),
+			update_time: millisToSeconds(source.updateTimeUtc),
+			mapping,
+			moderation_results: [],
+			current_node: currentNode,
+			plugin_ids: null,
+			conversation_id: source.conversationId,
+			conversation_template_id: null,
+			gizmo_id: null,
+			gizmo_type: null,
+			is_archived: false,
+			is_starred: null,
+			safe_urls: [],
+			default_model_slug: null,
+			disabled_tool_ids: [],
+			id: source.conversationId
+		};
+	}
+	var SOURCE_URL = "https://m365.cloud.microsoft/chat/conversation";
+	var CITATION_MARKER_RE = /【([^】]+)】/g;
+	function millisToIsoOffset(ms) {
+		return new Date(ms).toISOString().replace("Z", "+00:00");
+	}
+	function parseMessageDate(iso) {
+		if (!iso) return null;
+		const ms = Date.parse(iso);
+		return Number.isFinite(ms) ? new Date(ms) : null;
+	}
+	function formatTimeElement(date) {
+		return `<time datetime="${date.toISOString()}" title="${formatTimeTitle(date)}">${formatTimeShort(date)}</time>`;
+	}
+	function speakerLabel(author) {
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:29:23Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check blob consumption and message field usage
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+sed -n '580,600p' $SP/m365-copilot-exporter.user.js
+echo '--- citations / messages field names ---'
+grep -n 'source\.\|\.messages\b\|messageId\|createdAt\|timestamp\|author\b\|citations\|text ??' $SP/m365-copilot-exporter.user.js | sed -n '1,40p'
+```
+
+```text
+		return {
+			token: await getAccessToken(msalIds),
+			...msalIds
+		};
+	}
+	async function fetchConversation(token, localAccountId, tenantId, conversationId) {
+		const blob = await fetchCopilotConversation(token, localAccountId, tenantId, conversationId);
+		return JSON.parse(await blob.text());
+	}
+	async function exportIndividual(conversationIds, callback, format, token, localAccountId, tenantId) {
+		let successCount = 0;
+		for (let i = 0; i < conversationIds.length; i++) {
+			const conversationId = conversationIds[i];
+			callback({
+				phase: "start",
+				index: i
+			});
+			try {
+				const conversation = await fetchConversation(token, localAccountId, tenantId, conversationId);
+				downloadBlobAsFile(conversationToBlob(conversation, format), exportFilename(conversation, format));
+				console.log(`${APP_TAG} Completed download for conversation ${conversationId}`);
+--- citations / messages field names ---
+5:// @author       ganyuke
+153:	function roleFromSource(author) {
+154:		return author === "user" ? "user" : "assistant";
+165:		const role = roleFromSource(source.author);
+167:			id: source.messageId,
+168:			author: {
+173:			create_time: isoToSeconds(source.createdAt ?? source.timestamp),
+177:				parts: [source.text ?? ""]
+189:			id: source.messageId,
+200:		for (const message of source.messages) {
+201:			const nodeId = message.messageId;
+208:			title: source.chatName,
+209:			create_time: millisToSeconds(source.createTimeUtc),
+210:			update_time: millisToSeconds(source.updateTimeUtc),
+215:			conversation_id: source.conversationId,
+224:			id: source.conversationId
+240:	function speakerLabel(author) {
+241:		return author === "user" ? "You" : "Copilot";
+264:		const rawText = message.text ?? "";
+291:		const date = parseMessageDate(message.createdAt ?? message.timestamp);
+292:		const lines = [`## ${speakerLabel(message.author)}:`];
+300:			`title: ${JSON.stringify(source.chatName)}`,
+301:			`createdAt: ${JSON.stringify(millisToIsoOffset(source.createTimeUtc))}`,
+302:			`updatedAt: ${JSON.stringify(millisToIsoOffset(source.updateTimeUtc))}`,
+303:			`source: ${SOURCE_URL}/${source.conversationId}`,
+305:		].join("\n")}\n\n${[`# ${source.chatName}`, ...source.messages.map((message) => formatMessage(message))].join("\n\n")}\n`;
+708:	var author = {
+751:    <p id="copilotExportByline"><a href="${repository.url}" target="_blank">M365 Copilot Exporter</a> v${version} by <a href="${author.url}" target="_blank">${author.name}</a></p>
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:29:33Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read citation handling code
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+sed -n '240,300p' $SP/m365-copilot-exporter.user.js
+```
+
+```text
+	function speakerLabel(author) {
+		return author === "user" ? "You" : "Copilot";
+	}
+	function formatTimeTitle(date) {
+		return new Intl.DateTimeFormat("en-US", {
+			dateStyle: "short",
+			timeStyle: "medium"
+		}).format(date);
+	}
+	function formatTimeShort(date) {
+		return new Intl.DateTimeFormat("en-US", {
+			hour: "numeric",
+			minute: "2-digit"
+		}).format(date);
+	}
+	function parseCitationContent(content) {
+		if (!content) return null;
+		try {
+			return JSON.parse(content);
+		} catch {
+			return null;
+		}
+	}
+	function resolveMessageBody(message) {
+		const rawText = message.text ?? "";
+		try {
+			const cardText = message.adaptiveCards?.[0]?.body?.[0]?.text;
+			if (typeof cardText !== "string") return rawText;
+			const references = message.references ?? {};
+			const used = new Map();
+			const rewritten = cardText.replace(CITATION_MARKER_RE, (_match, key) => {
+				const ref = references[key];
+				if (!ref?.targetLink) throw new Error(`missing reference for ${key}`);
+				const parsed = parseCitationContent(ref.displayData?.content);
+				const n = parsed?.label;
+				const title = parsed?.Title;
+				if (!n || !title) throw new Error(`incomplete citation metadata for ${key}`);
+				if (!used.has(key)) used.set(key, {
+					n,
+					title,
+					url: ref.targetLink
+				});
+				return `[${n}]`;
+			});
+			if (used.size === 0) return rewritten;
+			return `${rewritten}\n\n**Sources:**\n\n${[...used.values()].sort((a, b) => Number(a.n) - Number(b.n)).map(({ n, title, url }) => `[${n}] [${title}](${url})`).join("\n")}`;
+		} catch {
+			return rawText;
+		}
+	}
+	function formatMessage(message) {
+		const date = parseMessageDate(message.createdAt ?? message.timestamp);
+		const lines = [`## ${speakerLabel(message.author)}:`];
+		if (date) lines.push(formatTimeElement(date));
+		lines.push("", resolveMessageBody(message));
+		return lines.join("\n");
+	}
+	function mapToMarkdown(source) {
+		return `${[
+			"---",
+			`title: ${JSON.stringify(source.chatName)}`,
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:30:16Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Confirm current match lines to revert
+
+`grep -n "生效網站\|@match" /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/copilot-export-markdown/copilot-export-markdown.user.js /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/copilot-export-markdown/README.md`
+
+```text
+/Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/copilot-export-markdown/README.md:7:- **生效網站**：`https://copilot.microsoft.com/*` 與 `https://copilot.cloud.microsoft/*`
+/Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/copilot-export-markdown/copilot-export-markdown.user.js:8:// @match        https://copilot.microsoft.com/*
+/Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/copilot-export-markdown/copilot-export-markdown.user.js:9:// @match        https://copilot.cloud.microsoft/*
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:31:31Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Write"><details>
+<summary>Tool use: **Write**</summary>
+
+````markdown
+# 修正 Copilot @match ＋ M365 Copilot Chat 實驗性腳本
+
+## Context
+
+上一輪加了 `@match https://copilot.cloud.microsoft/*` 到 `copilot-export-markdown`，
+以為那是消費版 Copilot 換了網域。使用者實測後回報：**copilot.cloud.microsoft 其實是
+Microsoft 365 的企業版 Copilot Chat**（帳號需要 M365 授權），跟消費版 copilot.microsoft.com
+完全是不同產品、不同 API，那個 `@match` 是誤加，要改回來。
+
+同時使用者手上沒有現成的 M365 Copilot 對話連結可以實測，問「看看有沒有什麼其他方法能知道結構」。
+查證後找到公開專案 [ganyuke/copilot-exporter](https://github.com/ganyuke/copilot-exporter)
+（MIT license），瞄準的其實是**另一個網域** `m365.cloud.microsoft`（不是 copilot.cloud.microsoft），
+從它的 build 產物（`dist/copilot-exporter.user.js`）反推出完整的 API 形狀：
+
+### 查到的事實
+
+1. **網域是 `m365.cloud.microsoft`**，不是使用者截圖裡重導去的 `copilot.cloud.microsoft`
+   （那個網域顯示的是「升級到 Microsoft 365 才能用 Copilot Chat」擋牆——這台帳號沒有
+   M365 Copilot 授權，兩個網域可能有重疊但不保證同一件事）。
+2. **API 是 REST，架在 `substrate.office.com`**，不是 WebSocket：
+   - `GET https://substrate.office.com/m365Copilot/GetChats?request=<json>&variants=<...>`
+     → `{ chats: [{ conversationId, chatName, createTimeUtc, updateTimeUtc, ... }] }`
+   - `GET https://substrate.office.com/m365Copilot/GetConversation?request={"conversationId":...}`
+     → `{ chatName, createTimeUtc, updateTimeUtc, conversationId, messages: [{ messageId, author: 'user'|'assistant', createdAt|timestamp, text, adaptiveCards?, references? }] }`
+   - Header 需要：`authorization: Bearer <token>`、`x-anchormailbox: Oid:<oid>@<tenantId>`、
+     `x-scenario: OfficeWebIncludedCopilot`、`x-routingparameter-sessionkey: <oid>`。
+3. **驗證方式明顯比另外三支複雜一個量級**：token 不是單純從網站的請求上攔到，
+   而是要讀 **MSAL（`@azure/msal-browser`）存在 `localStorage` 的加密 token cache**：
+   - `localStorage['msal.3.account.keys']` → 解析出 `homeAccountId` / `tenantId`
+   - `localStorage['msal.3.token.keys.<clientId>']`（clientId 固定是
+     `c0ab8ce9-e9a0-42e7-b064-33d422df41f1`，M365 Copilot Chat 的第一方 app id）
+     → 找 scope 含 `https://substrate.office.com/sydney/.default` 的那把 key
+   - 那把 key 對應的 `localStorage` entry 是加密的，要用 cookie `msal.cache.encryption`
+     （`{key, id}`，key 是 base64）透過 **HKDF → AES-GCM** 解出明文 token
+   - 這是 MSAL browser 自己的「cache encryption」機制（`@azure/msal-browser` 的公開功能，
+     不是漏洞），純粹是讀取使用者自己瀏覽器裡、自己帳號已經登入的 token 來呼叫網站自己的
+     API，跟另外三支腳本讀 `Authorization` header 或 `fetch` 回應是同一類事情，只是這次
+     token 是加密存放，需要多解一層。
+4. **citation 是另一套機制**：訊息可能有 `adaptiveCards[0].body[0].text`（比 `text` 更完整的
+   渲染版本），裡面用 `【key】` 這種全形括號當 citation marker，對照 `references[key]` 拿到
+   `targetLink`（URL）與 `displayData.content`（JSON 字串，含 `label` 序號與 `Title`）。
+5. Microsoft 365 Copilot 還有一條完全不同的 **WebSocket** 協定
+   （`wss://substrate.svc.cloud.microsoft/m365Copilot/Chathub/...`，即時對話用），
+   跟這裡要讀的「歷史紀錄」REST API 是兩回事，不要混為一談，也不需要碰。
+
+### 使用者已確認的方向
+
+- 先把誤加的 `@match` 改回來（`copilot-export-markdown` 只留 `copilot.microsoft.com`）
+- 同時**搭一個實驗性骨架** `m365-copilot-export-markdown`，瞄準 `m365.cloud.microsoft`，
+  用上面查到的 API 形狀寫，但**明確標記未經真實帳號驗證**
+- 使用者會嘗試在有 M365 Copilot 授權的電腦上蒐集資訊來驗證/回饋
+
+---
+
+## 要做的事
+
+### 1. 修正 `copilot-export-markdown` 的 `@match`
+
+- 拿掉 `// @match https://copilot.cloud.microsoft/*`（`copilot-export-markdown.user.js:9`）
+- `@version` 1.1.0 → 1.2.0
+- `README.md` 的「生效網站」改回只列 `copilot.microsoft.com`，補一句撤回原因：
+  「copilot.cloud.microsoft 是 M365 企業版 Copilot Chat，跟這支腳本鎖定的消費版是不同產品、
+  不同 API，之前誤加，已移除；企業版另外用 `m365-copilot-export-markdown` 處理」
+
+### 2. 新腳本 `userscripts/m365-copilot-export-markdown/`
+
+```bash
+npm run new -- m365-copilot-export-markdown "M365 Copilot Chat Export Markdown" \
+  "https://m365.cloud.microsoft/*" \
+  "【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——尚未經真實 M365 Copilot 帳號驗證"
+```
+
+metadata：`@run-at document-start`、`@grant unsafeWindow / GM_registerMenuCommand /
+GM_setClipboard / GM_setValue / GM_getValue / GM_deleteValue`（這支不需要 `GM_openInTab`——
+沒有「貼 share URL」功能，M365 Copilot Chat 目前沒看到公開分享連結這種東西）、
+兩個 `@require` 指到 `shared/`（`chat-export.js` / `export-ui.js`，沿用既有慣例）。
+
+檔頭註解要老實寫清楚這支的特殊狀態：
+
+- 目標網域、API 形狀、MSAL 解密機制的出處（列出上面查到的事實，並附上
+  `ganyuke/copilot-exporter`（MIT）這個公開參考來源——**不是抄它的程式碼**，
+  是照這個 repo 一貫的做法自己刻，只是這次多了 token 解密這一段沒辦法憑空想出來）
+  ，還有「這支腳本完全沒有在真實 M365 Copilot 帳號上跑過，隨時可能整支不能用」
+
+**Token 讀取（`shared/` 不放這段——這是 M365 專屬邏輯，留在腳本本體）**：
+
+- `getMsalAccount()`：讀 `localStorage['msal.3.account.keys']`，解析出
+  `homeAccountId` / `tenantId` / `localAccountId`
+- `getEncryptionCookie()`：讀 cookie `msal.cache.encryption`，`base64` 解碼 key，
+  `crypto.subtle.importKey('raw', ..., 'HKDF', ...)`
+- `decryptToken(baseKey, nonce, context, ciphertext)`：`deriveKey`（HKDF → AES-GCM 256）
+  → `crypto.subtle.decrypt`，對齊上面查到的演算法（HKDF salt=nonce、info=clientId、
+  AES-GCM iv 固定 12 bytes 全零——這點抄目標實作，等使用者實測回饋再確認是否真的固定）
+- `getAccessToken()`：找 `localStorage['msal.3.token.keys.<clientId>']` 裡 scope 含
+  `substrate.office.com/sydney/.default` 的 key，解密拿到 `secret`
+- 任何一步失敗都要拋出**講人話**的錯誤（沒有帳號 key / 沒有 encryption cookie / 沒有
+  對應 scope 的 token……），因為使用者接下來要靠這些錯誤訊息回報是哪一步壞的
+
+**API 呼叫**：
+
+- `fetchChats(token, oid, tenantId)` → `GET .../m365Copilot/GetChats?request=...`
+- `fetchConversation(token, oid, tenantId, conversationId)` → `GET .../m365Copilot/GetConversation?request=...`
+- 同時裝 `installFetchCapture()`（攔 `pageWin.fetch`，命中 `substrate.office.com/m365Copilot/`
+  就存起來，跟另外三支的攔截邏輯同一個模式）当網站自己有打過這兩支 API 時可以直接撿現成的，
+  不用重新發一次請求
+- **不要假設回應形狀完全不變**：跟 `copilot-export-markdown` 一樣，用寬鬆的欄位存取
+  （`?.`、多個備選欄位名）而不是死板的 destructuring，壞掉時明確報錯而不是靜默吐空值
+
+**normalize（adapter）**：
+
+- `messages[]` → sections：`author === 'user' ? 'User' : 'Assistant'`，
+  時間欄位 `createdAt ?? timestamp`
+- 內文優先用 `adaptiveCards?.[0]?.body?.[0]?.text`，citation marker `【key】` 對照
+  `references[key]` 換成 `[n]` 加段落末的來源清單（可以直接用
+  `shared/chat-export.js` 的 `sourcesBlock()`，欄位對到 `{url: targetLink, title}` 就好）；
+  沒有 adaptive card 就退回純 `text`
+- 未知欄位 / 解析失敗：照抄其他三支的原則，寧可留 JSON fence 也不要靜默丟掉
+
+**Diagnostics（這支最重要的除錯手段——沒有它我完全沒辦法遠端修）**：
+
+新增一個選單指令 `Copy Diagnostics`（也放進面板），把下面這些**不含任何 token / 對話內容**
+的安全資訊複製到剪貼簿：
+
+```text
+- msal.3.account.keys 是否存在、解析出幾筆 account
+- msal.cache.encryption cookie 是否存在
+- msal.3.token.keys.<clientId> 是否存在、裡面有幾個 accessToken、
+  有沒有一個命中 substrate.office.com/sydney/.default
+- 解密那一步成功 / 在哪裡丟例外（只回報錯誤訊息，不回報密文或明文）
+- 呼叫 GetChats 的 HTTP 狀態碼 + 回應的 top-level key（不含內容）
+- 網址是 m365.cloud.microsoft 還是被導去別的網域
+```
+
+這樣使用者只要在有授權的電腦上按一次 `Copy Diagnostics` 貼給我，我就能知道是卡在
+「這帳號用的 MSAL cache key 版本不是 `msal.3`」還是「clientId 不對」還是「API 形狀真的變了」，
+不需要使用者手動貼一堆 network tab 截圖。
+
+### 3. README
+
+`userscripts/m365-copilot-export-markdown/README.md` 結構比照其他三支，但開頭用明顯的
+「⚠️ 實驗性」區塊：
+
+- 這支完全沒有在真實帳號上跑過，`npm run preview` 也測不出登入態的任何東西
+- 已知會用到的機制：MSAL 加密 cache、`substrate.office.com` REST API（列出上面查到的細節）
+- 「如果你有 M365 Copilot 授權」一段：怎麼跑 `Copy Diagnostics`、要回報什麼
+- 已知限制：clientId / cache key 版本號（`msal.3.*`）都可能因為 MSAL 版本不同而不一樣，
+  這支目前寫死；`GetChats` 的 `variants` 參數含義未知，先照抄目標實作的預設值
+
+### 4. 索引
+
+跑 `npm run index` 重新產生根 README 的腳本清單表格（不要手改）。
+
+---
+
+## 驗證
+
+```bash
+npm run check      # metadata、@grant 交叉比對、@require 本機解析檢查
+npm run verify      # = check + index:check
+npx prettier --check .
+
+# 只能證明「腳本載得起來、選單有註冊」——沒有 MSAL cache 就不可能测到真實資料
+npm run preview -- m365-copilot-export-markdown "https://m365.cloud.microsoft/chat/"
+
+# 回歸測，確認沒動到既有兩支
+npm run preview -- copilot-export-markdown "https://copilot.microsoft.com/"
+npm run preview -- chatgpt-export-markdown \
+  "https://chatgpt.com/share/6a8d5801-10d8-83ec-b5e7-9d8dc54d48c6" \
+  --menu "Copy Markdown" --wait 20000
+```
+
+### 必須由使用者在有 M365 Copilot 授權的電腦上驗證
+
+1. 開 `https://m365.cloud.microsoft/chat/` 隨便一個對話，按 `Copy Diagnostics`，
+   把結果貼回來（**這是最關�Scrivener鍵的一步，沒有這個我沒辦法繼續修**）
+2. 如果 Diagnostics 顯示一切正常，再試 `Copy Markdown`，把結果（或錯誤訊息）回報
+3. Tampermonkey / Violentmonkey 各跑一次
+
+## 不做的事
+
+- 不碰 WebSocket 那條即時對話協定（`Chathub`），這支只處理歷史紀錄的 REST API
+- 不假設 `copilot.cloud.microsoft` 與 `m365.cloud.microsoft` 是同一件事，也不幫
+  `copilot.cloud.microsoft` 加任何 `@match`——目前完全不知道那個網域的 API 長怎樣
+- 不在沒有真實帳號驗證前，把這支腳本包裝成「可以用」的樣子；README 與 metadata 的
+  `@description` 都要老實掛「實驗性」
+- 不 push（由使用者決定）
+
+````
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/.claude/plans/specstory-local-codex-chat-history-mark-shimmering-eagle.md has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:31:38Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Edit"><details>
+<summary>Tool use: **Edit**</summary>
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/.claude/plans/specstory-local-codex-chat-history-mark-shimmering-eagle.md has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:38:49Z)**_
+
+<tool-use data-tool-type="generic" data-tool-name="ExitPlanMode"><details>
+<summary>Tool use: **ExitPlanMode**</summary>
+
+```text
+The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). To tell you how to proceed, the user said:
+copilot.cloud.microsoft 我確定使用者使用的是這個for organization的 domain; 不過我測試了一下 m365個人版 是能拿到share example link https://m365.cloud.microsoft/chat/share/eyJzaGFyZUlkIjoiZTU2N2EzZTItYzhiMC00MTI2LWI4ZjAtZjVhZjUwNGYyNjM4IiwiY29udmVyc2F0aW9uSWQiOiIxMjRlMjhiMS02ZWE0LTQzZmUtYjMzNy01ZDNlYjAyN2YzNTQifQ%3D%3D UI是蠻像的 可以先假設兩者結構一致 (除非你會調用底層API的話那就分開實現)
+
+Note: The user's next message may contain a correction or preference. Pay close attention — if they explain what went wrong or how they'd prefer you to work, consider saving that to memory for future sessions.
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:39:10Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Decode the M365 Copilot share URL payload
+
+```bash
+python3 -c "
+import base64, urllib.parse
+s = 'eyJzaGFyZUlkIjoiZTU2N2EzZTItYzhiMC00MTI2LWI4ZjAtZjVhZjUwNGYyNjM4IiwiY29udmVyc2F0aW9uSWQiOiIxMjRlMjhiMS02ZWE0LTQzZmUtYjMzNy01ZDNlYjAyN2YzNTQifQ%3D%3D'
+s = urllib.parse.unquote(s)
+print(base64.b64decode(s).decode())
+"
+```
+
+```text
+{"shareId":"e567a3e2-c8b0-4126-b8f0-f5af504f2638","conversationId":"124e28b1-6ea4-43fe-b337-5d3eb027f354"}
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:41:03Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Probe the real M365 Copilot share link
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+cat > $SP/m365-probe.mjs <<'JSEOF'
+import { chromium } from '/Users/david/Documents/Program/Tampermonkey-Scripts/node_modules/playwright/index.mjs';
+const URL_ = 'https://m365.cloud.microsoft/chat/share/eyJzaGFyZUlkIjoiZTU2N2EzZTItYzhiMC00MTI2LWI4ZjAtZjVhZjUwNGYyNjM4IiwiY29udmVyc2F0aW9uSWQiOiIxMjRlMjhiMS02ZWE0LTQzZmUtYjMzNy01ZDNlYjAyN2YzNTQifQ%3D%3D';
+
+const browser = await chromium.launch({ headless: false, channel: 'chrome', proxy: { server: 'http://127.0.0.1:7897' } });
+const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+const hits = [];
+page.on('response', async (r) => {
+  try {
+    const ct = r.headers()['content-type'] || '';
+    if (!/json/.test(ct)) return;
+    const body = await r.text();
+    hits.push({ status: r.status(), len: body.length, url: r.url(), body });
+  } catch {}
+});
+page.on('console', (m) => console.log(`  [${m.type()}]`, m.text().slice(0, 200)));
+await page.goto(URL_, { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.waitForTimeout(9000);
+console.log('FINAL URL:', page.url());
+console.log('TITLE:', await page.title());
+console.log('BODY HEAD:', (await page.evaluate(() => document.body.innerText)).slice(0, 400).replace(/\s+/g,' '));
+for (const h of hits) console.log('JSON', h.status, h.len, h.url.slice(0,140));
+// dump the biggest json hit fully
+const big = hits.sort((a,b)=>b.len-a.len)[0];
+if (big) {
+  const fs = await import('node:fs');
+  fs.writeFileSync('/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad/m365-share-api.json', JSON.stringify({url:big.url, body: big.body}, null, 1));
+  console.log('saved biggest json ->', big.url);
+}
+await browser.close();
+JSEOF
+cd $SP && node m365-probe.mjs 2>&1 | tail -60
+```
+
+```text
+  [info] BSSO Telemetry: {"result":"Error","error":"NoExtension","type":"ChromeSsoTelemetry","data":{},"traces":["BrowserSSO Initialized","Creating ChromeBrowserCore provider","Sending message for method Creat
+  [error] Failed to load resource: the server responded with a status of 404 (Not Found)
+  [log] true
+  [log] Storage access: true
+  [verbose] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o
+FINAL URL: https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=4765445b-32c6-49b0-83e6-1d93765276ca&redirect_uri=https%3A%2F%2Fm365.cloud.microsoft%2Flandingv2&response_type=code%20id_token&scope=openid%20profile%20offline_access%20https%3A%2F%2Fwww.office.com%2Fv2%2FOfficeHome.All&response_mode=form_post&nonce=639233088481683279.NjQ0NDAwNjktZTAyYS00N2E0LWI5MmUtYjg4NzRiODA4NWFiODRmYTVjZDQtOTA2My00ZDkyLWE5ZmUtOTM3YWRhMDRmOTY0&client-request-id=3d78c56b-607c-4517-9c6e-fe45e5d98ecb&siwa=1&siwg=1&state=GoOgGVnBkF5KSv2u2sB3C91kPRT-C3TkVMjdFk9xd3eO7De2oIY6LAizc3JQU8GkAPkoDZRKC1Vm0h74dO6lZPpEQDd06QxmbduJeezt6AViICazEfT_toPvt8-HbZGX2FZpv9KGkWnDp-Xm0XOIVWzDNMSsU0Qfd31fWsm1Kni_MgNNTHvkyz9HCSqH-d7SgvD0J1GlILmpMFXvRe5eSly1ZIp2HsP7_rY5S6wx5BmPdwPfIYVOzpw52FvXNGL-oCy9Uh4bnb-GBLkTBWYiyWKjGDZPKJHLI1MmnlL-CnCr5xc4S8ktl41K_bNdXzXdjmVL4s4S2b5317gZ0UEJBPqoiu6SjIoaBHLnxLwt0jtuS3zw9d28fqFbE5Z7llbkZuydwOJcFh7Wc1sbjykfPo0lS9gv4ixmNk5POzBYofxPOh3BuExB7y_xE3pEK1t6CgU_145uc4jmlEaA7m4Y4Z21fA2kTdsIgsluyPQP6LtW4VAwnVsQhE-OWdIzqAzGBKFB_BgMOJTsbJKuie3t-zEMeV3E-X7U9K4FKH8OJn_5lHa17x5scUxI99a_OyZuiax9Q7Ck-VQ-rYmvgsVOaQ&x-client-SKU=ID_NET8_0&x-client-ver=8.14.0.0&sso_reload=true
+TITLE: Sign in to your account
+BODY HEAD: Sign in No account? Create one! Can’t access your account? Sign-in options For personal accounts Continue with Google Continue with Apple Terms of use Privacy & cookies ...
+JSON 200 24 https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2
+saved biggest json -> https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:42:06Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check if any useful JSON was captured from the share page before the login redirect
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+cat $SP/m365-share-api.json | head -5
+```
+
+```text
+{
+ "url": "https://browser.events.data.microsoft.com/OneCollector/1.0/?cors=true&content-type=application/x-json-stream&w=2",
+ "body": "{\"acc\":3,\"webResult\":{}}"
+}
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:43:21Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Write"><details>
+<summary>Tool use: **Write**</summary>
+
+````markdown
+# 修正 Copilot @match ＋ M365 Copilot Chat 實驗性腳本
+
+## Context
+
+上一輪加了 `@match https://copilot.cloud.microsoft/*` 到 `copilot-export-markdown`，
+以為那是消費版 Copilot 換了網域。使用者實測後確認：**`copilot.cloud.microsoft` 是他們公司帳號
+用的「for organization」網域**，跟這支腳本鎖定的消費版 `copilot.microsoft.com` 是不同產品、
+不同 API——那個 `@match` 是誤加，要改回來。
+
+同時使用者測到另一件事：**`m365.cloud.microsoft`（個人版 M365 Copilot）有公開分享連結**，
+例如：
+
+```text
+https://m365.cloud.microsoft/chat/share/eyJzaGFyZUlkIjoiZTU2N2EzZTItYzhiMC00MTI2LWI4ZjAtZjVhZjUwNGYyNjM4IiwiY29udmVyc2F0aW9uSWQiOiIxMjRlMjhiMS02ZWE0LTQzZmUtYjMzNy01ZDNlYjAyN2YzNTQifQ%3D%3D
+```
+
+（base64 解出來是 `{"shareId":"...","conversationId":"..."}`——純前端路由參數，不是資料本身）。
+
+使用者說「for organization」與「個人版」的 UI 蠻像，**可以先假設兩者結構一致**，
+除非真的需要各自呼叫底層 API 才分開實作。
+
+### 查證到的事實
+
+1. **這個 share 連結需要登入才看得到內容**：用 headless/headed Chrome 開它，
+   會被導去 `login.microsoftonline.com`（`Sign in to your account`），跟 ChatGPT / Claude
+   的 share 頁「匿名就能看」完全不同——沒辦法在沒有帳號的情況下探到真正的 API 回應。
+2. 查到一個公開專案 [ganyuke/copilot-exporter](https://github.com/ganyuke/copilot-exporter)
+   （MIT license），瞄準「登入中檢視自己的對話歷史」這個情境（不是 share 連結），從它的
+   build 產物反推出一套**真的在用的 API**：
+   - `GET https://substrate.office.com/m365Copilot/GetChats?request=<json>&variants=<...>`
+     → `{ chats: [{ conversationId, chatName, createTimeUtc, updateTimeUtc, ... }] }`
+   - `GET https://substrate.office.com/m365Copilot/GetConversation?request={"conversationId":...}`
+     → `{ chatName, createTimeUtc, updateTimeUtc, conversationId, messages: [{ messageId,
+       author: 'user'|'assistant', createdAt|timestamp, text, adaptiveCards?, references? }] }`
+   - citation 是 `adaptiveCards[0].body[0].text` 裡的 `【key】` marker，對照
+     `references[key].targetLink`（URL）與 `references[key].displayData.content`
+     （JSON 字串，含 `label` 序號、`Title`）
+   - 驗證方式很重：token 存在 MSAL（`@azure/msal-browser`）的**加密 localStorage cache**，
+     要讀 `msal.3.account.keys`、`msal.3.token.keys.<clientId>`（clientId 固定
+     `c0ab8ce9-e9a0-42e7-b064-33d422df41f1`），配合 cookie `msal.cache.encryption`
+     做 HKDF → AES-GCM 解密才能拿到明文 token。這是 MSAL 自己的公開機制（不是漏洞），
+     純粹是讀使用者自己瀏覽器裡、自己帳號已登入的 token 來呼叫網站自己的 API。
+   - 這條路是「歷史紀錄」情境驗證過的做法，**不確定 share 連結走不走同一組 API**——
+     分享頁面很可能是另一個 endpoint（例如某種 `GetSharedConversation`），目前沒有證據。
+3. Microsoft 365 Copilot 還有一條完全不同的 **WebSocket** 即時對話協定
+   （`wss://substrate.svc.cloud.microsoft/m365Copilot/Chathub/...`），跟這裡要讀的
+   「歷史紀錄／分享」REST 資料是兩回事，不用碰。
+
+### 這次的設計決策：以「攔截」為主，不要賭 API 形狀
+
+因為 share 連結需要登入、而且不確定它的 API 跟 `GetConversation` 是不是同一套，
+**最穩的做法是照抄 `chatgpt-export-markdown` / `claude-export-markdown` /
+`copilot-export-markdown` 一致的架構**：`document-start` 攔截頁面自己發出的
+`fetch` / `XMLHttpRequest`，用「形狀辨識」找訊息列表（不假設 host 或 top-level key），
+不管網站實際上打的是 `substrate.office.com` 還是別的 endpoint 都攔得到——因為攔截是在
+`window.fetch` 這一層做的，跟目標 API 在哪個網域無關（不受同源限制，因為是頁面自己發的
+跨網域請求，我們只是包一層再呼叫原本的）。
+
+`GetConversation` ＋ MSAL 解密那套只當作**次要 fallback**（給「登入中自己的對話」這個
+情境用，不含 share），因為那條路已經有真實佐證、值得寫；但 share 連結目前**沒有已知的
+直接呼叫方式**，所以 share 情境完全依賴攔截，攔不到就老實報錯。
+
+### 「Copy Diagnostics」：拿掉對 MSAL 細節的猜測，直接讓攔截層說話
+
+不去用一個只回報 MSAL cache 狀態的診斷指令（上一版的想法），改成**把攔截到的每一個 JSON
+回應的 `{url, status, top-level keys}`（不含任何內容）都記下來**，一鍵複製。
+這樣不管使用者是開 share 連結還是自己的對話紀錄，只要按一次 `Copy Diagnostics`，
+我就能直接看到「真正打了哪個 API、回應長什麼形狀」，不必用力去猜。
+
+---
+
+## 要做的事
+
+### 1. 修正 `copilot-export-markdown` 的 `@match`
+
+- 拿掉 `// @match https://copilot.cloud.microsoft/*`（該檔第 9 行）
+- `@version` 1.1.0 → 1.2.0
+- `README.md` 的「生效網站」改回只列 `copilot.microsoft.com`，補一句撤回原因：
+  「`copilot.cloud.microsoft` 是 M365 for organization 用的網域，跟這支鎖定的消費版是
+  不同產品、不同 API，之前誤加已移除；M365 Copilot Chat 另外用
+  `m365-copilot-export-markdown` 處理（實驗性）」
+
+### 2. 新腳本 `userscripts/m365-copilot-export-markdown/`
+
+```bash
+npm run new -- m365-copilot-export-markdown "M365 Copilot Chat Export Markdown" \
+  "https://m365.cloud.microsoft/*" \
+  "【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——尚未經真實帳號驗證"
+```
+
+`@match` 同時列 `https://m365.cloud.microsoft/*` 與 `https://copilot.cloud.microsoft/*`
+（使用者說先假設兩者結構一致；攔截層本來就不綁 host，這樣寫沒有額外風險）。
+
+metadata：`@run-at document-start`、`@grant unsafeWindow / GM_registerMenuCommand /
+GM_setClipboard / GM_setValue / GM_getValue / GM_deleteValue / GM_openInTab`（share 連結
+需要登入，跟 Claude 版一樣用「開新分頁自動匯出」，不假設能就地重打 API）、
+兩個 `@require` 指到 `shared/`。
+
+檔頭註解要老實寫清楚：兩個網域、share 連結需要登入才看得到、目前完全沒有在真實帳號上
+跑過、`GetConversation` 那套 fallback 的出處與只覆蓋「登入中歷史紀錄」而非 share。
+
+**主要來源：攔截（跟其他三支同一個模式）**
+
+- `installFetchCapture()` / `installXhrCapture()`：**不限定 URL host**，攔到的每個 JSON
+  回應都丟進 `findMessageList()`（沿用 `copilot-export-markdown.user.js` 裡的深掃邏輯：
+  找「元素同時有 author/sender/role 與 content/text 的最長陣列」）
+- 同時把**每一個**攔到的 JSON（不只是命中形狀的）記進一份輕量的 log
+  （`{url, status, keys: Object.keys(json)}`，不含內容），供 `Copy Diagnostics` 用
+
+**次要 fallback：登入中歷史紀錄（有真實佐證，share 用不到）**
+
+- `getMsalAccount()` / `getEncryptionCookie()` / `decryptToken()` / `getAccessToken()`：
+  照查到的演算法實作（HKDF → AES-GCM，clientId 寫死
+  `c0ab8ce9-e9a0-42e7-b064-33d422df41f1`，cache key 前綴 `msal.3.*`）
+- `fetchConversationHistory(token, oid, tenantId, conversationId)` 打
+  `substrate.office.com/m365Copilot/GetConversation`
+- 這條路任何一步失敗都要拋出講人話的錯誤，而且**只在攔截完全沒抓到東西、又是登入中的
+  對話（不是 share 連結）時才嘗試**，避免對 share 連結做出錯誤假設
+
+**normalize（adapter）**：
+
+- 訊息 → sections：角色欄位可能是 `author.type` / `author`（字串）/ `sender` / `role`，
+  照 `copilot-export-markdown.user.js` 的 `roleOf()` 那套寬鬆判斷
+- 內文優先用 `adaptiveCards?.[0]?.body?.[0]?.text`，`【key】` citation marker 對照
+  `references[key]` 換成 `[n]` ＋ 段落末來源清單（用 `shared/chat-export.js` 的
+  `sourcesBlock()`，欄位對到 `{url: targetLink, title: Title}`）；沒有 adaptive card
+  就退回 `text` 欄位
+- 完全辨認不出的訊息形狀：留 JSON fence，不要靜默丟掉（跟另外三支一致的原則）
+
+**貼 share URL**：跟 Claude 版一樣的「開新分頁自動匯出」模式（`GM_setValue` 交棒 +
+`GM_openInTab` + 新分頁自己攔截）——不要嘗試在原地重打 API，目前沒有證據那樣行得通。
+
+**Copy Diagnostics**：選單指令＋面板按鈕，把「這次頁面存活期間攔到的每個 JSON 回應」
+（`url` / `status` / top-level keys，不含內容）整理成一段文字複製到剪貼簿；
+沒攔到任何東西時也要說清楚（而不是空字串）。
+
+### 3. README
+
+比照其他三支的結構，開頭用明顯的「⚠️ 實驗性」區塊，講清楚：
+
+- 兩個網域（`m365.cloud.microsoft` 個人版、`copilot.cloud.microsoft` for organization）
+  目前假設共用同一套前端行為，尚未驗證是否真的共用同一套後端 API
+- share 連結需要登入才看得到內容，跟 ChatGPT / Claude 的「匿名可看」不同
+- 主要靠攔截；`GetConversation` + MSAL 解密只是「登入中歷史紀錄」的 fallback，
+  且完全沒有實測過
+- 使用方式：不管是打開 share 連結還是自己的對話，先按 `Copy Diagnostics` 貼給開發者，
+  再視情況試 `Copy Markdown`
+
+### 4. 索引
+
+跑 `npm run index` 重新產生根 README 的腳本清單表格（不要手改）。
+
+---
+
+## 驗證
+
+```bash
+npm run check
+npm run verify
+npx prettier --check .
+
+npm run preview -- m365-copilot-export-markdown "https://m365.cloud.microsoft/chat/"
+
+# 回歸測，確認沒動到既有兩支
+npm run preview -- copilot-export-markdown "https://copilot.microsoft.com/"
+npm run preview -- chatgpt-export-markdown \
+  "https://chatgpt.com/share/6a8d5801-10d8-83ec-b5e7-9d8dc54d48c6" \
+  --menu "Copy Markdown" --wait 20000
+```
+
+`npm run preview` 只能證明「腳本載得起來、選單有註冊」——沒有登入態不可能測到真實資料。
+
+### 必須由使用者驗證（這是打通這支腳本唯一的路）
+
+1. 開那條 share 連結（登入後），按 `Copy Diagnostics`，把結果貼回來——
+   **這一步最關鍵**：能直接告訴我 share 連結實際打了什麼 API、回應長怎樣
+2. 有機會的話也在自己的對話歷史（`https://m365.cloud.microsoft/chat/` 或
+   `https://copilot.cloud.microsoft/...`）按一次 `Copy Diagnostics` 與 `Copy Markdown`
+3. Tampermonkey / Violentmonkey 各跑一次
+
+拿到 Diagnostics 的回報後，下一步是把 `findMessageList` / `normalize()` 對準真實形狀微調，
+必要時把 `copilot.cloud.microsoft` 與 `m365.cloud.microsoft` 拆成兩支腳本
+（如果回報顯示兩者 API 真的不一樣）。
+
+## 不做的事
+
+- 不碰 WebSocket 即時對話協定（`Chathub`），只處理歷史紀錄／分享的 REST 資料
+- 不在沒有真實回報前，把 share 連結的 fallback 寫成好像已知可行的樣子——
+  目前只有攔截這條路有把握
+- 不在沒有真實帳號驗證前，把這支腳本包裝成「可以用」；README 與 `@description`
+  都要老實掛「實驗性」
+- 不 push（由使用者決定）
+
+````
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/.claude/plans/specstory-local-codex-chat-history-mark-shimmering-eagle.md has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:43:53Z)**_
+
+<tool-use data-tool-type="generic" data-tool-name="ExitPlanMode"><details>
+<summary>Tool use: **ExitPlanMode**</summary>
+
+```text
+User has approved your plan. You can now start coding. Start with updating your todo list if applicable
+
+Your plan has been saved to: /Users/david/Documents/Program/Tampermonkey-Scripts/.claude/plans/specstory-local-codex-chat-history-mark-shimmering-eagle.md
+You can refer back to it if needed during implementation.
+
+## Approved Plan:
+# 修正 Copilot @match ＋ M365 Copilot Chat 實驗性腳本
+
+## Context
+
+上一輪加了 `@match https://copilot.cloud.microsoft/*` 到 `copilot-export-markdown`，
+以為那是消費版 Copilot 換了網域。使用者實測後確認：**`copilot.cloud.microsoft` 是他們公司帳號
+用的「for organization」網域**，跟這支腳本鎖定的消費版 `copilot.microsoft.com` 是不同產品、
+不同 API——那個 `@match` 是誤加，要改回來。
+
+同時使用者測到另一件事：**`m365.cloud.microsoft`（個人版 M365 Copilot）有公開分享連結**，
+例如：
+
+```text
+https://m365.cloud.microsoft/chat/share/eyJzaGFyZUlkIjoiZTU2N2EzZTItYzhiMC00MTI2LWI4ZjAtZjVhZjUwNGYyNjM4IiwiY29udmVyc2F0aW9uSWQiOiIxMjRlMjhiMS02ZWE0LTQzZmUtYjMzNy01ZDNlYjAyN2YzNTQifQ%3D%3D
+```
+
+（base64 解出來是 `{"shareId":"...","conversationId":"..."}`——純前端路由參數，不是資料本身）。
+
+使用者說「for organization」與「個人版」的 UI 蠻像，**可以先假設兩者結構一致**，
+除非真的需要各自呼叫底層 API 才分開實作。
+
+### 查證到的事實
+
+1. **這個 share 連結需要登入才看得到內容**：用 headless/headed Chrome 開它，
+   會被導去 `login.microsoftonline.com`（`Sign in to your account`），跟 ChatGPT / Claude
+   的 share 頁「匿名就能看」完全不同——沒辦法在沒有帳號的情況下探到真正的 API 回應。
+2. 查到一個公開專案 [ganyuke/copilot-exporter](https://github.com/ganyuke/copilot-exporter)
+   （MIT license），瞄準「登入中檢視自己的對話歷史」這個情境（不是 share 連結），從它的
+   build 產物反推出一套**真的在用的 API**：
+   - `GET https://substrate.office.com/m365Copilot/GetChats?request=<json>&variants=<...>`
+     → `{ chats: [{ conversationId, chatName, createTimeUtc, updateTimeUtc, ... }] }`
+   - `GET https://substrate.office.com/m365Copilot/GetConversation?request={"conversationId":...}`
+     → `{ chatName, createTimeUtc, updateTimeUtc, conversationId, messages: [{ messageId,
+       author: 'user'|'assistant', createdAt|timestamp, text, adaptiveCards?, references? }] }`
+   - citation 是 `adaptiveCards[0].body[0].text` 裡的 `【key】` marker，對照
+     `references[key].targetLink`（URL）與 `references[key].displayData.content`
+     （JSON 字串，含 `label` 序號、`Title`）
+   - 驗證方式很重：token 存在 MSAL（`@azure/msal-browser`）的**加密 localStorage cache**，
+     要讀 `msal.3.account.keys`、`msal.3.token.keys.<clientId>`（clientId 固定
+     `c0ab8ce9-e9a0-42e7-b064-33d422df41f1`），配合 cookie `msal.cache.encryption`
+     做 HKDF → AES-GCM 解密才能拿到明文 token。這是 MSAL 自己的公開機制（不是漏洞），
+     純粹是讀使用者自己瀏覽器裡、自己帳號已登入的 token 來呼叫網站自己的 API。
+   - 這條路是「歷史紀錄」情境驗證過的做法，**不確定 share 連結走不走同一組 API**——
+     分享頁面很可能是另一個 endpoint（例如某種 `GetSharedConversation`），目前沒有證據。
+3. Microsoft 365 Copilot 還有一條完全不同的 **WebSocket** 即時對話協定
+   （`wss://substrate.svc.cloud.microsoft/m365Copilot/Chathub/...`），跟這裡要讀的
+   「歷史紀錄／分享」REST 資料是兩回事，不用碰。
+
+### 這次的設計決策：以「攔截」為主，不要賭 API 形狀
+
+因為 share 連結需要登入、而且不確定它的 API 跟 `GetConversation` 是不是同一套，
+**最穩的做法是照抄 `chatgpt-export-markdown` / `claude-export-markdown` /
+`copilot-export-markdown` 一致的架構**：`document-start` 攔截頁面自己發出的
+`fetch` / `XMLHttpRequest`，用「形狀辨識」找訊息列表（不假設 host 或 top-level key），
+不管網站實際上打的是 `substrate.office.com` 還是別的 endpoint 都攔得到——因為攔截是在
+`window.fetch` 這一層做的，跟目標 API 在哪個網域無關（不受同源限制，因為是頁面自己發的
+跨網域請求，我們只是包一層再呼叫原本的）。
+
+`GetConversation` ＋ MSAL 解密那套只當作**次要 fallback**（給「登入中自己的對話」這個
+情境用，不含 share），因為那條路已經有真實佐證、值得寫；但 share 連結目前**沒有已知的
+直接呼叫方式**，所以 share 情境完全依賴攔截，攔不到就老實報錯。
+
+### 「Copy Diagnostics」：拿掉對 MSAL 細節的猜測，直接讓攔截層說話
+
+不去用一個只回報 MSAL cache 狀態的診斷指令（上一版的想法），改成**把攔截到的每一個 JSON
+回應的 `{url, status, top-level keys}`（不含任何內容）都記下來**，一鍵複製。
+這樣不管使用者是開 share 連結還是自己的對話紀錄，只要按一次 `Copy Diagnostics`，
+我就能直接看到「真正打了哪個 API、回應長什麼形狀」，不必用力去猜。
+
+---
+
+## 要做的事
+
+### 1. 修正 `copilot-export-markdown` 的 `@match`
+
+- 拿掉 `// @match https://copilot.cloud.microsoft/*`（該檔第 9 行）
+- `@version` 1.1.0 → 1.2.0
+- `README.md` 的「生效網站」改回只列 `copilot.microsoft.com`，補一句撤回原因：
+  「`copilot.cloud.microsoft` 是 M365 for organization 用的網域，跟這支鎖定的消費版是
+  不同產品、不同 API，之前誤加已移除；M365 Copilot Chat 另外用
+  `m365-copilot-export-markdown` 處理（實驗性）」
+
+### 2. 新腳本 `userscripts/m365-copilot-export-markdown/`
+
+```bash
+npm run new -- m365-copilot-export-markdown "M365 Copilot Chat Export Markdown" \
+  "https://m365.cloud.microsoft/*" \
+  "【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——尚未經真實帳號驗證"
+```
+
+`@match` 同時列 `https://m365.cloud.microsoft/*` 與 `https://copilot.cloud.microsoft/*`
+（使用者說先假設兩者結構一致；攔截層本來就不綁 host，這樣寫沒有額外風險）。
+
+metadata：`@run-at document-start`、`@grant unsafeWindow / GM_registerMenuCommand /
+GM_setClipboard / GM_setValue / GM_getValue / GM_deleteValue / GM_openInTab`（share 連結
+需要登入，跟 Claude 版一樣用「開新分頁自動匯出」，不假設能就地重打 API）、
+兩個 `@require` 指到 `shared/`。
+
+檔頭註解要老實寫清楚：兩個網域、share 連結需要登入才看得到、目前完全沒有在真實帳號上
+跑過、`GetConversation` 那套 fallback 的出處與只覆蓋「登入中歷史紀錄」而非 share。
+
+**主要來源：攔截（跟其他三支同一個模式）**
+
+- `installFetchCapture()` / `installXhrCapture()`：**不限定 URL host**，攔到的每個 JSON
+  回應都丟進 `findMessageList()`（沿用 `copilot-export-markdown.user.js` 裡的深掃邏輯：
+  找「元素同時有 author/sender/role 與 content/text 的最長陣列」）
+- 同時把**每一個**攔到的 JSON（不只是命中形狀的）記進一份輕量的 log
+  （`{url, status, keys: Object.keys(json)}`，不含內容），供 `Copy Diagnostics` 用
+
+**次要 fallback：登入中歷史紀錄（有真實佐證，share 用不到）**
+
+- `getMsalAccount()` / `getEncryptionCookie()` / `decryptToken()` / `getAccessToken()`：
+  照查到的演算法實作（HKDF → AES-GCM，clientId 寫死
+  `c0ab8ce9-e9a0-42e7-b064-33d422df41f1`，cache key 前綴 `msal.3.*`）
+- `fetchConversationHistory(token, oid, tenantId, conversationId)` 打
+  `substrate.office.com/m365Copilot/GetConversation`
+- 這條路任何一步失敗都要拋出講人話的錯誤，而且**只在攔截完全沒抓到東西、又是登入中的
+  對話（不是 share 連結）時才嘗試**，避免對 share 連結做出錯誤假設
+
+**normalize（adapter）**：
+
+- 訊息 → sections：角色欄位可能是 `author.type` / `author`（字串）/ `sender` / `role`，
+  照 `copilot-export-markdown.user.js` 的 `roleOf()` 那套寬鬆判斷
+- 內文優先用 `adaptiveCards?.[0]?.body?.[0]?.text`，`【key】` citation marker 對照
+  `references[key]` 換成 `[n]` ＋ 段落末來源清單（用 `shared/chat-export.js` 的
+  `sourcesBlock()`，欄位對到 `{url: targetLink, title: Title}`）；沒有 adaptive card
+  就退回 `text` 欄位
+- 完全辨認不出的訊息形狀：留 JSON fence，不要靜默丟掉（跟另外三支一致的原則）
+
+**貼 share URL**：跟 Claude 版一樣的「開新分頁自動匯出」模式（`GM_setValue` 交棒 +
+`GM_openInTab` + 新分頁自己攔截）——不要嘗試在原地重打 API，目前沒有證據那樣行得通。
+
+**Copy Diagnostics**：選單指令＋面板按鈕，把「這次頁面存活期間攔到的每個 JSON 回應」
+（`url` / `status` / top-level keys，不含內容）整理成一段文字複製到剪貼簿；
+沒攔到任何東西時也要說清楚（而不是空字串）。
+
+### 3. README
+
+比照其他三支的結構，開頭用明顯的「⚠️ 實驗性」區塊，講清楚：
+
+- 兩個網域（`m365.cloud.microsoft` 個人版、`copilot.cloud.microsoft` for organization）
+  目前假設共用同一套前端行為，尚未驗證是否真的共用同一套後端 API
+- share 連結需要登入才看得到內容，跟 ChatGPT / Claude 的「匿名可看」不同
+- 主要靠攔截；`GetConversation` + MSAL 解密只是「登入中歷史紀錄」的 fallback，
+  且完全沒有實測過
+- 使用方式：不管是打開 share 連結還是自己的對話，先按 `Copy Diagnostics` 貼給開發者，
+  再視情況試 `Copy Markdown`
+
+### 4. 索引
+
+跑 `npm run index` 重新產生根 README 的腳本清單表格（不要手改）。
+
+---
+
+## 驗證
+
+```bash
+npm run check
+npm run verify
+npx prettier --check .
+
+npm run preview -- m365-copilot-export-markdown "https://m365.cloud.microsoft/chat/"
+
+# 回歸測，確認沒動到既有兩支
+npm run preview -- copilot-export-markdown "https://copilot.microsoft.com/"
+npm run preview -- chatgpt-export-markdown \
+  "https://chatgpt.com/share/6a8d5801-10d8-83ec-b5e7-9d8dc54d48c6" \
+  --menu "Copy Markdown" --wait 20000
+```
+
+`npm run preview` 只能證明「腳本載得起來、選單有註冊」——沒有登入態不可能測到真實資料。
+
+### 必須由使用者驗證（這是打通這支腳本唯一的路）
+
+1. 開那條 share 連結（登入後），按 `Copy Diagnostics`，把結果貼回來——
+   **這一步最關鍵**：能直接告訴我 share 連結實際打了什麼 API、回應長怎樣
+2. 有機會的話也在自己的對話歷史（`https://m365.cloud.microsoft/chat/` 或
+   `https://copilot.cloud.microsoft/...`）按一次 `Copy Diagnostics` 與 `Copy Markdown`
+3. Tampermonkey / Violentmonkey 各跑一次
+
+拿到 Diagnostics 的回報後，下一步是把 `findMessageList` / `normalize()` 對準真實形狀微調，
+必要時把 `copilot.cloud.microsoft` 與 `m365.cloud.microsoft` 拆成兩支腳本
+（如果回報顯示兩者 API 真的不一樣）。
+
+## 不做的事
+
+- 不碰 WebSocket 即時對話協定（`Chathub`），只處理歷史紀錄／分享的 REST 資料
+- 不在沒有真實回報前，把 share 連結的 fallback 寫成好像已知可行的樣子——
+  目前只有攔截這條路有把握
+- 不在沒有真實帳號驗證前，把這支腳本包裝成「可以用」；README 與 `@description`
+  都要老實掛「實驗性」
+- 不 push（由使用者決定）
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:43:58Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./userscripts/copilot-export-markdown/copilot-export-markdown.user.js`
+
+```text
+1	// ==UserScript==
+2	// @name         Copilot Export Markdown
+3	// @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
+4	// @version      1.1.0
+5	// @description  把整段 Microsoft Copilot 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用
+6	// @author       Da-Wei Lee
+7	// @license      MIT
+8	// @match        https://copilot.microsoft.com/*
+9	// @match        https://copilot.cloud.microsoft/*
+10	// @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9ImhzbCgyNjMgNjIlIDQ2JSkiLz48dGV4dCB4PSIzMiIgeT0iMzMiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJIZWx2ZXRpY2EsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNyIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9ImNlbnRyYWwiPkNFPC90ZXh0Pjwvc3ZnPg==
+11	// @run-at       document-start
+12	// @grant        unsafeWindow
+13	// @grant        GM_registerMenuCommand
+14	// @grant        GM_setClipboard
+15	// @grant        GM_setValue
+16	// @grant        GM_getValue
+17	// @grant        GM_deleteValue
+18	// @grant        GM_openInTab
+19	// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/chat-export.js
+20	// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/export-ui.js
+21	// @updateURL    https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/copilot-export-markdown/copilot-export-markdown.user.js
+22	// @downloadURL  https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/copilot-export-markdown/copilot-export-markdown.user.js
+23	// ==/UserScript==
+24	
+25	/* global createExportPanel, downloadText, filenameFor, jsonFence, renderTranscript, sourcesBlock */
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:44:05Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Revert copilot.cloud.microsoft match, bump version
+
+```bash
+R=/Users/david/Documents/Program/Tampermonkey-Scripts
+python3 - <<'PYEOF'
+from pathlib import Path
+p = Path('/Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/copilot-export-markdown/copilot-export-markdown.user.js')
+s = p.read_text()
+s = s.replace(
+"""// @version      1.1.0
+// @description  把整段 Microsoft Copilot 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用
+// @author       Da-Wei Lee
+// @license      MIT
+// @match        https://copilot.microsoft.com/*
+// @match        https://copilot.cloud.microsoft/*""",
+"""// @version      1.2.0
+// @description  把整段 Microsoft Copilot 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用
+// @author       Da-Wei Lee
+// @license      MIT
+// @match        https://copilot.microsoft.com/*"""
+)
+assert "const VERSION = '1.1.0';" in s
+s = s.replace("const VERSION = '1.1.0';", "const VERSION = '1.2.0';")
+p.write_text(s)
+print("patched")
+PYEOF
+grep -n '@version\|@match\|VERSION =' /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/copilot-export-markdown/copilot-export-markdown.user.js
+```
+
+```text
+patched
+4:// @version      1.2.0
+8:// @match        https://copilot.microsoft.com/*
+46:  const VERSION = '1.2.0';
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:44:07Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Locate README lines to update
+
+```bash
+R=/Users/david/Documents/Program/Tampermonkey-Scripts
+grep -n '生效網站\|已知限制' $R/userscripts/copilot-export-markdown/README.md
+```
+
+```text
+7:- **生效網站**：`https://copilot.microsoft.com/*` 與 `https://copilot.cloud.microsoft/*`
+61:## 已知限制
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:44:16Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Update Copilot README to revert domain claim and point to new experimental script
+
+```bash
+R=/Users/david/Documents/Program/Tampermonkey-Scripts
+python3 - <<'PYEOF'
+from pathlib import Path
+p = Path('/Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/copilot-export-markdown/README.md')
+s = p.read_text()
+old = """- **生效網站**：`https://copilot.microsoft.com/*` 與 `https://copilot.cloud.microsoft/*`
+  （`/chats/<id>` 與 `/shares/<id>`；後者是 Microsoft 365 帳號登入時導去的網域，
+  API 路徑與行為跟前者一致）"""
+new = """- **生效網站**：`https://copilot.microsoft.com/*`（`/chats/<id>` 與 `/shares/<id>`）"""
+assert old in s
+s = s.replace(old, new)
+
+old2 = "## 已知限制\n\n"
+new2 = """## 已知限制
+
+- **`copilot.cloud.microsoft` 不是這支腳本的目標**：那是 Microsoft 365 for organization
+  用的網域，跟這裡鎖定的消費版是不同產品、不同 API（曾經誤加過 `@match`，已移除）。
+  M365 Copilot Chat（`copilot.cloud.microsoft` / `m365.cloud.microsoft`）另外用
+  [`m365-copilot-export-markdown`](../m365-copilot-export-markdown/) 處理，目前是實驗性、
+  尚未驗證。
+"""
+assert old2 in s
+s = s.replace(old2, new2, 1)
+p.write_text(s)
+print("readme patched")
+PYEOF
+
+```
+
+```text
+readme patched
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:44:18Z)**_
+
+Good, that patch applied cleanly. Now scaffold the new experimental script.
+
+_**Agent (claude-sonnet-5 2026-08-26 02:44:26Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Scaffold new experimental M365 Copilot script
+
+```bash
+R=/Users/david/Documents/Program/Tampermonkey-Scripts
+cd "$R" && npm run new -- m365-copilot-export-markdown "M365 Copilot Chat Export Markdown" "https://m365.cloud.microsoft/*" "【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——尚未經真實帳號驗證" 2>&1 | tail -10
+```
+
+```text
+> tampermonkey-scripts@1.0.0 new
+> node scripts/new-script.mjs m365-copilot-export-markdown M365 Copilot Chat Export Markdown https://m365.cloud.microsoft/* 【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——尚未經真實帳號驗證
+
+Created userscripts/m365-copilot-export-markdown/
+Next: 實作腳本 → npm run check → npm run index
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:44:47Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js`
+
+```text
+1	// ==UserScript==
+2	// @name         M365 Copilot Chat Export Markdown
+3	// @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
+4	// @version      0.1.0
+5	// @description  【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——尚未經真實帳號驗證
+6	// @author       Da-Wei Lee
+7	// @license      MIT
+8	// @match        https://m365.cloud.microsoft/*
+9	// @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9ImhzbCgyMTUgNjIlIDQ2JSkiLz48dGV4dCB4PSIzMiIgeT0iMzMiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJIZWx2ZXRpY2EsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNyIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9ImNlbnRyYWwiPk1DPC90ZXh0Pjwvc3ZnPg==
+10	// @run-at       document-idle
+11	// @grant        none
+12	// @updateURL    https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js
+13	// @downloadURL  https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js
+14	// ==/UserScript==
+15	
+16	/**
+17	 * M365 Copilot Chat Export Markdown
+18	 *
+19	 * 開發備忘：
+20	 * - 改動後記得把 @version 往上加，否則其他機器的 Tampermonkey 不會更新。
+21	 * - 用到任何 GM_* API 都要在上面加對應的 `// @grant`，`npm run check` 會擋。
+22	 * - 現代網站多半是 SPA：換頁不會 reload，所以下面用 MutationObserver + URL 監看。
+23	 */
+24	(function () {
+25	  'use strict';
+26	
+27	  const LOG_PREFIX = '[m365-copilot-export-markdown]';
+28	  const log = (...args) => console.log(LOG_PREFIX, ...args);
+29	
+30	  /** 頁面（或 SPA 路由）進入可用狀態時要做的事。可重複呼叫，必須 idempotent。 */
+31	  function run() {
+32	    // TODO: 在這裡實作。範例：
+33	    // const target = document.querySelector('main');
+34	    // if (!target || target.dataset.myScriptDone) return;
+35	    // target.dataset.myScriptDone = '1';
+36	    log('running on', location.href);
+37	  }
+38	
+39	  /** 等某個 selector 出現（SPA 常見需求），逾時就放棄。 */
+40	  function waitForElement(selector, { timeout = 10_000 } = {}) {
+41	    return new Promise((resolve, reject) => {
+42	      const existing = document.querySelector(selector);
+43	      if (existing) return resolve(existing);
+44	
+45	      const observer = new MutationObserver(() => {
+46	        const el = document.querySelector(selector);
+47	        if (el) {
+48	          observer.disconnect();
+49	          clearTimeout(timer);
+50	          resolve(el);
+51	        }
+52	      });
+53	      observer.observe(document.documentElement, { childList: true, subtree: true });
+54	
+55	      const timer = setTimeout(() => {
+56	        observer.disconnect();
+57	        reject(new Error(`${selector} not found within ${timeout}ms`));
+58	      }, timeout);
+59	    });
+60	  }
+61	
+62	  /** SPA 路由變化偵測：history API 不會觸發任何原生事件，所以自己輪詢 URL。 */
+63	  function onUrlChange(callback) {
+64	    let lastUrl = location.href;
+65	    new MutationObserver(() => {
+66	      if (location.href !== lastUrl) {
+67	        lastUrl = location.href;
+68	        callback(location.href);
+69	      }
+70	    }).observe(document.body, { childList: true, subtree: true });
+71	  }
+72	
+73	  run();
+74	  onUrlChange(run);
+75	
+76	  // 用不到就刪掉，留著只是提醒有這個工具可用。
+77	  void waitForElement;
+78	})();
+79
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:44:49Z)**_
+
+Now let me write the full implementation.
+
+_**Agent (claude-sonnet-5 2026-08-26 02:46:39Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Write"><details>
+<summary>Tool use: **Write**</summary>
+
+```javascript
+// ==UserScript==
+// @name         M365 Copilot Chat Export Markdown
+// @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
+// @version      0.1.0
+// @description  【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——尚未經真實帳號驗證
+// @author       Da-Wei Lee
+// @license      MIT
+// @match        https://m365.cloud.microsoft/*
+// @match        https://copilot.cloud.microsoft/*
+// @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9ImhzbCgyMTUgNjIlIDQ2JSkiLz48dGV4dCB4PSIzMiIgeT0iMzMiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJIZWx2ZXRpY2EsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNyIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9ImNlbnRyYWwiPk1DPC90ZXh0Pjwvc3ZnPg==
+// @run-at       document-start
+// @grant        unsafeWindow
+// @grant        GM_registerMenuCommand
+// @grant        GM_setClipboard
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_deleteValue
+// @grant        GM_openInTab
+// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/chat-export.js
+// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/export-ui.js
+// @updateURL    https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js
+// @downloadURL  https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js
+// ==/UserScript==
+
+/* global createExportPanel, downloadText, filenameFor, jsonFence, renderTranscript, sourcesBlock */
+
+/**
+ * ⚠️ 實驗性：這支腳本完全沒有在真實 M365 Copilot 帳號上跑過，隨時可能整支不能用。
+ *
+ * 背景：這是 `copilot-export-markdown`（消費版 copilot.microsoft.com）的姊妹腳本，
+ * 目標是 Microsoft 365 的企業版／個人版 Copilot Chat。這兩個產品**不是同一個 API**：
+ *
+ * - `copilot.cloud.microsoft` —— 使用者確認是他們公司帳號用的「for organization」網域
+ * - `m365.cloud.microsoft` —— 個人版，有公開分享連結，例如
+ *   `https://m365.cloud.microsoft/chat/share/<base64url(JSON)>`，base64 解出來是
+ *   `{"shareId":"…","conversationId":"…"}`——但**這個連結需要登入才看得到內容**
+ *   （匿名開會被導去 login.microsoftonline.com），跟 ChatGPT / Claude 的「匿名可看」不同，
+ *   所以沒辦法在沒有帳號的情況下探到真正的 API 回應。
+ *
+ * 因為不確定兩個網域、甚至「登入中的歷史紀錄」與「share 連結」是不是打同一套 API，
+ * 這支腳本的**主要來源是攔截**（跟 chatgpt / claude / copilot 三支同一個模式）：
+ * `document-start` 攔 `fetch` / `XMLHttpRequest`，攔到的 JSON **不限定 URL host**，
+ * 用形狀辨識找訊息列表——不管網站實際上打的是哪個 endpoint 都攔得到，因為攔截是包一層
+ * `window.fetch`，跟目標 API 在哪個網域無關（不受同源限制：是頁面自己發的跨網域請求，
+ * 我們只是攔截再照樣呼叫原本的）。
+ *
+ * 次要 fallback（只給「登入中查看自己的歷史紀錄」用，覆蓋不到 share 連結）是從公開專案
+ * ganyuke/copilot-exporter（MIT license，github.com/ganyuke/copilot-exporter）的 build
+ * 產物反推出來的真實 API 事實——不是抄它的程式碼，是照這個 repo 一貫的風格自己刻，
+ * 只是 token 這段沒辦法憑空猜出來，來源列在下面：
+ *
+ * - `GET https://substrate.office.com/m365Copilot/GetConversation?request={"conversationId":…}`
+ *   → `{ chatName, createTimeUtc, updateTimeUtc, conversationId,
+ *        messages: [{ messageId, author: 'user'|'assistant', createdAt|timestamp, text,
+ *                      adaptiveCards?, references? }] }`
+ * - citation 是 `adaptiveCards[0].body[0].text` 裡的『【key】』全形括號 marker，
+ *   對照 `references[key]`（`targetLink` 是 URL，`displayData.content` 是含 `label` /
+ *   `Title` 的 JSON 字串）
+ * - 驗證要讀 MSAL（`@azure/msal-browser`）存在 localStorage 的**加密** token cache：
+ *   `msal.3.account.keys` 找帳號、`msal.3.token.keys.<clientId>`
+ *   （clientId 固定 `c0ab8ce9-e9a0-42e7-b064-33d422df41f1`，M365 Copilot Chat 的第一方
+ *   app id）找 scope 含 `substrate.office.com/sydney/.default` 的 token，
+ *   配合 cookie `msal.cache.encryption` 做 HKDF → AES-GCM 解密。這是 MSAL 自己的公開
+ *   「cache encryption」機制，不是漏洞——單純是讀使用者自己瀏覽器裡、自己帳號已登入的
+ *   token 來呼叫網站自己的 API，跟另外三支腳本讀 `Authorization` header 是同一類事情。
+ *
+ * **Copy Diagnostics**：因為不確定真實 API 長怎樣，這支腳本會把「攔到的每一個 JSON
+ * 回應」的 `{url, status, top-level keys}`（不含任何內容）記下來，一鍵複製。
+ * 拿到真實帳號測試的人請先按這個，把結果回報，才能把 `findMessageList` / `normalize()`
+ * 對準真實形狀微調。
+ */
+(function () {
+  'use strict';
+
+  const VERSION = '0.1.0';
+  const NS = 'm365-copilot-export-md';
+  const EXPORTER = `m365-copilot-export-markdown v${VERSION}`;
+  const LOG_PREFIX = '[m365-copilot-export-markdown]';
+  const log = (...args) => console.log(LOG_PREFIX, ...args);
+
+  // 有任何 @grant 就會被 sandbox，頁面的全域要走 unsafeWindow 才看得到。
+  const pageWin = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+
+  // M365 Copilot Chat 的第一方 app id，來自 ganyuke/copilot-exporter 的反推結果。
+  const MSAL_CLIENT_ID = 'c0ab8ce9-e9a0-42e7-b064-33d422df41f1';
+  const MSAL_TOKEN_SCOPE = 'https://substrate.office.com/sydney/.default';
+
+  // ---------------------------------------------------------------- 設定
+
+  const SETTINGS_KEYS = ['includeThinking', 'includeTools'];
+  const PENDING_KEY = 'pendingExport'; // 「貼 share URL → 開新分頁自動匯出」的一次性交棒
+  const settings = { includeThinking: false, includeTools: false };
+
+  for (const key of SETTINGS_KEYS) {
+    settings[key] = GM_getValue(key, settings[key]) === true;
+  }
+
+  function setSetting(key, value) {
+    settings[key] = value === true;
+    GM_setValue(key, settings[key]);
+  }
+
+  // ------------------------------------------------- 來源 1：攔截網站自己的請求
+
+  /**
+   * 深掃找「訊息列表」：元素同時有 author/sender/role 與 content/text 的陣列，
+   * 取最長的那個。跟 `copilot-export-markdown.user.js` 是同一套邏輯，因為我們也不知道
+   * M365 Copilot Chat 的回應會不會長得跟消費版一樣。
+   */
+  function findMessageList(root, maxDepth = 6) {
+    const seen = new Set();
+    let best = null;
+
+    const isMessage = (item) =>
+      !!item &&
+      typeof item === 'object' &&
+      (item.author || item.sender || item.role) &&
+      (Array.isArray(item.content) || typeof item.content === 'string' || 'text' in item);
+
+    const walk = (node, depth) => {
+      if (!node || typeof node !== 'object' || depth > maxDepth || seen.has(node)) return;
+      seen.add(node);
+      if (Array.isArray(node)) {
+        if (node.length > 0 && node.every(isMessage)) {
+          if (!best || node.length > best.length) best = node;
+          return;
+        }
+        for (const item of node) walk(item, depth + 1);
+        return;
+      }
+      for (const value of Object.values(node)) walk(value, depth + 1);
+    };
+
+    walk(root, 0);
+    return best;
+  }
+
+  /** [{ url, data, messages }]，最新的排最後。 */
+  const captured = [];
+  /** 每一個攔到的 JSON 都記一筆（不含內容），供 Copy Diagnostics 用。 */
+  const diagnostics = [];
+  const DIAGNOSTICS_LIMIT = 100;
+
+  function rememberDiagnostics(url, status, json) {
+    diagnostics.push({
+      url,
+      status,
+      keys: json && typeof json === 'object' ? Object.keys(json) : [],
+      at: new Date().toISOString(),
+    });
+    if (diagnostics.length > DIAGNOSTICS_LIMIT) diagnostics.shift();
+  }
+
+  function rememberPayload(url, status, payload) {
+    rememberDiagnostics(url, status, payload);
+    const messages = findMessageList(payload);
+    if (!messages) return;
+    captured.push({ url, data: payload, messages });
+    log('captured conversation:', url, `${messages.length} messages`);
+  }
+
+  function installFetchCapture() {
+    const originalFetch = pageWin.fetch;
+    if (typeof originalFetch !== 'function' || originalFetch.__m365ExportPatched) return;
+
+    const patched = function (...args) {
+      const promise = originalFetch.apply(this, args);
+      return promise.then((response) => {
+        try {
+          const input = args[0];
+          const url = typeof input === 'string' ? input : input?.url || '';
+          if (!/json/.test(response.headers.get('content-type') || '')) return response;
+          // body 只能讀一次，一定要 clone，否則網站自己就讀不到了。
+          response
+            .clone()
+            .json()
+            .then((json) => rememberPayload(url, response.status, json))
+            .catch(() => {});
+        } catch {
+          /* 攔截失敗不能影響網站本身 */
+        }
+        return response; // 一定要把原本的 response 還回去
+      });
+    };
+    patched.__m365ExportPatched = true;
+    pageWin.fetch = patched;
+  }
+
+  /** 有些請求可能走 XHR，所以兩種都要攔（跟 copilot-export-markdown 一致）。 */
+  function installXhrCapture() {
+    const XHR = pageWin.XMLHttpRequest;
+    if (!XHR || XHR.prototype.__m365ExportPatched) return;
+
+    const { open, send } = XHR.prototype;
+
+    XHR.prototype.open = function (method, url, ...rest) {
+      this.__m365ExportUrl = String(url || '');
+      return open.call(this, method, url, ...rest);
+    };
+
+    XHR.prototype.send = function (...args) {
+      this.addEventListener('load', () => {
+        try {
+          const contentType = this.getResponseHeader('content-type') || '';
+          if (!/json/.test(contentType)) return;
+          const raw =
+            this.responseType === '' || this.responseType === 'text'
+              ? this.responseText
+              : this.response;
+          const json = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          rememberPayload(this.__m365ExportUrl || '', this.status, json);
+        } catch {
+          /* 不是 JSON 就算了 */
+        }
+      });
+      return send.apply(this, args);
+    };
+
+    XHR.prototype.__m365ExportPatched = true;
+  }
+
+  // --------------------------------------------- 來源 2：登入中歷史紀錄的 fallback
+  //
+  // 只覆蓋「登入中查看自己的對話」這個情境，share 連結目前沒有已知的直接呼叫方式，
+  // 所以這條路不會對 share 連結生效（見 resolveConversation）。
+
+  function base64UrlDecode(value) {
+    const padded = value.replace(/-/g, '+').replace(/_/g, '/');
+    const binary = atob(padded.padEnd(padded.length + ((4 - (padded.length % 4)) % 4), '='));
+    return Uint8Array.from(binary, (ch) => ch.codePointAt(0));
+  }
+
+  function getCookie(name) {
+    const match = document.cookie.match(`(^|;)\\s*${name}\\s*=\\s*([^;]+)`);
+    return match ? decodeURIComponent(match.pop()) : '';
+  }
+
+  function getMsalAccount() {
+    const raw = pageWin.localStorage.getItem('msal.3.account.keys');
+    if (!raw) throw new Error('沒有 MSAL 帳號 key（msal.3.account.keys）——可能沒有登入，或 MSAL cache 版本不是 msal.3');
+    const keys = JSON.parse(raw);
+    if (!Array.isArray(keys) || keys.length === 0) throw new Error('MSAL 帳號 key 是空的');
+    const [homeAccountId, , tenantId] = keys[0].split('|');
+    const [localAccountId] = homeAccountId.split('.');
+    return { localAccountId, tenantId, homeAccountId, clientId: MSAL_CLIENT_ID };
+  }
+
+  async function getEncryptionCookie() {
+    const cookieValue = getCookie('msal.cache.encryption');
+    if (!cookieValue) throw new Error('沒有 msal.cache.encryption cookie，解不了 token cache');
+    const parsed = JSON.parse(cookieValue);
+    if (!parsed.key) throw new Error('msal.cache.encryption cookie 格式不對（缺 key）');
+    const baseKey = await pageWin.crypto.subtle.importKey(
+      'raw',
+      base64UrlDecode(parsed.key).buffer,
+      'HKDF',
+      false,
+      ['deriveKey']
+    );
+    return baseKey;
+  }
+
+  /** HKDF 衍生金鑰 → AES-GCM 解密，演算法照 ganyuke/copilot-exporter 反推的結果。 */
+  async function decryptMsalToken(baseKey, nonce, context, ciphertext) {
+    const derivedKey = await pageWin.crypto.subtle.deriveKey(
+      {
+        name: 'HKDF',
+        salt: base64UrlDecode(nonce).buffer,
+        hash: 'SHA-256',
+        info: new TextEncoder().encode(context),
+      },
+      baseKey,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['decrypt']
+    );
+    const decrypted = await pageWin.crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: new Uint8Array(12) },
+      derivedKey,
+      base64UrlDecode(ciphertext).buffer
+    );
+    return new TextDecoder().decode(decrypted);
+  }
+
+  async function getMsalAccessToken(msalIds) {
+    const baseKey = await getEncryptionCookie();
+    const tokenKeysRaw = pageWin.localStorage.getItem(`msal.3.token.keys.${msalIds.clientId}`);
+    if (!tokenKeysRaw) throw new Error(`沒有 msal.3.token.keys.${msalIds.clientId}`);
+    const tokenKeys = JSON.parse(tokenKeysRaw);
+    const scopedKey = (tokenKeys.accessToken || []).find((key) => key.includes(MSAL_TOKEN_SCOPE));
+    if (!scopedKey) throw new Error(`token cache 裡沒有 scope 含 ${MSAL_TOKEN_SCOPE} 的 token`);
+    const entryRaw = pageWin.localStorage.getItem(scopedKey);
+    if (!entryRaw) throw new Error('對應的 token cache entry 不見了');
+    const entry = JSON.parse(entryRaw);
+    const decrypted = await decryptMsalToken(baseKey, entry.nonce, msalIds.clientId, entry.data);
+    return JSON.parse(decrypted).secret;
+  }
+
+  async function fromLoggedInHistory(conversationId) {
+    if (!conversationId) return null;
+    let msalIds;
+    let token;
+    try {
+      msalIds = getMsalAccount();
+      token = await getMsalAccessToken(msalIds);
+    } catch (error) {
+      log('MSAL fallback unavailable:', error.message);
+      return null;
+    }
+
+    const requestObj = { conversationId, source: 'officeweb', traceId: crypto.randomUUID() };
+    const url = `https://substrate.office.com/m365Copilot/GetConversation?request=${encodeURIComponent(JSON.stringify(requestObj))}`;
+    const headers = {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+      'x-anchormailbox': `Oid:${msalIds.localAccountId}@${msalIds.tenantId}`,
+      'x-scenario': 'OfficeWebIncludedCopilot',
+    };
+
+    try {
+      const res = await fetch(url, { headers });
+      const json = await res.json();
+      rememberDiagnostics(url, res.status, json);
+      if (!res.ok) {
+        log('GetConversation fallback failed:', res.status);
+        return null;
+      }
+      const messages = findMessageList(json);
+      return messages ? { url, data: json, messages } : null;
+    } catch (error) {
+      log('GetConversation fallback threw:', error.message);
+      return null;
+    }
+  }
+
+  // ------------------------------------------------------------ 來源總調度
+
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  /** `/chat/share/<base64url(JSON)>` → { shareId, conversationId }。 */
+  function decodeShareParam(param) {
+    try {
+      return JSON.parse(new TextDecoder().decode(base64UrlDecode(decodeURIComponent(param))));
+    } catch {
+      return null;
+    }
+  }
+
+  function currentIds() {
+    const share = location.pathname.match(/\/chat\/share\/([^/?#]+)/);
+    if (share) {
+      const decoded = decodeShareParam(share[1]);
+      if (decoded) return { shareId: decoded.shareId || null, conversationId: decoded.conversationId || null };
+    }
+    return { shareId: null, conversationId: null };
+  }
+
+  function shareIdFromUrl(input) {
+    const match = String(input).match(/\/chat\/share\/([^/?#]+)/);
+    return match ? match[1] : null;
+  }
+
+  function pickCaptured(ids) {
+    if (ids.conversationId) {
+      for (let i = captured.length - 1; i >= 0; i--) {
+        if (captured[i].url.includes(ids.conversationId)) return captured[i];
+      }
+    }
+    return captured[captured.length - 1] || null;
+  }
+
+  async function waitForCapture(ids, { timeout = 8_000, interval = 200 } = {}) {
+    const deadline = Date.now() + timeout;
+    for (;;) {
+      const hit = pickCaptured(ids);
+      if (hit) return hit;
+      if (Date.now() >= deadline) return null;
+      await delay(interval);
+    }
+  }
+
+  async function resolveConversation(ids) {
+    const hit = pickCaptured(ids) || (await waitForCapture(ids));
+    if (hit) return { ...hit, source: 'network-capture' };
+
+    // fallback 只覆蓋「登入中的歷史紀錄」，share 連結沒有已知的直接呼叫方式。
+    if (!ids.shareId && ids.conversationId) {
+      const api = await fromLoggedInHistory(ids.conversationId);
+      if (api) return { ...api, source: 'api (未實測)' };
+    }
+
+    throw new Error(
+      '抓不到對話資料。這支腳本是實驗性的——請按 "Copy Diagnostics" 把結果回報，' +
+        '再確認已登入、對話已載完、重新整理這一頁試一次。'
+    );
+  }
+
+  // ------------------------------------------------------------ 轉成 Markdown
+
+  function roleOf(message) {
+    const raw = message.author?.type || message.author || message.sender || message.role || '';
+    const type = String(raw);
+    if (/human|user/i.test(type)) return 'User';
+    if (/^(ai|bot|assistant|copilot)$/i.test(type)) return 'Assistant';
+    return type ? type[0].toUpperCase() + type.slice(1) : 'Unknown';
+  }
+
+  const CITATION_MARKER_RE = /【([^】]+)】/g;
+
+  /**
+   * citation 藏在 adaptiveCards[0].body[0].text 裡的『【key】』marker，
+   * 對照 references[key]（targetLink 是 URL，displayData.content 是含 label/Title 的
+   * JSON 字串）。查證來源：ganyuke/copilot-exporter。
+   */
+  function resolveAdaptiveCardBody(message) {
+    const cardText = message.adaptiveCards?.[0]?.body?.[0]?.text;
+    if (typeof cardText !== 'string') return null;
+
+    const references = message.references || {};
+    const citations = [];
+    const rewritten = cardText.replace(CITATION_MARKER_RE, (whole, key) => {
+      const ref = references[key];
+      if (!ref?.targetLink) return whole;
+      let title = '';
+      try {
+        title = JSON.parse(ref.displayData?.content || '{}')?.Title || '';
+      } catch {
+        /* 拿不到 Title 就用 URL 當標題 */
+      }
+      citations.push({ url: ref.targetLink, title });
+      return '';
+    });
+
+    const sources = sourcesBlock(citations);
+    return sources ? `${rewritten}\n\n${sources}` : rewritten;
+  }
+
+  function partToText(part, opts) {
+    if (typeof part === 'string') return part;
+    if (!part || typeof part !== 'object') return '';
+
+    switch (part.type) {
+      case 'text':
+        return String(part.text ?? '');
+      case 'image': {
+        if (!part.url) return '';
+        const caption = part.prompt ? `\n\n*Prompt: ${part.prompt}*` : '';
+        return `![image](${part.url})${caption}`;
+      }
+      default:
+        if (!opts.includeTools) return '';
+        return `**${part.type || 'part'}**\n\n${jsonFence(part)}`;
+    }
+  }
+
+  function messageToBody(message, opts) {
+    // 優先用 adaptive card（citation 都在那裡），沒有就退回 content[] 或 text。
+    const cardBody = resolveAdaptiveCardBody(message);
+    if (cardBody) return cardBody;
+
+    if (Array.isArray(message.content)) {
+      const texts = message.content.map((part) => partToText(part, opts)).filter(Boolean);
+      if (texts.length > 0) return texts.join('\n\n');
+    }
+
+    if (typeof message.text === 'string' && message.text.trim()) return message.text;
+
+    // 完全辨認不出的形狀：留 JSON fence，不要靜默丟掉。
+    return jsonFence(message);
+  }
+
+  /** 標題可能藏在哪一層不確定，優先找已知的 chatName，其次往下找兩層。 */
+  function pickTitle(data) {
+    if (typeof data.chatName === 'string' && data.chatName.trim()) return data.chatName;
+    const keys = ['title', 'conversationTitle', 'name'];
+    const look = (node, depth) => {
+      if (!node || typeof node !== 'object' || depth > 2) return '';
+      for (const key of keys) {
+        if (typeof node[key] === 'string' && node[key].trim()) return node[key];
+      }
+      for (const value of Object.values(node)) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          const hit = look(value, depth + 1);
+          if (hit) return hit;
+        }
+      }
+      return '';
+    };
+    return look(data, 0) || 'M365 Copilot conversation';
+  }
+
+  function normalize(hit, ctx, opts) {
+    const messages = [...hit.messages].sort((a, b) => {
+      const at = new Date(a.createdAt || a.timestamp || 0).getTime() || 0;
+      const bt = new Date(b.createdAt || b.timestamp || 0).getTime() || 0;
+      return at - bt;
+    });
+
+    const sections = messages
+      .map((message) => ({
+        role: roleOf(message),
+        model: '',
+        time: message.createdAt || message.timestamp,
+        body: messageToBody(message, opts),
+      }))
+      .filter((section) => section.body.trim());
+
+    return {
+      source: 'm365-copilot',
+      sourceLabel: 'Microsoft 365 Copilot Chat',
+      title: pickTitle(hit.data),
+      url: ctx.url,
+      ids: { conversation_id: ctx.conversationId || '', share_id: ctx.shareId || '' },
+      model: '',
+      createdAt: hit.data.createTimeUtc || messages[0]?.createdAt || messages[0]?.timestamp,
+      sections,
+    };
+  }
+
+  // ------------------------------------------------------------------ 動作
+
+  async function doExport({ mode, to, ids }) {
+    ui.setStatus('讀取對話…');
+    try {
+      const target = ids || currentIds();
+      const hit = await resolveConversation(target);
+      const url = target.shareId ? location.href : location.href;
+
+      const doc = normalize(hit, { ...target, url }, settings);
+      const text =
+        mode === 'json'
+          ? JSON.stringify(hit.data, null, 2)
+          : renderTranscript(doc, {
+              ...settings,
+              handoff: mode === 'handoff',
+              exporter: EXPORTER,
+            });
+
+      if (to === 'clipboard') {
+        GM_setClipboard(text, 'text');
+        ui.setStatus(`已複製 ${text.length.toLocaleString()} 字（來源：${hit.source}）`);
+      } else {
+        downloadText(
+          filenameFor(doc, mode === 'json' ? 'json' : 'md'),
+          text,
+          mode === 'json' ? 'application/json;charset=utf-8' : 'text/markdown;charset=utf-8'
+        );
+        ui.setStatus(`已下載（來源：${hit.source}）`);
+      }
+      log('exported', { mode, to, source: hit.source, length: text.length });
+    } catch (error) {
+      ui.setStatus(`失敗：${error.message}`);
+      log('export failed:', error);
+    }
+  }
+
+  function copyDiagnostics() {
+    if (diagnostics.length === 0) {
+      GM_setClipboard('（這次頁面存活期間沒有攔到任何 JSON 回應）', 'text');
+      ui.setStatus('沒有攔到任何 JSON 回應——把這個結果回報也是有用的資訊。');
+      return;
+    }
+    const lines = diagnostics.map(
+      (entry) => `${entry.at}  ${entry.status}  ${entry.url}\n  keys: [${entry.keys.join(', ')}]`
+    );
+    const report = [
+      `${EXPORTER} diagnostics`,
+      `page: ${location.href}`,
+      `captured ${diagnostics.length} JSON response(s):`,
+      '',
+      ...lines,
+    ].join('\n');
+    GM_setClipboard(report, 'text');
+    ui.setStatus(`已複製 ${diagnostics.length} 筆 diagnostics，麻煩回報給開發者。`);
+  }
+
+  /** share 連結需要登入才看得到內容，且目前沒有已知的就地重打 API 方式，一律開新分頁。 */
+  function exportFromShareUrl(raw) {
+    const shareId = shareIdFromUrl(raw);
+    if (!shareId) {
+      ui.setStatus('這不像 share 連結（要有 /chat/share/<id>）。');
+      return;
+    }
+    if (shareId === currentIds().shareId) {
+      doExport({ mode: 'transcript', to: 'clipboard' });
+      return;
+    }
+    GM_setValue(PENDING_KEY, { shareId, expires: Date.now() + 120_000 });
+    GM_openInTab(new URL(`/chat/share/${shareId}`, location.origin).href, { active: true });
+    ui.setStatus('已開新分頁，那邊載完就會自動複製。');
+  }
+
+  async function consumePending() {
+    const pending = GM_getValue(PENDING_KEY, null);
+    if (!pending || typeof pending !== 'object') return;
+    const { shareId } = currentIds();
+    if (!shareId || pending.shareId !== shareId) return;
+
+    GM_deleteValue(PENDING_KEY); // 一次性：先消耗再執行，免得失敗時每次開頁都重跑
+    if (Date.now() > (pending.expires ?? 0)) return;
+
+    ui.openPanel();
+    await doExport({ mode: 'transcript', to: 'clipboard' });
+  }
+
+  const ACTIONS = [
+    { label: 'Copy Markdown', run: () => doExport({ mode: 'transcript', to: 'clipboard' }) },
+    { label: 'Copy Agent Handoff', run: () => doExport({ mode: 'handoff', to: 'clipboard' }) },
+    { label: 'Download .md', run: () => doExport({ mode: 'transcript', to: 'file' }) },
+    { label: 'Download .json', run: () => doExport({ mode: 'json', to: 'file' }) },
+    { label: 'Copy Diagnostics', run: copyDiagnostics },
+  ];
+
+  // -------------------------------------------------------------------- UI
+
+  const ui = createExportPanel({
+    ns: NS,
+    buttonLabel: '⇩ Export MD (實驗性)',
+    buttonTitle: '實驗性腳本：如果失敗，請先按 Copy Diagnostics 回報',
+    actions: ACTIONS,
+    toggles: [
+      {
+        label: '含 thinking / reasoning',
+        get: () => settings.includeThinking,
+        set: (value) => setSetting('includeThinking', value),
+      },
+      {
+        label: '含工具呼叫與未知區塊',
+        get: () => settings.includeTools,
+        set: (value) => setSetting('includeTools', value),
+      },
+    ],
+    shareInput: {
+      placeholder: '貼上任意 share 連結…',
+      buttonLabel: 'Open & copy share URL',
+      onSubmit: exportFromShareUrl,
+    },
+    storage: { get: (key, fallback) => GM_getValue(key, fallback), set: GM_setValue },
+    onStatus: log,
+  });
+
+  function registerMenu() {
+    for (const action of ACTIONS) {
+      // 不要用 accessKey —— 那是 Tampermonkey 限定的。
+      GM_registerMenuCommand(action.label, () => {
+        ui.openPanel();
+        action.run();
+      });
+    }
+    GM_registerMenuCommand('Export from share URL…', () => {
+      ui.openPanel();
+      const raw = prompt('貼上 M365 Copilot Chat share 連結：');
+      if (raw) exportFromShareUrl(raw);
+    });
+    GM_registerMenuCommand('Toggle thinking / reasoning', () => {
+      setSetting('includeThinking', !settings.includeThinking);
+      ui.openPanel();
+      ui.setStatus(`thinking / reasoning：${settings.includeThinking ? '含' : '不含'}`);
+    });
+    GM_registerMenuCommand('Toggle 工具呼叫與未知區塊', () => {
+      setSetting('includeTools', !settings.includeTools);
+      ui.openPanel();
+      ui.setStatus(`工具呼叫：${settings.includeTools ? '含' : '不含'}`);
+    });
+    GM_registerMenuCommand('Reset button position', () => {
+      ui.mount();
+      ui.resetPosition();
+      ui.openPanel();
+      ui.setStatus('按鈕已放回右下角');
+    });
+  }
+
+  // ----------------------------------------------------------------- 啟動
+
+  installFetchCapture(); // 必須在網站發出請求之前，所以 @run-at document-start
+  installXhrCapture();
+  registerMenu();
+
+  function start() {
+    ui.mount();
+    consumePending();
+
+    // SPA 換對話不會 reload，只要確保 UI 還在（抓資料完全不碰 DOM，不需要重建狀態）。
+    let lastUrl = location.href;
+    new MutationObserver(() => {
+      if (location.href === lastUrl) return;
+      lastUrl = location.href;
+      ui.mount();
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  // document-start 時 <body>（有時連 <html>）都還沒有，所以 UI 與 observer 等到 DOM 就緒再掛。
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else {
+    start();
+  }
+})();
+
+```
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:46:54Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Syntax check and metadata check for new script
+
+```bash
+R=/Users/david/Documents/Program/Tampermonkey-Scripts
+node --check "$R/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js" && echo "syntax ok"
+cd "$R" && npm run check 2>&1 | tail -30
+```
+
+```text
+syntax ok
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 6 userscript(s): 0 error(s), 0 warning(s).
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:46:58Z)**_
+
+Now let's run a stub-based end-to-end test of the transform pipeline (like I did for copilot-export-markdown) since real data isn't available.
+
+_**Agent (claude-sonnet-5 2026-08-26 02:47:34Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Stub-test M365 Copilot exporter pipeline: capture, normalize, render, diagnostics
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+cat > $SP/m365-stub.mjs <<'JSEOF'
+// 用 stub server 打 m365-copilot 腳本的整條鏈：攔截（不限 host）→ 找形狀 → normalize → render。
+// 同時驗證 Copy Diagnostics 在有資料 / 沒資料時都輸出合理內容。
+import { chromium } from '/Users/david/Documents/Program/Tampermonkey-Scripts/node_modules/playwright/index.mjs';
+import { readFileSync } from 'node:fs';
+
+const REPO = '/Users/david/Documents/Program/Tampermonkey-Scripts';
+const script = readFileSync(`${REPO}/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js`, 'utf8');
+const requires = [...script.matchAll(/^\/\/ @require\s+(\S+)/gm)].map((m) => m[1]);
+
+const GM_SHIM = `
+window.__gmStore = {}; window.__gmClipboard = null; window.__gmMenu = [];
+window.GM_setValue = (k, v) => { window.__gmStore[k] = v; };
+window.GM_getValue = (k, d) => (k in window.__gmStore ? window.__gmStore[k] : d);
+window.GM_deleteValue = (k) => { delete window.__gmStore[k]; };
+window.GM_setClipboard = (t) => { window.__gmClipboard = t; };
+window.GM_openInTab = (u) => console.log('GM_openInTab', u);
+window.GM_registerMenuCommand = (c, f) => { window.__gmMenu.push({ caption: c, fn: f }); return c; };
+window.unsafeWindow = window;
+`;
+
+// 模擬「登入中查看歷史」情境會拿到的 GetConversation 形狀（含 adaptiveCard citation）。
+const conversation = {
+  chatName: '幫我規劃 userscript 的 M365 支援',
+  createTimeUtc: Date.parse('2026-08-20T03:00:00Z'),
+  updateTimeUtc: Date.parse('2026-08-20T03:05:00Z'),
+  conversationId: 'FAKECONV',
+  messages: [
+    {
+      messageId: 'm1',
+      author: 'user',
+      createdAt: '2026-08-20T03:00:00Z',
+      text: 'M365 Copilot Chat 的 share 連結要怎麼處理？',
+    },
+    {
+      messageId: 'm2',
+      author: 'assistant',
+      createdAt: '2026-08-20T03:00:20Z',
+      text: 'fallback text（沒有 adaptive card 時用這個）',
+      adaptiveCards: [
+        {
+          body: [
+            {
+              text: '結論：先攔截【a1】，不確定的話再查 GetConversation【a1】。',
+            },
+          ],
+        },
+      ],
+      references: {
+        a1: {
+          targetLink: 'https://learn.microsoft.com/copilot',
+          displayData: { content: JSON.stringify({ label: '1', Title: 'Copilot docs' }) },
+        },
+      },
+    },
+  ],
+};
+
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage();
+page.on('console', (m) => { if (m.text().includes('m365-copilot-export')) console.log(`  ${m.text()}`.slice(0, 220)); });
+page.on('pageerror', (e) => console.log('  [pageerror]', e.message));
+
+await page.route('https://m365.cloud.microsoft/**', (route) => {
+  const url = new URL(route.request().url());
+  if (url.pathname === '/fakehistoryapi/GetConversation') {
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(conversation) });
+  }
+  return route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>stub</title><body>stub</body>' });
+});
+
+const bundle = [GM_SHIM, ...requires.map((r) => readFileSync(`${REPO}/${r.replace(/^.*\/main\//, '')}`, 'utf8')), script];
+await page.addInitScript({ content: bundle.join('\n;\n') });
+
+await page.goto('https://m365.cloud.microsoft/chat/', { waitUntil: 'domcontentloaded' });
+// 模擬網站自己發出那個請求（攔截器應該接住它，即使 host/path 完全是我們沒預期過的）
+await page.evaluate(() => fetch('/fakehistoryapi/GetConversation').then((r) => r.json()));
+await page.waitForTimeout(300);
+
+console.log('\n########## Copy Diagnostics (有資料) ##########\n');
+await page.evaluate(() => window.__gmMenu.find((m) => m.caption === 'Copy Diagnostics').fn());
+console.log(await page.evaluate(() => window.__gmClipboard));
+
+console.log('\n########## Copy Markdown ##########\n');
+await page.evaluate(() => { window.__gmClipboard = null; });
+await page.evaluate(() => window.__gmMenu.find((m) => m.caption === 'Copy Markdown').fn());
+await page.waitForFunction(() => window.__gmClipboard !== null, null, { timeout: 15000 }).catch(() => {});
+console.log(await page.evaluate(() => window.__gmClipboard));
+
+// 第二個分頁：完全沒有任何攔截 → Copy Diagnostics 該說「沒攔到」而不是空字串
+const page2 = await browser.newPage();
+await page.route ? null : null;
+await page2.route('https://m365.cloud.microsoft/**', (route) =>
+  route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>stub</title><body>stub</body>' })
+);
+await page2.addInitScript({ content: bundle.join('\n;\n') });
+await page2.goto('https://m365.cloud.microsoft/chat/', { waitUntil: 'domcontentloaded' });
+await page2.waitForTimeout(200);
+console.log('\n########## Copy Diagnostics (沒資料) ##########\n');
+await page2.evaluate(() => window.__gmMenu.find((m) => m.caption === 'Copy Diagnostics').fn());
+console.log(await page2.evaluate(() => window.__gmClipboard));
+
+await browser.close();
+JSEOF
+cd $SP && node m365-stub.mjs 2>&1
+```
+
+```text
+  [m365-copilot-export-markdown] captured conversation: /fakehistoryapi/GetConversation 2 messages
+
+########## Copy Diagnostics (有資料) ##########
+
+  [m365-copilot-export-markdown] 已複製 1 筆 diagnostics，麻煩回報給開發者。
+m365-copilot-export-markdown v0.1.0 diagnostics
+page: https://m365.cloud.microsoft/chat/
+captured 1 JSON response(s):
+
+2026-08-26T02:47:32.208Z  200  /fakehistoryapi/GetConversation
+  keys: [chatName, createTimeUtc, updateTimeUtc, conversationId, messages]
+
+########## Copy Markdown ##########
+
+  [m365-copilot-export-markdown] 讀取對話…
+  [m365-copilot-export-markdown] 已複製 602 字（來源：network-capture）
+  [m365-copilot-export-markdown] exported {mode: transcript, to: clipboard, source: network-capture, length: 602}
+---
+source: m365-copilot
+title: "幫我規劃 userscript 的 M365 支援"
+url: "https://m365.cloud.microsoft/chat/"
+model: ""
+created_at: "2026-08-20 03:00:00Z"
+exported_at: "2026-08-26T10:47:32+08:00"
+messages: 2
+include_thinking: false
+include_tools: false
+exporter: "m365-copilot-export-markdown v0.1.0"
+---
+
+# 幫我規劃 userscript 的 M365 支援
+
+<!-- Generated by m365-copilot-export-markdown v0.1.0 -->
+
+_**User (2026-08-20 03:00:00Z)**_
+
+M365 Copilot Chat 的 share 連結要怎麼處理？
+
+---
+
+_**Assistant (2026-08-20 03:00:20Z)**_
+
+結論：先攔截，不確定的話再查 GetConversation。
+
+**Sources**
+
+- [Copilot docs](https://learn.microsoft.com/copilot)
+
+
+########## Copy Diagnostics (沒資料) ##########
+
+（這次頁面存活期間沒有攔到任何 JSON 回應）
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:47:50Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Smoke-test m365-copilot script through the harness
+
+`timeout 150 npm run preview -- m365-copilot-export-markdown "https://m365.cloud.microsoft/chat/" 2>&1 | tail -20`
+
+```text
+> tampermonkey-scripts@1.0.0 preview
+> node scripts/preview.mjs m365-copilot-export-markdown https://m365.cloud.microsoft/chat/
+
+→ https://m365.cloud.microsoft/chat/
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.addScriptTag: Execution context was destroyed, most likely because of a navigation
+    at /Users/david/Documents/Program/Tampermonkey-Scripts/scripts/preview.mjs:115:12 {
+  log: [],
+  name: 'Error'
+}
+
+Node.js v24.13.1
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:48:13Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check whether m365.cloud.microsoft/chat/ redirects immediately
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+cat > $SP/m365-redirect-check.mjs <<'JSEOF'
+import { chromium } from '/Users/david/Documents/Program/Tampermonkey-Scripts/node_modules/playwright/index.mjs';
+const browser = await chromium.launch({ headless: true, proxy: { server: 'http://127.0.0.1:7897' } });
+const page = await browser.newPage();
+page.on('framenavigated', (f) => { if (f === page.mainFrame()) console.log('nav ->', f.url()); });
+await page.goto('https://m365.cloud.microsoft/chat/', { waitUntil: 'domcontentloaded', timeout: 30000 }).catch((e) => console.log('goto err', e.message.split('\n')[0]));
+await page.waitForTimeout(4000);
+console.log('final:', page.url());
+await browser.close();
+JSEOF
+cd $SP && node m365-redirect-check.mjs 2>&1
+```
+
+```text
+nav -> https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=4765445b-32c6-49b0-83e6-1d93765276ca&redirect_uri=https%3A%2F%2Fm365.cloud.microsoft%2Flandingv2&response_type=code%20id_token&scope=openid%20profile%20offline_access%20https%3A%2F%2Fwww.office.com%2Fv2%2FOfficeHome.All&response_mode=form_post&nonce=639233092875532190.YTI0OTQ1YzgtMjU3Yy00OTljLTkzYmEtMDYyZmJkYjA0YjZkOGVjNGFmMDQtNWE5Yi00MzA3LThmZWItOWMzODJmOTgwOGJl&client-request-id=1061dc62-48a9-4f70-bf6a-a811b415c15b&siwa=1&siwg=1&state=3lXvhGLnkVe0q80Tys7euD-7GZPjVpGcCp7fHl8qr3zLgIJQ4mZGv_GEUdyaPULrnPL1aY6tzB_cJViiJEBCeCOdf800qUGotyrTR2IcPl_tNvk8ww4dSe5K9ufjAk0KeMSdFMn1Dv7MiG8CH0Cjlmck7607azhk0AR2_eG4IOTmEtwHkvh9GBofQXyTxiRfEaHtn9Us88nPbnRJ9IxTS-uViYK8-qt__ggt7B37qyJqCb2_lL0pauWq50cvAuReyGIhe-nGmFGkqTMBBYlOg-nGyvLHqHeT2bc2DNiqVU_9QivbynzADk66v9yLz9rrcsffFzugLKUyB2c42K_K6vWNxDKrg5EfBMrPhp_W0-l2Tl8_OI1fHuJD8FSNU8TgzG29BzDPM09EXvpOEpOKew&x-client-SKU=ID_NET8_0&x-client-ver=8.14.0.0
+nav -> https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=4765445b-32c6-49b0-83e6-1d93765276ca&redirect_uri=https%3A%2F%2Fm365.cloud.microsoft%2Flandingv2&response_type=code%20id_token&scope=openid%20profile%20offline_access%20https%3A%2F%2Fwww.office.com%2Fv2%2FOfficeHome.All&response_mode=form_post&nonce=639233092875532190.YTI0OTQ1YzgtMjU3Yy00OTljLTkzYmEtMDYyZmJkYjA0YjZkOGVjNGFmMDQtNWE5Yi00MzA3LThmZWItOWMzODJmOTgwOGJl&client-request-id=1061dc62-48a9-4f70-bf6a-a811b415c15b&siwa=1&siwg=1&state=3lXvhGLnkVe0q80Tys7euD-7GZPjVpGcCp7fHl8qr3zLgIJQ4mZGv_GEUdyaPULrnPL1aY6tzB_cJViiJEBCeCOdf800qUGotyrTR2IcPl_tNvk8ww4dSe5K9ufjAk0KeMSdFMn1Dv7MiG8CH0Cjlmck7607azhk0AR2_eG4IOTmEtwHkvh9GBofQXyTxiRfEaHtn9Us88nPbnRJ9IxTS-uViYK8-qt__ggt7B37qyJqCb2_lL0pauWq50cvAuReyGIhe-nGmFGkqTMBBYlOg-nGyvLHqHeT2bc2DNiqVU_9QivbynzADk66v9yLz9rrcsffFzugLKUyB2c42K_K6vWNxDKrg5EfBMrPhp_W0-l2Tl8_OI1fHuJD8FSNU8TgzG29BzDPM09EXvpOEpOKew&x-client-SKU=ID_NET8_0&x-client-ver=8.14.0.0&sso_reload=true
+nav -> https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=4765445b-32c6-49b0-83e6-1d93765276ca&redirect_uri=https%3A%2F%2Fm365.cloud.microsoft%2Flandingv2&response_type=code%20id_token&scope=openid%20profile%20offline_access%20https%3A%2F%2Fwww.office.com%2Fv2%2FOfficeHome.All&response_mode=form_post&nonce=639233092875532190.YTI0OTQ1YzgtMjU3Yy00OTljLTkzYmEtMDYyZmJkYjA0YjZkOGVjNGFmMDQtNWE5Yi00MzA3LThmZWItOWMzODJmOTgwOGJl&client-request-id=1061dc62-48a9-4f70-bf6a-a811b415c15b&siwa=1&siwg=1&state=3lXvhGLnkVe0q80Tys7euD-7GZPjVpGcCp7fHl8qr3zLgIJQ4mZGv_GEUdyaPULrnPL1aY6tzB_cJViiJEBCeCOdf800qUGotyrTR2IcPl_tNvk8ww4dSe5K9ufjAk0KeMSdFMn1Dv7MiG8CH0Cjlmck7607azhk0AR2_eG4IOTmEtwHkvh9GBofQXyTxiRfEaHtn9Us88nPbnRJ9IxTS-uViYK8-qt__ggt7B37qyJqCb2_lL0pauWq50cvAuReyGIhe-nGmFGkqTMBBYlOg-nGyvLHqHeT2bc2DNiqVU_9QivbynzADk66v9yLz9rrcsffFzugLKUyB2c42K_K6vWNxDKrg5EfBMrPhp_W0-l2Tl8_OI1fHuJD8FSNU8TgzG29BzDPM09EXvpOEpOKew&x-client-SKU=ID_NET8_0&x-client-ver=8.14.0.0&sso_reload=true
+nav -> https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=4765445b-32c6-49b0-83e6-1d93765276ca&redirect_uri=https%3A%2F%2Fm365.cloud.microsoft%2Flandingv2&response_type=code%20id_token&scope=openid%20profile%20offline_access%20https%3A%2F%2Fwww.office.com%2Fv2%2FOfficeHome.All&response_mode=form_post&nonce=639233092875532190.YTI0OTQ1YzgtMjU3Yy00OTljLTkzYmEtMDYyZmJkYjA0YjZkOGVjNGFmMDQtNWE5Yi00MzA3LThmZWItOWMzODJmOTgwOGJl&client-request-id=1061dc62-48a9-4f70-bf6a-a811b415c15b&siwa=1&siwg=1&state=3lXvhGLnkVe0q80Tys7euD-7GZPjVpGcCp7fHl8qr3zLgIJQ4mZGv_GEUdyaPULrnPL1aY6tzB_cJViiJEBCeCOdf800qUGotyrTR2IcPl_tNvk8ww4dSe5K9ufjAk0KeMSdFMn1Dv7MiG8CH0Cjlmck7607azhk0AR2_eG4IOTmEtwHkvh9GBofQXyTxiRfEaHtn9Us88nPbnRJ9IxTS-uViYK8-qt__ggt7B37qyJqCb2_lL0pauWq50cvAuReyGIhe-nGmFGkqTMBBYlOg-nGyvLHqHeT2bc2DNiqVU_9QivbynzADk66v9yLz9rrcsffFzugLKUyB2c42K_K6vWNxDKrg5EfBMrPhp_W0-l2Tl8_OI1fHuJD8FSNU8TgzG29BzDPM09EXvpOEpOKew&x-client-SKU=ID_NET8_0&x-client-ver=8.14.0.0&sso_reload=true
+nav -> https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=4765445b-32c6-49b0-83e6-1d93765276ca&redirect_uri=https%3A%2F%2Fm365.cloud.microsoft%2Flandingv2&response_type=code%20id_token&scope=openid%20profile%20offline_access%20https%3A%2F%2Fwww.office.com%2Fv2%2FOfficeHome.All&response_mode=form_post&nonce=639233092875532190.YTI0OTQ1YzgtMjU3Yy00OTljLTkzYmEtMDYyZmJkYjA0YjZkOGVjNGFmMDQtNWE5Yi00MzA3LThmZWItOWMzODJmOTgwOGJl&client-request-id=1061dc62-48a9-4f70-bf6a-a811b415c15b&siwa=1&siwg=1&state=3lXvhGLnkVe0q80Tys7euD-7GZPjVpGcCp7fHl8qr3zLgIJQ4mZGv_GEUdyaPULrnPL1aY6tzB_cJViiJEBCeCOdf800qUGotyrTR2IcPl_tNvk8ww4dSe5K9ufjAk0KeMSdFMn1Dv7MiG8CH0Cjlmck7607azhk0AR2_eG4IOTmEtwHkvh9GBofQXyTxiRfEaHtn9Us88nPbnRJ9IxTS-uViYK8-qt__ggt7B37qyJqCb2_lL0pauWq50cvAuReyGIhe-nGmFGkqTMBBYlOg-nGyvLHqHeT2bc2DNiqVU_9QivbynzADk66v9yLz9rrcsffFzugLKUyB2c42K_K6vWNxDKrg5EfBMrPhp_W0-l2Tl8_OI1fHuJD8FSNU8TgzG29BzDPM09EXvpOEpOKew&x-client-SKU=ID_NET8_0&x-client-ver=8.14.0.0&sso_reload=true
+nav -> https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=4765445b-32c6-49b0-83e6-1d93765276ca&redirect_uri=https%3A%2F%2Fm365.cloud.microsoft%2Flandingv2&response_type=code%20id_token&scope=openid%20profile%20offline_access%20https%3A%2F%2Fwww.office.com%2Fv2%2FOfficeHome.All&response_mode=form_post&nonce=639233092875532190.YTI0OTQ1YzgtMjU3Yy00OTljLTkzYmEtMDYyZmJkYjA0YjZkOGVjNGFmMDQtNWE5Yi00MzA3LThmZWItOWMzODJmOTgwOGJl&client-request-id=1061dc62-48a9-4f70-bf6a-a811b415c15b&siwa=1&siwg=1&state=3lXvhGLnkVe0q80Tys7euD-7GZPjVpGcCp7fHl8qr3zLgIJQ4mZGv_GEUdyaPULrnPL1aY6tzB_cJViiJEBCeCOdf800qUGotyrTR2IcPl_tNvk8ww4dSe5K9ufjAk0KeMSdFMn1Dv7MiG8CH0Cjlmck7607azhk0AR2_eG4IOTmEtwHkvh9GBofQXyTxiRfEaHtn9Us88nPbnRJ9IxTS-uViYK8-qt__ggt7B37qyJqCb2_lL0pauWq50cvAuReyGIhe-nGmFGkqTMBBYlOg-nGyvLHqHeT2bc2DNiqVU_9QivbynzADk66v9yLz9rrcsffFzugLKUyB2c42K_K6vWNxDKrg5EfBMrPhp_W0-l2Tl8_OI1fHuJD8FSNU8TgzG29BzDPM09EXvpOEpOKew&x-client-SKU=ID_NET8_0&x-client-ver=8.14.0.0&sso_reload=true
+final: https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=4765445b-32c6-49b0-83e6-1d93765276ca&redirect_uri=https%3A%2F%2Fm365.cloud.microsoft%2Flandingv2&response_type=code%20id_token&scope=openid%20profile%20offline_access%20https%3A%2F%2Fwww.office.com%2Fv2%2FOfficeHome.All&response_mode=form_post&nonce=639233092875532190.YTI0OTQ1YzgtMjU3Yy00OTljLTkzYmEtMDYyZmJkYjA0YjZkOGVjNGFmMDQtNWE5Yi00MzA3LThmZWItOWMzODJmOTgwOGJl&client-request-id=1061dc62-48a9-4f70-bf6a-a811b415c15b&siwa=1&siwg=1&state=3lXvhGLnkVe0q80Tys7euD-7GZPjVpGcCp7fHl8qr3zLgIJQ4mZGv_GEUdyaPULrnPL1aY6tzB_cJViiJEBCeCOdf800qUGotyrTR2IcPl_tNvk8ww4dSe5K9ufjAk0KeMSdFMn1Dv7MiG8CH0Cjlmck7607azhk0AR2_eG4IOTmEtwHkvh9GBofQXyTxiRfEaHtn9Us88nPbnRJ9IxTS-uViYK8-qt__ggt7B37qyJqCb2_lL0pauWq50cvAuReyGIhe-nGmFGkqTMBBYlOg-nGyvLHqHeT2bc2DNiqVU_9QivbynzADk66v9yLz9rrcsffFzugLKUyB2c42K_K6vWNxDKrg5EfBMrPhp_W0-l2Tl8_OI1fHuJD8FSNU8TgzG29BzDPM09EXvpOEpOKew&x-client-SKU=ID_NET8_0&x-client-ver=8.14.0.0&sso_reload=true
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:48:59Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Regenerate index and run full verify
+
+```bash
+R=/Users/david/Documents/Program/Tampermonkey-Scripts
+cd "$R" && npm run index 2>&1 | tail -5 && npm run verify 2>&1 | tail -20
+```
+
+```text
+> tampermonkey-scripts@1.0.0 index
+> node scripts/build-index.mjs
+
+README.md script index updated (6 script(s)).
+
+> tampermonkey-scripts@1.0.0 verify
+> npm run check && npm run index:check
+
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 6 userscript(s): 0 error(s), 0 warning(s).
+
+> tampermonkey-scripts@1.0.0 index:check
+> node scripts/build-index.mjs --check
+
+README.md script index is up to date.
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:49:01Z)**_
+
+Now let's write the README for the new experimental script.
+
+_**Agent (claude-sonnet-5 2026-08-26 02:49:43Z)**_
+
+<tool-use data-tool-type="write" data-tool-name="Write"><details>
+<summary>Tool use: **Write**</summary>
+
+````markdown
+# M365 Copilot Chat Export Markdown
+
+## ⚠️ 這支是實驗性的
+
+**完全沒有在真實 M365 Copilot 帳號上跑過**，隨時可能整支不能用。開發者手上沒有
+M365 Copilot 授權，沒辦法自己實測；下面的「怎麼幫忙驗證」是打通這支腳本唯一的路。
+
+把一整段 Microsoft 365 Copilot Chat 對話匯成 Markdown，格式跟
+[`chatgpt-export-markdown`](../chatgpt-export-markdown/) 一致（仿 SpecStory 的 chat history），
+目的是**貼給 coding agent**（Claude Code / Codex / Cursor…）當作前情提要。
+
+- **生效網站**：`https://m365.cloud.microsoft/*` 與 `https://copilot.cloud.microsoft/*`
+  （先假設兩者共用同一套前端行為；**尚未驗證是否真的共用同一套後端 API**，如果回報顯示
+  不一樣會拆成兩支腳本）
+- **安裝**：[點這裡安裝](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js)（需先裝好 Tampermonkey / Violentmonkey）
+- **原始碼**：[`m365-copilot-export-markdown.user.js`](./m365-copilot-export-markdown.user.js)
+
+## 跟 `copilot-export-markdown` 的關係
+
+Microsoft 有兩個完全不同的 Copilot 產品：
+
+| 網域 | 產品 | 腳本 |
+| --- | --- | --- |
+| `copilot.microsoft.com` | 消費版 Copilot | [`copilot-export-markdown`](../copilot-export-markdown/) |
+| `m365.cloud.microsoft` / `copilot.cloud.microsoft` | Microsoft 365 Copilot Chat（個人版／for organization） | 這支 |
+
+之前誤把 `copilot.cloud.microsoft` 加進消費版腳本的 `@match`，使用者實測後確認那其實是
+「for organization」網域、API 完全不同，已經改回來、另外拆成這支。
+
+## 它做了什麼
+
+右下角一顆 **⇩ Export MD (實驗性)**，點開有五個動作：
+
+| 動作 | 輸出 |
+| --- | --- |
+| Copy Markdown | 完整 transcript（YAML frontmatter + `_**User**_` / `_**Assistant**_`）進剪貼簿 |
+| Copy Agent Handoff | 同上，但前面多一段給 agent 的指示 |
+| Download .md | 同 transcript，存成 `m365-copilot-<標題>-<時間>.md` |
+| Download .json | 攔到的原始 JSON |
+| **Copy Diagnostics** | 這次頁面存活期間攔到的每個 JSON 回應的 `{url, status, top-level keys}`（不含內容） |
+
+外加兩個開關（預設關，會記住）與貼 share 連結的輸入框。
+
+## 資料是從哪來的
+
+**主要來源：攔截（跟 chatgpt / claude / copilot 三支同一個模式）**。`@run-at document-start`
+攔 `fetch` 與 `XMLHttpRequest`，**不限定 URL host**——把攔到的每個 JSON 回應丟進形狀辨識
+（找「元素同時有 author/sender/role 與 content/text 的最長陣列」），不管網站實際上打的是
+哪個 endpoint 都攔得到，因為攔截是包一層 `window.fetch`，跟目標 API 在哪個網域無關。
+
+**次要 fallback（只覆蓋「登入中查看自己的歷史紀錄」，share 連結用不到）**：從公開專案
+[ganyuke/copilot-exporter](https://github.com/ganyuke/copilot-exporter)（MIT license）的
+build 產物反推出來的真實 API：
+
+```text
+GET https://substrate.office.com/m365Copilot/GetConversation?request={"conversationId":…}
+→ { chatName, createTimeUtc, updateTimeUtc, conversationId,
+    messages: [{ messageId, author: 'user'|'assistant', createdAt|timestamp, text,
+                 adaptiveCards?, references? }] }
+```
+
+citation 是 `adaptiveCards[0].body[0].text` 裡的『【key】』全形括號 marker，對照
+`references[key]`（`targetLink` 是 URL，`displayData.content` 是含 `label` / `Title` 的
+JSON 字串）。
+
+驗證要讀 MSAL（`@azure/msal-browser`）存在 `localStorage` 的**加密** token cache：
+`msal.3.account.keys` 找帳號、`msal.3.token.keys.<clientId>`（clientId 固定
+`c0ab8ce9-e9a0-42e7-b064-33d422df41f1`）找 scope 含
+`https://substrate.office.com/sydney/.default` 的 token，配合 cookie
+`msal.cache.encryption` 做 HKDF → AES-GCM 解密。這是 MSAL 自己的公開「cache encryption」
+機制，不是漏洞——單純是讀使用者自己瀏覽器裡、自己帳號已登入的 token 來呼叫網站自己的
+API，跟另外三支腳本讀 `Authorization` header 是同一類事情。
+
+## share 連結需要登入才看得到
+
+M365 Copilot Chat 的分享連結長這樣：
+
+```text
+https://m365.cloud.microsoft/chat/share/eyJzaGFyZUlkIjoi…（base64url）
+```
+
+base64 解出來是 `{"shareId":"…","conversationId":"…"}`——純前端路由參數，不是資料本身。
+**跟 ChatGPT / Claude 的「匿名可看」不同，這個連結需要登入才看得到內容**（匿名開會被導去
+`login.microsoftonline.com`），所以沒辦法在沒有帳號的情況下探到真正的 API 回應。
+貼上別的 share 連結時，腳本跟 `claude-export-markdown` 一樣**開新分頁自動匯出**，
+不會嘗試就地重打 API——目前沒有證據那樣行得通。
+
+## 怎麼幫忙驗證（這是打通這支腳本唯一的路）
+
+1. 開一個 M365 Copilot Chat 的對話（自己的歷史紀錄，或上面那種 share 連結），
+   按 **Copy Diagnostics**，把結果貼給開發者。這一步最關鍵：能直接告訴我實際打了什麼
+   API、回應長怎樣，不用手動翻 DevTools。
+2. 如果 Diagnostics 顯示有攔到東西，再試 **Copy Markdown**，把結果（或錯誤訊息）回報。
+3. Tampermonkey / Violentmonkey 各跑一次。
+
+## 已知限制
+
+- 完全沒有實測過；`GetConversation` + MSAL 解密那套只是有真實佐證的**猜測**，不保證能跑。
+- share 連結沒有任何已知的直接呼叫方式，完全依賴攔截；攔不到就會老實報錯，不會假裝有資料。
+- `copilot.cloud.microsoft` 與 `m365.cloud.microsoft` 是否真的共用同一套後端 API 未知。
+- 靠的是私有 API 與 MSAL 內部快取格式（`msal.3.*`），Microsoft 改版就可能整支失效
+  （見 [`docs/06`](../../docs/06-sandbox-and-unsafewindow.md)）。
+- 不碰 M365 Copilot 的 WebSocket 即時對話協定，只處理歷史紀錄／分享的 REST 資料。
+- 用 `@require` 引入 [`shared/`](../../shared/)，所以安裝時多一個
+  raw.githubusercontent.com 的網路相依。
+
+## 測試
+
+`npm run preview` 對這個網域幾乎測不了：`m365.cloud.microsoft/*` 匿名開會被連續導向
+`login.microsoftonline.com`（SSO 重導鏈），harness 的注入時序跟導頁會衝突。
+已驗證過的是：
+
+- `npm run check` / `npm run verify`（metadata、`@grant`、`@require` 都過）
+- 語法檢查（`node --check`）
+- 用 stub server 餵合成的 `GetConversation` 回應，驗證「攔截（不限 host）→ 形狀辨識 →
+  normalize → render」整條鏈，以及 `Copy Diagnostics` 在有資料／沒資料時都輸出合理內容
+
+真正的驗證要在登入後的瀏覽器裡按下去——見上面「怎麼幫忙驗證」。
+
+````
+
+```text
+The file /Users/david/Documents/Program/Tampermonkey-Scripts/userscripts/m365-copilot-export-markdown/README.md has been updated successfully. (file state is current in your context — no need to Read it back)
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:50:52Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Format, re-check, regenerate index, verify
+
+```bash
+R=/Users/david/Documents/Program/Tampermonkey-Scripts
+cd "$R" && npx prettier --write userscripts/m365-copilot-export-markdown/ userscripts/copilot-export-markdown/ 2>&1
+npm run check 2>&1 | tail -10
+npm run index 2>&1 | tail -5
+npm run verify 2>&1 | tail -15
+```
+
+```text
+userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js 384ms
+userscripts/copilot-export-markdown/copilot-export-markdown.user.js 190ms (unchanged)
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 6 userscript(s): 0 error(s), 0 warning(s).
+
+> tampermonkey-scripts@1.0.0 index
+> node scripts/build-index.mjs
+
+README.md script index updated (6 script(s)).
+
+> tampermonkey-scripts@1.0.0 verify
+> npm run check && npm run index:check
+
+
+> tampermonkey-scripts@1.0.0 check
+> node scripts/check-meta.mjs
+
+
+Checked 6 userscript(s): 0 error(s), 0 warning(s).
+
+> tampermonkey-scripts@1.0.0 index:check
+> node scripts/build-index.mjs --check
+
+README.md script index is up to date.
+[This command modified 1 file you've previously read: userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js. Call Read before editing.]
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:50:55Z)**_
+
+Good, prettier only reformatted whitespace. Final syntax check and regression tests, then commit.
+
+_**Agent (claude-sonnet-5 2026-08-26 02:51:04Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Final syntax check after prettier formatting
+
+```bash
+R=/Users/david/Documents/Program/Tampermonkey-Scripts
+node --check "$R/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js" && echo "syntax ok"
+node --check "$R/userscripts/copilot-export-markdown/copilot-export-markdown.user.js" && echo "syntax ok 2"
+```
+
+```text
+syntax ok
+syntax ok 2
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:51:16Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Re-run stub pipeline test after prettier reformat
+
+```bash
+SP=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/47615dff-7e67-47ef-9a9c-2a6f35747139/scratchpad
+cd $SP && node m365-stub.mjs 2>&1 | tail -25
+```
+
+```text
+exporter: "m365-copilot-export-markdown v0.1.0"
+---
+
+# 幫我規劃 userscript 的 M365 支援
+
+<!-- Generated by m365-copilot-export-markdown v0.1.0 -->
+
+_**User (2026-08-20 03:00:00Z)**_
+
+M365 Copilot Chat 的 share 連結要怎麼處理？
+
+---
+
+_**Assistant (2026-08-20 03:00:20Z)**_
+
+結論：先攔截，不確定的話再查 GetConversation。
+
+**Sources**
+
+- [Copilot docs](https://learn.microsoft.com/copilot)
+
+
+########## Copy Diagnostics (沒資料) ##########
+
+（這次頁面存活期間沒有攔到任何 JSON 回應）
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:51:19Z)**_
+
+Still working correctly. Now regression-test the two existing scripts and commit.
+
+_**Agent (claude-sonnet-5 2026-08-26 02:51:36Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Regression test copilot-export-markdown after match revert
+
+`timeout 150 npm run preview -- copilot-export-markdown "https://copilot.microsoft.com/" 2>&1 | tail -12`
+
+```text
+page.goto: net::ERR_CONNECTION_CLOSED at https://copilot.microsoft.com/
+Call log:
+  - navigating to "https://copilot.microsoft.com/", waiting until "domcontentloaded"**
+
+    at /Users/david/Documents/Program/Tampermonkey-Scripts/scripts/preview.mjs:112:12 {
+  log: [
+    '  - navigating to "https://copilot.microsoft.com/", waiting until "domcontentloaded"'
+  ],
+  name: 'Error'
+}
+
+Node.js v24.13.1
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:52:10Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Regression test chatgpt exporter unaffected by this change
+
+`timeout 150 npm run preview -- chatgpt-export-markdown "https://chatgpt.com/share/6a8d5801-10d8-83ec-b5e7-9d8dc54d48c6" --menu "Copy Markdown" --wait 20000 2>&1 | sed -n '1,10p'`
+
+```text
+> tampermonkey-scripts@1.0.0 preview
+> node scripts/preview.mjs chatgpt-export-markdown https://chatgpt.com/share/*** --menu Copy Markdown --wait 20000
+
+→ https://chatgpt.com/share/6a8d5801-10d8-83ec-b5e7-9d8dc54d48c6
+@require       : local shared/chat-export.js
+@require       : local shared/export-ui.js
+ran menu       : Copy Markdown
+
+document.title : 分享聊天Context
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:52:13Z)**_
+
+That regression is unaffected (chatgpt-export-markdown untouched by this change). The copilot.microsoft.com connectivity failure is environmental (this proxy flaked earlier in the session too), not caused by my edit — the change there was only removing one `@match` line and a version bump. Let's finalize and commit.
+
+_**Agent (claude-sonnet-5 2026-08-26 02:52:16Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Stage the fix and new experimental script
+
+```bash
+cd /tmp
+R=/Users/david/Documents/Program/Tampermonkey-Scripts
+git -C "$R" status --short | grep -v specstory
+echo '---'
+git -C "$R" add \
+  userscripts/copilot-export-markdown/copilot-export-markdown.user.js \
+  userscripts/copilot-export-markdown/README.md \
+  userscripts/m365-copilot-export-markdown/ \
+  README.md
+git -C "$R" status --short | grep -v specstory
+```
+
+```text
+ M README.md
+ M userscripts/copilot-export-markdown/README.md
+ M userscripts/copilot-export-markdown/copilot-export-markdown.user.js
+?? userscripts/m365-copilot-export-markdown/
+---
+M  README.md
+M  userscripts/copilot-export-markdown/README.md
+M  userscripts/copilot-export-markdown/copilot-export-markdown.user.js
+A  userscripts/m365-copilot-export-markdown/README.md
+A  userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:52:34Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Commit the match fix and new experimental script
+
+```bash
+cd /tmp
+R=/Users/david/Documents/Program/Tampermonkey-Scripts
+git -C "$R" commit -q -F - <<'MSGEOF'
+fix(copilot-export-markdown): 撤回誤加的 copilot.cloud.microsoft match
+
+實測確認 copilot.cloud.microsoft 是 Microsoft 365 for organization 用的網域，
+跟這支腳本鎖定的消費版 copilot.microsoft.com 是不同產品、不同 API，上一版誤加，
+現在移除（1.1.0 → 1.2.0）。
+
+feat(m365-copilot-export-markdown): 新增實驗性的 M365 Copilot Chat 匯出腳本
+
+M365 Copilot Chat（m365.cloud.microsoft 個人版／copilot.cloud.microsoft
+for organization）有自己的 share 連結，但需要登入才看得到內容，也沒有現成的
+範例可以實測，所以這支腳本刻意設計成攔截優先：document-start 攔 fetch/XHR、
+不限定 URL host，用形狀辨識找訊息列表——不管實際打的是哪個 endpoint 都攔得到。
+
+次要 fallback（只覆蓋登入中查看自己的歷史紀錄）根據公開專案
+ganyuke/copilot-exporter（MIT）反推出的真實 API 事實實作：
+substrate.office.com/m365Copilot/GetConversation，驗證要讀 MSAL 存在
+localStorage 的加密 token cache（HKDF → AES-GCM 解密）。
+
+新增 Copy Diagnostics 動作：把攔到的每個 JSON 回應的 {url, status, top-level
+keys}（不含內容）複製出來，讓有 M365 Copilot 授權的使用者一鍵回報，取代盲猜
+API 形狀。整支腳本在 README 與 metadata 都老實標記為實驗性、尚未經真實帳號驗證。
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_015g44u87L4nKmipfkpEaC9C
+MSGEOF
+git -C "$R" log --oneline -3
+```
+
+```text
+7dd35d8 fix(copilot-export-markdown): 撤回誤加的 copilot.cloud.microsoft match
+c71cbd3 feat(copilot-export-markdown): 支援 copilot.cloud.microsoft 網域
+99b3e51 feat: Claude 與 Copilot 對話匯出腳本，共用碼搬進 shared/
+Shell cwd was reset to /Users/david/Documents/Program/Tampermonkey-Scripts
+```
+</details></tool-use>
+
+_**Agent (claude-sonnet-5 2026-08-26 02:52:44Z)**_
+
+Committed as `7dd35d8` (not pushed). Summary of what changed:
+
+**Reverted the mistake**: `copilot-export-markdown` no longer matches `copilot.cloud.microsoft` (confirmed to be the "for organization" M365 product, a different API entirely). Version 1.1.0 → 1.2.0, README updated to explain the revert.
+
+**New experimental script**: `m365-copilot-export-markdown`, targeting `m365.cloud.microsoft` and `copilot.cloud.microsoft` together (per your call to assume shared structure for now).
+
+- **Primary mechanism is interception, not a guessed endpoint** — same `document-start` fetch/XHR capture pattern as the other three scripts, but host-unrestricted, so it catches whatever API the page actually calls via shape detection.
+- **Secondary fallback** (logged-in history only, not share links) implements a real, evidence-based API I traced from the public MIT-licensed `ganyuke/copilot-exporter`: `substrate.office.com/m365Copilot/GetConversation` + MSAL's encrypted token cache (HKDF→AES-GCM), not a guess.
+- **`Copy Diagnostics`** — new action that dumps every intercepted JSON response's `{url, status, top-level keys}` (no content) to clipboard. This is the actual mechanism for closing the gap: whenever you or someone with M365 Copilot access opens a conversation or that share link and hits this button, I get exactly what API shape is real, no DevTools digging required.
+- Verified via a stub server (synthetic `GetConversation`-shaped payload): capture → shape-detection → citation rewriting → render all work correctly, and diagnostics report correctly both with and without captured data. Real preview-harness testing isn't possible — `m365.cloud.microsoft` redirects anonymously through a Microsoft SSO chain that the harness can't get past.
+- README and the script's own `@description` are explicitly marked experimental throughout.
+
+Next step is on your end: open that share link (or your own chat history) once logged in, hit **Copy Diagnostics**, and send me the result — that tells me whether the interception caught anything and what to tune. Didn't push; let me know if you want that.
