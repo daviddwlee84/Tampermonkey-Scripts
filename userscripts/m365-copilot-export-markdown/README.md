@@ -2,11 +2,9 @@
 
 ## ⚠️ 這支是實驗性的
 
-已經在真實帳號上實測八輪（見下面各次紀錄）。結論：**Microsoft 的 API 這條路走不通**
-（`GetConversation` 一律回 403，換 token、換 transport 都一樣；拿別的 token 會回 401，
-所以 403 是「這個 endpoint 不接受非官方前端」而不是 token 有問題）。
-v0.8.0 起改成**直接讀畫面上 render 出來的內容**，v0.9.0 已經對準真實版面、
-在使用者的帳號上成功匯出過。這代表：
+已經在真實帳號上持續實測（見下面各次紀錄）。v0.11.0 的最新回報顯示，重用頁面送出的
+request headers 後，`GetConversation` 已成功回傳完整原始資料（15 筆），因此歷史對話會優先
+走 API；API 不可用或 share 頁面才退回**直接讀畫面上 render 出來的內容**。DOM fallback 代表：
 
 - 匯出的內容**可能不完整**——如果訊息列表是 virtualized 的，沒 render 出來的抓不到。
   輸出會標示「從畫面擷取，可能不完整」，但腳本沒辦法自己知道少了幾則。
@@ -54,8 +52,8 @@ Microsoft 有兩個完全不同的 Copilot 產品：
 ## 資料是從哪來的
 
 > **v0.8.0 起實際能用的是第 3 條（讀畫面）**：前兩條在真實帳號上都試過了，
-> 攔截攔不到訊息、`GetConversation` 一律回 403，詳見下面「第七次真實測試」。
-> 三條路仍照順序嘗試，因為 Microsoft 隨時可能改回來。
+> v0.11.0 的最新回報則確認 `GetConversation` 已回 200 並取得 15 筆原始訊息，所以登入中的
+> 歷史對話現在優先走 API；失敗才退回 DOM。
 
 **來源 1：攔截（跟 chatgpt / claude / copilot 三支同一個模式）**。`@run-at document-start`
 攔 `fetch` 與 `XMLHttpRequest`，**不限定 URL host**——把攔到的每個 JSON 回應丟進形狀辨識
@@ -90,8 +88,9 @@ token 有兩個來源（依可信度）：**攔頁面自己跟 `login.microsofto
 解密。實測確認真正的 scope 是 `https://substrate.office.com/sydney/v2/.default`
 （有 `v2/`），cache key 用 `|` 分隔。token 只留在記憶體，不會進 diagnostics 或剪貼簿。
 
-**來源 3（v0.8.0 新增，目前實際上就是靠這條）：直接讀畫面上 render 出來的內容**。
+**來源 3（v0.8.0 新增，現在是 fallback）：直接讀畫面上 render 出來的內容**。
 把訊息節點的 HTML 轉回 Markdown（code fence／清單／表格／連結／粗體都有處理），
+並移除 code widget 常見的 gutter／行號節點，
 排除腳本自己注入的 UI。這條路排在最後，而且輸出會標示
 **「從畫面擷取，可能不完整」**——virtualized 列表可能讓部分訊息沒 render 出來。
 細節與已驗證的範圍見下面「第七次真實測試」。
@@ -443,11 +442,20 @@ API 一律 403，所以每次匯出都在跑兩條註定失敗的路。
 `dom-scrape (可能不完整)`，走啟發式是 `dom-scrape (啟發式，可能不完整)`，
 一眼看得出是哪條路。
 
+## 第十次真實測試：API 成功與 diagnostics 安全修正（v0.11.0，2026-08-26）
+
+實際 diagnostics 顯示 `GetConversation` 已回 **200**，而且包含 **15 筆原始訊息**；同一頁
+DOM 只抓到 6 則。這代表先前「API 一律 403」的結論已過時，完整匯出應優先使用 API，
+DOM 改回 fallback。原始 `text` 也比 HTML 反推 Markdown 更能保留 ASCII diagram/code block。
+
+同一份 diagnostics 還發現 WebSocket URL 的 query string 含 `access_token`，舊版會原樣複製，
+屬於敏感資訊外洩。v0.11.0 起所有 diagnostics URL 都會先遮蔽 token 類 query 值；舊版產生的
+diagnostics 不應公開分享。DOM fallback 也會移除常見的 line-number/gutter 節點。
+
 ## 已知限制
 
-- `GetConversation` 這條路仍**沒有成功拿到對話內容**：六輪測試已經確認「token 拿得到、
-  scope 也對了、請求真的送出去了」，但回應是空 body，status 還沒看到（這次才補上記錄）。
-  這次同時加了 GM_xhr 繞過 CORS 的第二條路，還需要再測一次。
+- `GetConversation` 已在一個真實歷史對話成功回傳 15 筆訊息，但這是 Microsoft 私有 API，
+  其他帳號、租戶或 share 頁面仍可能失敗；失敗時會退回 DOM。
 - share 連結沒有任何已知的直接呼叫方式，完全依賴攔截；攔不到就會老實報錯，不會假裝有資料。
 - `copilot.cloud.microsoft` 與 `m365.cloud.microsoft` 是否真的共用同一套後端 API 未知。
 - 靠的是私有 API 與 MSAL 內部快取格式（`msal.3.*`），Microsoft 改版就可能整支失效
@@ -456,8 +464,7 @@ API 一律 403，所以每次匯出都在跑兩條註定失敗的路。
   如果對話走的是二進位協定（Fluid Framework 那種），現在只能記大小、看不到內容；
   如果連線是在 iframe／Worker 裡建立的，現在的 patch 完全看不到——見上面
   「第四次真實測試」。
-- **`GetConversation` 回 403，這條路目前是死的**：token、scope、transport 都排除過了
-  （GM_xhr 繞過 CORS 一樣 403），研判是伺服器對非官方前端的防護。
+- diagnostics 只應分享 v0.11.0 之後產生的版本；更舊版本可能在 WebSocket URL 中帶出 token。
 - **爬畫面這條路可能不完整**：如果 M365 Copilot 的訊息列表是 virtualized 的
   （只 render 可視範圍），捲不到的訊息就抓不到。輸出會標「可能不完整」，
   但**腳本無法自己知道少了幾則**——長對話建議先整串捲到底再匯出。

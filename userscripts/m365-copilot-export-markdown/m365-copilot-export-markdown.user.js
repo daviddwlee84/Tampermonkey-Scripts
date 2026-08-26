@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         M365 Copilot Chat Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.10.0
-// @description  【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——改讀畫面，內容可能不完整
+// @version      0.11.0
+// @description  【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，優先讀原始資料、失敗退回畫面
 // @author       Da-Wei Lee
 // @license      MIT
 // @match        https://m365.cloud.microsoft/*
@@ -27,10 +27,10 @@
 /* global createExportPanel, downloadText, filenameFor, jsonFence, renderTranscript, sourcesBlock */
 
 /**
- * ⚠️ 實驗性：已在真實帳號上實測八輪。結論是 Microsoft 的 API 這條路走不通
- * （`GetConversation` 一律回 403，換 token、換 transport 都一樣），所以實際能用的是
- * 最後那條「讀畫面」——見下面 `fromDom`。匯出內容可能不完整（virtualized 列表），
- * 輸出會標示清楚。
+ * ⚠️ 實驗性：早期實測中 `GetConversation` 一律回 403，所以 v0.8.0 加了最後一條
+ * 「讀畫面」fallback。v0.11.0 的真實回報顯示，重用頁面 request headers 後 API 已回 200
+ * 並取得 15 筆原始訊息；因此現在歷史對話優先走 API，失敗才走可能受 virtualized 列表
+ * 影響的 `fromDom`，輸出也會標示來源。
  *
  * 背景：這是 `copilot-export-markdown`（消費版 copilot.microsoft.com）的姊妹腳本，
  * 目標是 Microsoft 365 的企業版／個人版 Copilot Chat。這兩個產品**不是同一個 API**：
@@ -84,8 +84,8 @@
  *   token 本身只存在記憶體裡，**絕對不會進 diagnostics 或剪貼簿**
  *   （那邊只記 key 名稱與型別，不記值）。
  *
- * **最後一條路：讀畫面（`fromDom`）**。實測下來 API 全部回 403，攔截也攔不到訊息，
- * 所以補了「直接把 render 出來的 DOM 轉回 Markdown」這條路。這是另外三支腳本刻意
+ * **最後一條路：讀畫面（`fromDom`）**。早期實測時 API 全部回 403、攔截也攔不到訊息，
+ * 所以補了「直接把 render 出來的 DOM 轉回 Markdown」這條 fallback。這是另外三支腳本刻意
  * 避開的做法（virtualized 列表會讓 transcript 殘缺、Markdown 是從 HTML 反推的會失真），
  * 因此它排在最後，而且輸出的 `sourceLabel` 會明講「從畫面擷取，可能不完整」——
  * 殘缺的 transcript 比沒有更糟，一定要讓讀的人知道。
@@ -99,7 +99,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.10.0';
+  const VERSION = '0.11.0';
   const NS = 'm365-copilot-export-md';
   const EXPORTER = `m365-copilot-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[m365-copilot-export-markdown]';
@@ -198,6 +198,13 @@
   // 不會讓輸出爆量。
   const SHAPE_DEPTH = 5;
 
+  /** Diagnostics 不能帶出 WebSocket / HTTP URL 裡的 bearer token。 */
+  function redactUrlSecrets(raw) {
+    return String(raw || '')
+      .replace(/([?&](?:access_token|token|authorization|auth|sig)=)[^&#\s]+/gi, '$1[REDACTED]')
+      .replace(/(bearer%20)[^&#\s]+/gi, '$1[REDACTED]');
+  }
+
   function describeShape(value, depth) {
     if (value === null || value === undefined) return String(value);
     if (Array.isArray(value)) {
@@ -217,7 +224,7 @@
 
   function rememberDiagnostics(url, status, json) {
     diagnostics.push({
-      url,
+      url: redactUrlSecrets(url),
       status,
       shape: describeShape(json, SHAPE_DEPTH),
       at: new Date().toISOString(),
@@ -892,8 +899,18 @@
    *   角色我們自己會判斷，留著只會變成多餘的 `##### You said:`
    * - `__actions`：訊息底下那排複製／讚／倒讚按鈕
    */
-  const DOM_NOISE_SELECTOR =
-    '[class*="accessibleHeading"], [class*="__actions"], button, [role="button"], [aria-hidden="true"]';
+  const DOM_NOISE_SELECTOR = [
+    '[class*="accessibleHeading"]',
+    '[class*="__actions"]',
+    '[class*="line-number" i]',
+    '[class*="lineNumber" i]',
+    '[class*="linenumber" i]',
+    '[class*="gutter" i]',
+    '[data-line-number]',
+    'button',
+    '[role="button"]',
+    '[aria-hidden="true"]',
+  ].join(', ');
 
   function htmlToMarkdown(el) {
     // 在 clone 上動刀，不要碰到真的頁面
@@ -1054,21 +1071,20 @@
     const hit = pickCaptured(ids);
     if (hit) return { ...hit, source: 'network-capture' };
 
-    // 2. 認得出版面就直接讀畫面。API 實測一律 403、攔截也從沒攔到訊息，
-    //    先跑那兩條只是讓每次匯出白等一兩秒，所以把這條插到它們前面。
-    const knownDom = fromDom({ knownLayoutOnly: true });
-    if (knownDom) return { ...knownDom, source: 'dom-scrape (可能不完整)' };
-
-    // 3. 版面不認得時才值得等攔截（也許頁面還在載）
-    const late = await waitForCapture(ids);
-    if (late) return { ...late, source: 'network-capture' };
-
-    // 4. API：實測一律 403（換 token、換 transport 都一樣），留著是為了萬一
-    //    Microsoft 哪天改回來。只覆蓋「登入中的歷史紀錄」，share 連結用不到。
+    // 2. 2026-08-26 的真實回報顯示：重用頁面 request headers 後 GetConversation 已回 200，
+    //    而且拿到 15 筆原始訊息；DOM 當時只 render 6 則。完整性優先，先走 API。
     if (!ids.shareId && ids.conversationId) {
       const api = await fromLoggedInHistory(ids.conversationId);
       if (api) return { ...api, source: 'api' };
     }
+
+    // 3. API 不可用時，認得出版面就直接讀畫面。
+    const knownDom = fromDom({ knownLayoutOnly: true });
+    if (knownDom) return { ...knownDom, source: 'dom-scrape (可能不完整)' };
+
+    // 4. 版面不認得時才值得等攔截（也許頁面還在載）
+    const late = await waitForCapture(ids);
+    if (late) return { ...late, source: 'network-capture' };
 
     // 5. 最後：通用啟發式讀畫面（版面改了才會走到這，可能歪）
     const dom = fromDom();
@@ -1150,8 +1166,8 @@
 
     if (typeof message.text === 'string' && message.text.trim()) return message.text;
 
-    // 完全辨認不出的形狀：留 JSON fence，不要靜默丟掉。
-    return jsonFence(message);
+    // 完全辨認不出的形狀只在使用者明確要求工具／未知區塊時保留。
+    return opts.includeTools ? jsonFence(message) : '';
   }
 
   /** 標題可能藏在哪一層不確定，優先找已知的 chatName，其次往下找兩層。 */
@@ -1182,12 +1198,18 @@
     });
 
     const sections = messages
-      .map((message) => ({
-        role: roleOf(message),
-        model: '',
-        time: message.createdAt || message.timestamp,
-        body: messageToBody(message, opts),
-      }))
+      .map((message) => {
+        const role = roleOf(message);
+        return {
+          role,
+          model: '',
+          time: message.createdAt || message.timestamp,
+          body:
+            role === 'User' || role === 'Assistant' || opts.includeTools
+              ? messageToBody(message, opts)
+              : '',
+        };
+      })
       .filter((section) => section.body.trim());
 
     return {
@@ -1266,7 +1288,7 @@
     );
     const report = [
       `${EXPORTER} diagnostics`,
-      `page: ${location.href}`,
+      `page: ${redactUrlSecrets(location.href)}`,
       `captured ${diagnostics.length} JSON response(s):`,
       '',
       ...lines,
