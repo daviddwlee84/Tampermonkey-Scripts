@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         M365 Copilot Chat Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.9.0
+// @version      0.10.0
 // @description  【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——改讀畫面，內容可能不完整
 // @author       Da-Wei Lee
 // @license      MIT
@@ -99,7 +99,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.9.0';
+  const VERSION = '0.10.0';
   const NS = 'm365-copilot-export-md';
   const EXPORTER = `m365-copilot-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[m365-copilot-export-markdown]';
@@ -959,7 +959,7 @@
     return messages;
   }
 
-  function fromDom() {
+  function fromDom({ knownLayoutOnly = false } = {}) {
     const ownRoot = document.getElementById(`${NS}-root`);
 
     // 先走已知版面（準確），不行才退回通用啟發式（可能歪）
@@ -971,6 +971,8 @@
         messages: known,
       };
     }
+    // 只想要「高把握」的那條時就不要退回啟發式（見 resolveConversation 的順序）
+    if (knownLayoutOnly) return null;
 
     const hits = [];
     for (const el of document.querySelectorAll('*')) {
@@ -1048,19 +1050,29 @@
   }
 
   async function resolveConversation(ids) {
-    const hit = pickCaptured(ids) || (await waitForCapture(ids));
+    // 1. 已經攔到的（最理想：原始 JSON，citation 之類都完整）
+    const hit = pickCaptured(ids);
     if (hit) return { ...hit, source: 'network-capture' };
 
-    // fallback 只覆蓋「登入中的歷史紀錄」，share 連結沒有已知的直接呼叫方式。
+    // 2. 認得出版面就直接讀畫面。API 實測一律 403、攔截也從沒攔到訊息，
+    //    先跑那兩條只是讓每次匯出白等一兩秒，所以把這條插到它們前面。
+    const knownDom = fromDom({ knownLayoutOnly: true });
+    if (knownDom) return { ...knownDom, source: 'dom-scrape (可能不完整)' };
+
+    // 3. 版面不認得時才值得等攔截（也許頁面還在載）
+    const late = await waitForCapture(ids);
+    if (late) return { ...late, source: 'network-capture' };
+
+    // 4. API：實測一律 403（換 token、換 transport 都一樣），留著是為了萬一
+    //    Microsoft 哪天改回來。只覆蓋「登入中的歷史紀錄」，share 連結用不到。
     if (!ids.shareId && ids.conversationId) {
       const api = await fromLoggedInHistory(ids.conversationId);
-      if (api) return { ...api, source: 'api (未實測)' };
+      if (api) return { ...api, source: 'api' };
     }
 
-    // 最後一條路：讀畫面。可能不完整（virtualized 列表只留可視範圍的節點），
-    // 所以放在最後，而且來源標籤會明講。
+    // 5. 最後：通用啟發式讀畫面（版面改了才會走到這，可能歪）
     const dom = fromDom();
-    if (dom) return { ...dom, source: 'dom-scrape (可能不完整)' };
+    if (dom) return { ...dom, source: 'dom-scrape (啟發式，可能不完整)' };
 
     throw new Error(
       '抓不到對話資料。這支腳本是實驗性的——請按 "Copy Diagnostics" 把結果回報，' +
@@ -1182,10 +1194,9 @@
       source: 'm365-copilot',
       // 從畫面刮下來的可能不完整，標籤要講清楚——殘缺的 transcript 比沒有更糟，
       // agent 不會知道少了什麼（見 chatgpt-export-markdown 的 README）。
-      sourceLabel:
-        hit.source === 'dom-scrape (可能不完整)'
-          ? 'Microsoft 365 Copilot Chat（從畫面擷取，可能不完整）'
-          : 'Microsoft 365 Copilot Chat',
+      sourceLabel: String(hit.source || '').startsWith('dom-scrape')
+        ? 'Microsoft 365 Copilot Chat（從畫面擷取，可能不完整）'
+        : 'Microsoft 365 Copilot Chat',
       title: pickTitle(hit.data),
       url: ctx.url,
       ids: { conversation_id: ctx.conversationId || '', share_id: ctx.shareId || '' },
