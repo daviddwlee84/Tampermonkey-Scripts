@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.1.1
+// @version      0.2.0
 // @description  把整段 Gemini 對話匯成 Markdown（含 share 頁與 Agent Handoff），貼給 coding agent 用
 // @author       Da-Wei Lee
 // @license      MIT
@@ -47,7 +47,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.1.1';
+  const VERSION = '0.2.0';
   const NS = 'gemini-export-md';
   const EXPORTER = `gemini-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[gemini-export-markdown]';
@@ -184,11 +184,15 @@
   }
 
   /**
-   * 從一份 payload 找出「這段對話」。
+   * 從一份 payload 找出「這段對話」。實測兩種容器形狀：
    *
-   * 容器長這樣：`[<?>, <turns>, <meta>, "<shareId>", [<epoch 秒>, <奈秒>], …]`，
-   * meta 是 `[true, "<title>", …, [2, "<modelId>", "Flash"], true]`。
-   * 認不出容器（例如串流回應）就退回「把 payload 裡所有 turn 撿一撿」。
+   * - share 頁 `ujx1Bf`：`[null, <turns>, <meta>, "<shareId>", [<epoch 秒>, <奈秒>], …]`
+   *   meta 是 `[true, "<title>", …, [2, "<modelId>", "Flash"], true]`
+   * - app 頁載歷史：`[<turns>, null, null, []]` —— **沒有 meta，也沒有標題**
+   *
+   * 與其兩種各寫一次，不如掃前幾格找「元素是 turn 的陣列」，meta / shareId / 時間
+   * 就固定跟在它後面三格；app 那邊那三格是 null / null / []，型別檢查會擋掉。
+   * 連容器都認不出來（例如串流回應）就退回「把 payload 裡所有 turn 撿一撿」。
    */
   function findConversation(payload) {
     let best = null;
@@ -197,13 +201,14 @@
     const walk = (node, depth) => {
       if (!Array.isArray(node) || depth > 10 || seen.has(node)) return;
       seen.add(node);
-      const turns = Array.isArray(node[1]) ? node[1].filter(isTurn) : [];
-      if (turns.length > 0 && (!best || turns.length > best.turns.length)) {
+      for (let i = 0; i < Math.min(node.length, 3); i += 1) {
+        const turns = Array.isArray(node[i]) ? node[i].filter(isTurn) : [];
+        if (turns.length === 0 || (best && turns.length <= best.turns.length)) continue;
         best = {
           turns,
-          meta: Array.isArray(node[2]) ? node[2] : null,
-          shareId: typeof node[3] === 'string' ? node[3] : '',
-          created: Array.isArray(node[4]) ? node[4] : null,
+          meta: Array.isArray(node[i + 1]) ? node[i + 1] : null,
+          shareId: typeof node[i + 2] === 'string' ? node[i + 2] : '',
+          created: Array.isArray(node[i + 3]) ? node[i + 3] : null,
         };
       }
       for (const item of node) walk(item, depth + 1);
@@ -498,15 +503,30 @@
       .trim();
   }
 
+  /** 側欄選中那條的標題。app 頁的歷史 payload 沒有標題，只剩畫面上這個來源。 */
+  const DOM_TITLE_SELECTOR = [
+    'share-viewer h1',
+    '.share-viewer_header-container-old h1',
+    '.selected [data-test-id="conversation-title"]',
+    '[aria-selected="true"] [data-test-id="conversation-title"]',
+  ].join(', ');
+
   function domTitle() {
-    const heading = document.querySelector(
-      'share-viewer h1, .share-viewer_header-container-old h1'
-    );
-    const text = heading?.textContent?.trim();
+    const text = document.querySelector(DOM_TITLE_SELECTOR)?.textContent?.trim();
     if (text) return text;
-    // 沒有標題列時 document.title 只是「Gemini - …」那串站名，沒有資訊量。
-    const fallback = (document.title || '').replace(/\s*[-–—]\s*Gemini.*$/i, '').trim();
-    return fallback && !/gemini/i.test(fallback) ? fallback : DEFAULT_TITLE;
+
+    // document.title 可能被別的腳本加了前綴（本 repo 的 page-title-tag 就會加
+    // `[Gemini] `），也可能帶站名前後綴。全部剝掉再看剩下什麼還有沒有資訊量——
+    // 之前直接用 /gemini/i 一刀切，結果把加了前綴的真標題也一起丟掉了。
+    const stripped = (document.title || '')
+      .replace(/[‎‏]/g, '')
+      .replace(/^\s*\[[^\]]{1,20}\]\s*/, '')
+      .replace(/\s*[-–—|]\s*Gemini\s*$/i, '')
+      .replace(/^\s*Gemini\s*[-–—|]\s*/i, '')
+      .trim();
+    if (!stripped || /^gemini$/i.test(stripped)) return DEFAULT_TITLE;
+    if (/direct access to Google AI/i.test(stripped)) return DEFAULT_TITLE;
+    return stripped;
   }
 
   function fromDom() {
@@ -706,18 +726,40 @@
     return out;
   }
 
+  /** `turn[4]` 是 `[epoch 秒, 奈秒]`，share 與 app 兩種 payload 都有這格。 */
+  function turnTime(turn) {
+    const stamp = turn[4];
+    return Array.isArray(stamp) && typeof stamp[0] === 'number' ? stamp[0] : undefined;
+  }
+
+  /**
+   * app 頁的歷史 RPC 把型號寫在 response 的某一格（實測是 `"3 Flash"`），
+   * share 頁的 response 沒有這格、型號在容器的 meta 裡。
+   * 位置會變所以認字樣不認索引 —— 順便擋掉同一層那些 `"JP"` / `"zh"` / 16 進位 id。
+   */
+  const MODEL_LABEL_RE = /^(\d+(\.\d+)?\s+)?(flash|pro|ultra|nano)(\s+\S+)?$/i;
+
+  function modelOf(turn) {
+    if (!Array.isArray(turn[3])) return '';
+    for (const value of turn[3]) {
+      if (typeof value === 'string' && MODEL_LABEL_RE.test(value.trim())) return value.trim();
+    }
+    return '';
+  }
+
   function turnToSections(turn, opts) {
     const sections = [];
+    const time = turnTime(turn);
 
     const userText = firstString(turn[2]);
-    if (userText) sections.push({ role: 'User', model: '', body: userText });
+    if (userText) sections.push({ role: 'User', model: '', time, body: userText });
 
     const response = turn[3];
     const drafts = collectMatches(response, isDraft);
     if (drafts.length === 0) {
       // 沒見過的形狀不靜默丟掉，寧可留 JSON（但預設不塞進正文，避免整篇被雜訊淹掉）。
       if (opts.includeTools) {
-        sections.push({ role: 'Assistant', model: '', body: jsonFence(response) });
+        sections.push({ role: 'Assistant', model: modelOf(turn), time, body: jsonFence(response) });
       }
       return sections;
     }
@@ -742,7 +784,12 @@
       if (sources) parts.push(sources);
     }
 
-    sections.push({ role: 'Assistant', model: '', body: parts.filter(Boolean).join('\n\n') });
+    sections.push({
+      role: 'Assistant',
+      model: modelOf(turn),
+      time,
+      body: parts.filter(Boolean).join('\n\n'),
+    });
     return sections;
   }
 
@@ -790,9 +837,11 @@
         conversation_id: conversationId || ctx.conversationId || '',
         share_id: shareId || ctx.shareId || '',
       },
-      // meta[7] 是 `[2, "<modelId>", "Flash"]`，第三格才是給人看的名字。
-      model: (typeof meta?.[7]?.[2] === 'string' && meta[7][2]) || '',
-      createdAt: typeof created?.[0] === 'number' ? created[0] : undefined,
+      // share 頁：meta[7] 是 `[2, "<modelId>", "Flash"]`，第三格才是給人看的名字。
+      // app 頁沒有 meta，型號只能從 response 認字樣（實測是 `"3 Flash"`）。
+      model: (typeof meta?.[7]?.[2] === 'string' && meta[7][2]) || modelOf(turns[0] || []),
+      // share 頁容器帶了整段對話的建立時間；app 頁沒有，退回第一輪的時間戳。
+      createdAt: typeof created?.[0] === 'number' ? created[0] : turnTime(turns[0] || []),
       sections,
     };
   }
