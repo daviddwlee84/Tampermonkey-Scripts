@@ -2,8 +2,15 @@
 
 ## ⚠️ 這支是實驗性的
 
-**完全沒有在真實 M365 Copilot 帳號上跑過**，隨時可能整支不能用。開發者手上沒有
-M365 Copilot 授權，沒辦法自己實測；下面的「怎麼幫忙驗證」是打通這支腳本唯一的路。
+已經在真實帳號上實測過七輪（見下面各次紀錄），結論是：**Microsoft 的 API 這條路走不通**
+（`GetConversation` 一律回 403，換 token、換 transport 都一樣），所以 v0.8.0 起改成
+**直接讀畫面上 render 出來的內容**。這代表：
+
+- 匯出的內容**可能不完整**——如果訊息列表是 virtualized 的，沒 render 出來的抓不到。
+  輸出會標示「從畫面擷取，可能不完整」，但腳本沒辦法自己知道少了幾則。
+- 讀畫面的啟發式**還沒在真實 M365 Copilot DOM 上驗證過**（只用合成頁面測過），
+  實際的 `data-testid` / class 可能對不上。抓不到或抓歪時，`Copy Diagnostics` 會列出
+  掃到的候選節點群組，回報那個就能對準。
 
 把一整段 Microsoft 365 Copilot Chat 對話匯成 Markdown，格式跟
 [`chatgpt-export-markdown`](../chatgpt-export-markdown/) 一致（仿 SpecStory 的 chat history），
@@ -37,18 +44,22 @@ Microsoft 有兩個完全不同的 Copilot 產品：
 | Copy Agent Handoff | 同上，但前面多一段給 agent 的指示 |
 | Download .md | 同 transcript，存成 `m365-copilot-<標題>-<時間>.md` |
 | Download .json | 攔到的原始 JSON |
-| **Copy Diagnostics** | 這次頁面存活期間攔到的每個 JSON 回應的 `{url, status, top-level keys}`（不含內容） |
+| **Copy Diagnostics** | 這次頁面存活期間攔到的每個 JSON 回應的 `{url, status, shape}`（只有 key 名稱與型別，不含任何內容），外加 fallback／DOM 掃描的嘗試紀錄 |
 
 外加兩個開關（預設關，會記住）與貼 share 連結的輸入框。
 
 ## 資料是從哪來的
 
-**主要來源：攔截（跟 chatgpt / claude / copilot 三支同一個模式）**。`@run-at document-start`
+> **v0.8.0 起實際能用的是第 3 條（讀畫面）**：前兩條在真實帳號上都試過了，
+> 攔截攔不到訊息、`GetConversation` 一律回 403，詳見下面「第七次真實測試」。
+> 三條路仍照順序嘗試，因為 Microsoft 隨時可能改回來。
+
+**來源 1：攔截（跟 chatgpt / claude / copilot 三支同一個模式）**。`@run-at document-start`
 攔 `fetch` 與 `XMLHttpRequest`，**不限定 URL host**——把攔到的每個 JSON 回應丟進形狀辨識
 （找「元素同時有 author/sender/role 與 content/text 的最長陣列」），不管網站實際上打的是
 哪個 endpoint 都攔得到，因為攔截是包一層 `window.fetch`，跟目標 API 在哪個網域無關。
 
-**次要 fallback（只覆蓋「登入中查看自己的歷史紀錄」，share 連結用不到）**：從公開專案
+**來源 2（只覆蓋「登入中查看自己的歷史紀錄」，share 連結用不到）**：從公開專案
 [ganyuke/copilot-exporter](https://github.com/ganyuke/copilot-exporter)（MIT license）的
 build 產物反推出來的真實 API：
 
@@ -66,10 +77,21 @@ JSON 字串）。
 驗證要讀 MSAL（`@azure/msal-browser`）存在 `localStorage` 的**加密** token cache：
 `msal.3.account.keys` 找帳號、`msal.3.token.keys.<clientId>`（clientId 固定
 `c0ab8ce9-e9a0-42e7-b064-33d422df41f1`）找 scope 含
-`https://substrate.office.com/sydney/.default` 的 token，配合 cookie
+`https://substrate.office.com/sydney/v2/.default` 的 token，配合 cookie
 `msal.cache.encryption` 做 HKDF → AES-GCM 解密。這是 MSAL 自己的公開「cache encryption」
 機制，不是漏洞——單純是讀使用者自己瀏覽器裡、自己帳號已登入的 token 來呼叫網站自己的
 API，跟另外三支腳本讀 `Authorization` header 是同一類事情。
+
+token 有兩個來源（依可信度）：**攔頁面自己跟 `login.microsoftonline.com` 換 token 的
+回應**（裡面就有明文 `access_token` 與 `scope`，不用解密），以及上面那套 MSAL cache
+解密。實測確認真正的 scope 是 `https://substrate.office.com/sydney/v2/.default`
+（有 `v2/`），cache key 用 `|` 分隔。token 只留在記憶體，不會進 diagnostics 或剪貼簿。
+
+**來源 3（v0.8.0 新增，目前實際上就是靠這條）：直接讀畫面上 render 出來的內容**。
+把訊息節點的 HTML 轉回 Markdown（code fence／清單／表格／連結／粗體都有處理），
+排除腳本自己注入的 UI。這條路排在最後，而且輸出會標示
+**「從畫面擷取，可能不完整」**——virtualized 列表可能讓部分訊息沒 render 出來。
+細節與已驗證的範圍見下面「第七次真實測試」。
 
 ## share 連結需要登入才看得到
 
@@ -304,6 +326,62 @@ diagnostics，所以 body 一空、`res.json()` 一丟例外，**status 就永�
 **下一步**：再跑一次 `Copy Diagnostics`。這次空 body 的情況會連 HTTP status 一起報出來，
 而且如果先前是 CORS 擋住的，`GM_xhr` 那條應該會直接成功。
 
+## 第七次真實測試 → 改走「讀畫面」（v0.8.0，2026-08-26）
+
+上一版把 HTTP status 記下來之後，答案很乾淨：
+
+```text
+[fallback] GetConversation 回空 body（… / fetch）    HTTP 403 | content-type: (none)
+[fallback] GetConversation 回空 body（… / GM_xhr）   HTTP 403 | content-type: (none)
+```
+
+四種組合（2 把 token × 2 種 transport）**全部 403、body 全空**。GM_xhr 不受 CORS 限制
+卻一樣 403，代表**不是瀏覽器擋的，是伺服器拒絕**。token 本身沒問題（scope 對、
+`sydney/v2/.default` 與 `sydney.readwrite` 都在），所以 403 是這個 endpoint 對
+「不是官方前端發出的請求」的防護——再猜 header 也只是繼續碰運氣。
+
+同時 scope 解析修好了，回報變得很清楚（帳號實際持有 7 個 scope）。
+
+### 為什麼改成爬畫面
+
+到這裡累積的事實是：**API 這條路走不通，但畫面上的內容一直都在**。
+其他三支腳本刻意避開 DOM 是有原因的（見
+[`chatgpt-export-markdown`](../chatgpt-export-markdown/) 的 README：ChatGPT 的訊息
+列表是 virtualized 的，44 則訊息 DOM 裡只有 4 個節點；而且 Markdown 從 render 過的
+HTML 反推回來會失真）。但那是**在 API 走得通的前提下**的取捨——這裡 API 走不通，
+「可能不完整的 transcript」勝過「完全沒有 transcript」，只要**老實標示**就好。
+
+所以 v0.8.0 加了 `fromDom()`，放在所有來源的**最後**：
+
+- 掃 DOM 找 `data-testid` / class / id 含 `message` / `chat-turn` / `bubble` 的節點
+- **會排除腳本自己注入的 UI**（`#m365-copilot-export-md-root`），否則自己的按鈕文字
+  會被當成對話內容
+- 同一則訊息被多層節點命中時只留最外層；但如果最外層只剩一個容器（class 含
+  `message` 的整串對話外框），會再往下拆一層，避免整篇變成一則訊息
+- 角色從節點與祖先的 `data-testid` / `aria-label` / class 判斷
+  （`user`/`human` vs `assistant`/`copilot`/`bot`），認不出來就用一問一答交錯推，
+  並把「幾則認不出來」記進 diagnostics
+- HTML → Markdown 自己轉：code fence（含語言）、清單、表格、連結、行內 code、
+  粗體斜體、引用都有處理
+
+輸出的來源標籤會寫 **「從畫面擷取，可能不完整」**，狀態列也會顯示
+`來源：dom-scrape (可能不完整)`——不會假裝跟 API 來源一樣可靠。
+
+### 這條路測過什麼
+
+用 Playwright 開一個合成的聊天頁（訊息節點用不同的 `data-testid` 分使用者／助理，
+內容含 code fence、清單、表格、連結、粗體，並故意混入腳本自己的注入 UI）驗證：
+
+- 三則訊息都抓到、角色正確、順序正確
+- Markdown 轉換正確（```python fence、`-` 清單、表格、`[文字](網址)` 都對）
+- 腳本自己的 UI 沒有被當成訊息
+- 外層容器 class 也含 `message` 時，不會把整篇折成一則
+
+**還沒驗證的是真實頁面**——M365 Copilot 實際用什麼 `data-testid`／class 我還沒看過，
+所以啟發式有可能對不上。如果 `Copy Markdown` 抓不到或抓歪了，`Copy Diagnostics` 裡
+會有一筆 `[fallback] DOM 掃描找到的候選群組`，列出掃到哪些節點群組與數量——
+把那個回報就能對準真實結構調。
+
 ## 已知限制
 
 - `GetConversation` 這條路仍**沒有成功拿到對話內容**：六輪測試已經確認「token 拿得到、
@@ -317,6 +395,13 @@ diagnostics，所以 body 一空、`res.json()` 一丟例外，**status 就永�
   如果對話走的是二進位協定（Fluid Framework 那種），現在只能記大小、看不到內容；
   如果連線是在 iframe／Worker 裡建立的，現在的 patch 完全看不到——見上面
   「第四次真實測試」。
+- **`GetConversation` 回 403，這條路目前是死的**：token、scope、transport 都排除過了
+  （GM_xhr 繞過 CORS 一樣 403），研判是伺服器對非官方前端的防護。
+- **爬畫面這條路可能不完整**：如果 M365 Copilot 的訊息列表是 virtualized 的
+  （只 render 可視範圍），捲不到的訊息就抓不到。輸出會標「可能不完整」，
+  但**腳本無法自己知道少了幾則**——長對話建議先整串捲到底再匯出。
+- 爬畫面的 Markdown 是從 render 過的 HTML 反推的，複雜排版（巢狀表格、
+  自訂元件、citation 標記）可能失真。
 - 用 `@require` 引入 [`shared/`](../../shared/)，所以安裝時多一個
   raw.githubusercontent.com 的網路相依。
 
@@ -330,5 +415,8 @@ diagnostics，所以 body 一空、`res.json()` 一丟例外，**status 就永�
 - 語法檢查（`node --check`）
 - 用 stub server 餵合成的 `GetConversation` 回應，驗證「攔截（不限 host）→ 形狀辨識 →
   normalize → render」整條鏈，以及 `Copy Diagnostics` 在有資料／沒資料時都輸出合理內容
+- 用 Playwright 開合成聊天頁驗證 `fromDom()`：多角色、code fence／清單／表格／連結的
+  Markdown 轉換、排除自己注入的 UI、外層容器不會把整篇折成一則
+  （見上面「第七次真實測試」）
 
 真正的驗證要在登入後的瀏覽器裡按下去——見上面「怎麼幫忙驗證」。

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         M365 Copilot Chat Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.7.0
+// @version      0.8.0
 // @description  【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，貼給 coding agent 用——尚未經真實帳號驗證
 // @author       Da-Wei Lee
 // @license      MIT
@@ -81,6 +81,12 @@
  *   token 本身只存在記憶體裡，**絕對不會進 diagnostics 或剪貼簿**
  *   （那邊只記 key 名稱與型別，不記值）。
  *
+ * **最後一條路：讀畫面（`fromDom`）**。實測下來 API 全部回 403，攔截也攔不到訊息，
+ * 所以補了「直接把 render 出來的 DOM 轉回 Markdown」這條路。這是另外三支腳本刻意
+ * 避開的做法（virtualized 列表會讓 transcript 殘缺、Markdown 是從 HTML 反推的會失真），
+ * 因此它排在最後，而且輸出的 `sourceLabel` 會明講「從畫面擷取，可能不完整」——
+ * 殘缺的 transcript 比沒有更糟，一定要讓讀的人知道。
+ *
  * **Copy Diagnostics**：因為不確定真實 API 長怎樣，這支腳本會把「攔到的每一個 JSON
  * 回應」的 `{url, status, shape}` 記下來，一鍵複製——`shape` 是巢狀 key 名稱／型別／
  * 陣列長度，最多五層，絕對不含任何實際內容/字串值，用來在不洩漏對話內容的前提下
@@ -90,7 +96,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.7.0';
+  const VERSION = '0.8.0';
   const NS = 'm365-copilot-export-md';
   const EXPORTER = `m365-copilot-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[m365-copilot-export-markdown]';
@@ -250,6 +256,51 @@
     log('observed an access token for scope:', json.scope || '(none)');
   }
 
+  /**
+   * 頁面自己打 `substrate.office.com/m365Copilot/*` 是會成功的（實測看得到
+   * `EventListener/Client` 回 200），我們自己打同一個 host 卻拿 403。與其一個一個猜
+   * 還缺哪個 header，不如**把頁面自己送出的 request header 原封不動接下來重用**。
+   *
+   * header 的「值」只留在記憶體裡給 `GetConversation` 用，diagnostics 只記**名稱**
+   * （`authorization` 之類的值絕對不會被記錄或複製出去）。
+   */
+  const observedRequestHeaders = []; // [{ url, headers }]，最新的排最後
+  const M365_COPILOT_URL_RE = /substrate\.office\.com\/m365Copilot\//i;
+
+  function headersToObject(headersInit) {
+    const out = {};
+    try {
+      if (!headersInit) return out;
+      if (typeof headersInit.forEach === 'function' && !Array.isArray(headersInit)) {
+        headersInit.forEach((value, key) => {
+          out[String(key).toLowerCase()] = String(value);
+        });
+        return out;
+      }
+      if (Array.isArray(headersInit)) {
+        for (const [key, value] of headersInit) out[String(key).toLowerCase()] = String(value);
+        return out;
+      }
+      for (const [key, value] of Object.entries(headersInit)) {
+        out[String(key).toLowerCase()] = String(value);
+      }
+    } catch {
+      /* header 拿不到就算了，不能影響網站本身 */
+    }
+    return out;
+  }
+
+  function rememberRequestHeaders(url, headersInit) {
+    if (!M365_COPILOT_URL_RE.test(url)) return;
+    const headers = headersToObject(headersInit);
+    if (Object.keys(headers).length === 0) return;
+    observedRequestHeaders.push({ url, headers });
+    rememberAttempt(
+      '攔到頁面自己送 m365Copilot 的 request header 名稱',
+      `${url.replace(/\?.*$/, '')} → ${Object.keys(headers).join(', ')}`
+    );
+  }
+
   function rememberPayload(url, status, payload) {
     rememberDiagnostics(url, status, payload);
     rememberTokenResponse(url, payload);
@@ -265,18 +316,22 @@
     if (typeof originalFetch !== 'function' || originalFetch.__m365ExportPatched) return;
 
     const patched = function (...args) {
+      const input = args[0];
+      // input 可能是 string／Request／URL 三種——URL 物件沒有 .url，只有 .href，
+      // 之前漏判這個，導致這類請求在 diagnostics 裡的 url 是空字串。
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.href : input?.url || '';
+
+      try {
+        // Request 物件的 header 掛在自己身上，否則看第二個參數的 init.headers。
+        rememberRequestHeaders(url, input && input.headers ? input.headers : args[1]?.headers);
+      } catch {
+        /* 攔截失敗不能影響網站本身 */
+      }
+
       const promise = originalFetch.apply(this, args);
       return promise.then((response) => {
         try {
-          const input = args[0];
-          // input 可能是 string／Request／URL 三種——URL 物件沒有 .url，只有 .href，
-          // 之前漏判這個，導致這類請求在 diagnostics 裡的 url 是空字串。
-          const url =
-            typeof input === 'string'
-              ? input
-              : input instanceof URL
-                ? input.href
-                : input?.url || '';
           if (!/json/.test(response.headers.get('content-type') || '')) return response;
           // body 只能讀一次，一定要 clone，否則網站自己就讀不到了。
           response
@@ -299,14 +354,32 @@
     const XHR = pageWin.XMLHttpRequest;
     if (!XHR || XHR.prototype.__m365ExportPatched) return;
 
-    const { open, send } = XHR.prototype;
+    const { open, send, setRequestHeader } = XHR.prototype;
 
     XHR.prototype.open = function (method, url, ...rest) {
       this.__m365ExportUrl = String(url || '');
+      this.__m365ExportHeaders = {};
       return open.call(this, method, url, ...rest);
     };
 
+    // XHR 的 header 是一個一個設的，得自己累積起來才知道整組長怎樣。
+    XHR.prototype.setRequestHeader = function (name, value) {
+      try {
+        if (this.__m365ExportHeaders) {
+          this.__m365ExportHeaders[String(name).toLowerCase()] = String(value);
+        }
+      } catch {
+        /* 攔截失敗不能影響網站本身 */
+      }
+      return setRequestHeader.call(this, name, value);
+    };
+
     XHR.prototype.send = function (...args) {
+      try {
+        rememberRequestHeaders(this.__m365ExportUrl || '', this.__m365ExportHeaders);
+      } catch {
+        /* 同上 */
+      }
       this.addEventListener('load', () => {
         try {
           const contentType = this.getResponseHeader('content-type') || '';
@@ -567,9 +640,16 @@
     const requestObj = { conversationId, source: 'officeweb', traceId: crypto.randomUUID() };
     const url = `https://substrate.office.com/m365Copilot/GetConversation?request=${encodeURIComponent(JSON.stringify(requestObj))}`;
 
+    // 以「頁面自己送 m365Copilot 的 header」為底（實測那些請求是會成功的），
+    // 再蓋上我們自己要的 authorization——比一個一個猜還缺哪個 header 可靠。
+    const observed = observedRequestHeaders[observedRequestHeaders.length - 1];
+    const baseHeaders = observed ? { ...observed.headers } : {};
+    delete baseHeaders['content-length']; // 由瀏覽器自己算，帶過去會出事
+
     // 每一把 token 都先用 fetch 試、失敗再用 GM_xhr 試（後者不受 CORS 限制）。
     for (const candidate of candidates) {
       const headers = {
+        ...baseHeaders,
         authorization: `Bearer ${candidate.token}`,
         'content-type': 'application/json',
         'x-anchormailbox': `Oid:${msalIds.localAccountId}@${msalIds.tenantId}`,
@@ -686,6 +766,221 @@
     }
   }
 
+  // ------------------------------------- 來源 3：直接讀畫面上已經 render 出來的內容
+  //
+  // 這條路是其他三支腳本刻意避開的（見 `chatgpt-export-markdown` 的 README：
+  // ChatGPT 的訊息列表是 virtualized 的，44 則訊息 DOM 裡只存在 4 個節點，
+  // 而且 Markdown 是從 render 過的 HTML 反推回來的，code fence / 表格 / citation
+  // 都可能失真）。但 M365 Copilot 這邊七輪實測下來，API 全部走不通（403），
+  // 「畫面上看得到的東西」反而是唯一確定存在的資料——所以這裡把它當最後一條路，
+  // 並且**明白標示可能不完整**，不假裝跟 API 來源一樣可靠。
+
+  const DOM_MESSAGE_HINT_RE = /message|chat-turn|conversation-turn|chatbubble|bubble/i;
+
+  /** 把 render 過的 HTML 轉回 Markdown。 */
+  function nodeToMarkdown(node, depth = 0) {
+    if (node.nodeType === 3) return (node.nodeValue || '').replace(/\s+/g, ' ');
+    if (node.nodeType !== 1) return '';
+
+    const tag = node.tagName.toLowerCase();
+    const kids = () =>
+      Array.from(node.childNodes)
+        .map((child) => nodeToMarkdown(child, depth))
+        .join('');
+
+    switch (tag) {
+      // 純互動元素不是內容，帶進去只會變雜訊
+      case 'script':
+      case 'style':
+      case 'svg':
+      case 'button':
+      case 'textarea':
+        return '';
+      case 'br':
+        return '\n';
+      case 'hr':
+        return '\n\n---\n\n';
+      case 'strong':
+      case 'b':
+        return `**${kids().trim()}**`;
+      case 'em':
+      case 'i':
+        return `*${kids().trim()}*`;
+      case 'del':
+      case 's':
+        return `~~${kids().trim()}~~`;
+      case 'a': {
+        const href = node.getAttribute('href') || '';
+        const text = kids().trim();
+        return href ? `[${text}](${href})` : text;
+      }
+      case 'img':
+        return `![image](${node.getAttribute('src') || ''})`;
+      case 'code':
+        // <pre><code> 由 pre 那邊整塊處理，這裡只管行內的
+        return node.parentElement && node.parentElement.tagName.toLowerCase() === 'pre'
+          ? kids()
+          : `\`${kids().trim()}\``;
+      case 'pre': {
+        const className = node.querySelector('code')?.className || '';
+        const lang = /language-([\w+-]+)/.exec(className)?.[1] || '';
+        return `\n\n\`\`\`${lang}\n${(node.textContent || '').replace(/\n+$/, '')}\n\`\`\`\n\n`;
+      }
+      case 'h1':
+      case 'h2':
+      case 'h3':
+      case 'h4':
+      case 'h5':
+      case 'h6':
+        return `\n\n${'#'.repeat(Number(tag[1]))} ${kids().trim()}\n\n`;
+      case 'blockquote':
+        return `\n\n> ${kids().trim().replace(/\n/g, '\n> ')}\n\n`;
+      case 'ul':
+      case 'ol': {
+        const items = Array.from(node.children).filter(
+          (child) => child.tagName.toLowerCase() === 'li'
+        );
+        const body = items
+          .map((li, index) => {
+            const marker = tag === 'ol' ? `${index + 1}.` : '-';
+            const text = nodeToMarkdown(li, depth + 1)
+              .trim()
+              .replace(/\n/g, '\n  ');
+            return `${'  '.repeat(depth)}${marker} ${text}`;
+          })
+          .join('\n');
+        return `\n\n${body}\n\n`;
+      }
+      case 'table': {
+        const rows = Array.from(node.querySelectorAll('tr'));
+        if (rows.length === 0) return '';
+        const toCells = (tr) =>
+          Array.from(tr.children).map((cell) => nodeToMarkdown(cell, depth).trim() || ' ');
+        const head = toCells(rows[0]);
+        const lines = [
+          `| ${head.join(' | ')} |`,
+          `| ${head.map(() => '---').join(' | ')} |`,
+          ...rows.slice(1).map((tr) => `| ${toCells(tr).join(' | ')} |`),
+        ];
+        return `\n\n${lines.join('\n')}\n\n`;
+      }
+      case 'p':
+      case 'div':
+      case 'section':
+      case 'article':
+      case 'li':
+        return `\n\n${kids().trim()}\n\n`;
+      default:
+        return kids();
+    }
+  }
+
+  function htmlToMarkdown(el) {
+    return nodeToMarkdown(el)
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  /** 這個節點（或它的祖先）看起來是誰講的話。 */
+  function domRoleOf(el) {
+    let node = el;
+    for (let i = 0; i < 4 && node; i += 1, node = node.parentElement) {
+      const blob = [
+        node.getAttribute?.('data-testid') || '',
+        node.getAttribute?.('aria-label') || '',
+        node.getAttribute?.('data-author') || '',
+        typeof node.className === 'string' ? node.className : '',
+      ].join(' ');
+      if (/user|human|self|outgoing|\bsent\b/i.test(blob)) return 'user';
+      if (/assistant|copilot|\bbot\b|response|incoming|received/i.test(blob)) return 'assistant';
+    }
+    return '';
+  }
+
+  function domSignature(el) {
+    const testid = el.getAttribute('data-testid') || '';
+    const className = typeof el.className === 'string' ? el.className : '';
+    const token =
+      `${testid} ${className}`.split(/\s+/).find((part) => DOM_MESSAGE_HINT_RE.test(part)) || '';
+    return `${el.tagName.toLowerCase()}[${token}]`;
+  }
+
+  function fromDom() {
+    const ownRoot = document.getElementById(`${NS}-root`);
+    const hits = [];
+    for (const el of document.querySelectorAll('*')) {
+      // 一定要排掉自己注入的 UI，否則會把自己的按鈕文字當成對話內容
+      if (ownRoot && ownRoot.contains(el)) continue;
+      const testid = el.getAttribute('data-testid') || '';
+      const className = typeof el.className === 'string' ? el.className : '';
+      if (!DOM_MESSAGE_HINT_RE.test(`${testid} ${className} ${el.id || ''}`)) continue;
+      if (!(el.textContent || '').trim()) continue;
+      hits.push(el);
+    }
+
+    if (hits.length === 0) {
+      rememberAttempt('DOM 掃描', '找不到任何看起來像訊息的節點');
+      return null;
+    }
+
+    // 只記錄分組狀況給 diagnostics 看，**不要**只挑一組——實測發現使用者與助理的
+    // 訊息常常是不同的 data-testid（`chat-message-user` / `chat-message-assistant`），
+    // 只取「最大的一組」會把使用者說的話整個丟掉。
+    const groups = new Map();
+    for (const el of hits) {
+      const sig = domSignature(el);
+      if (!groups.has(sig)) groups.set(sig, []);
+      groups.get(sig).push(el);
+    }
+    rememberAttempt(
+      'DOM 掃描找到的候選群組',
+      [...groups.entries()].map(([sig, els]) => `${sig} ×${els.length}`).join(' | ')
+    );
+
+    // 取「最外層」的候選：被其他候選包住的都丟掉，避免同一則訊息被算很多次。
+    let nodes = hits.filter((el) => !hits.some((other) => other !== el && other.contains(el)));
+
+    // 但如果最外層只剩一個、裡面還有別的候選，那個八成是整串對話的容器
+    // （例如 class 含 "messages"），要再往下拆一層，否則整篇會變成一則訊息。
+    if (nodes.length === 1) {
+      const inner = hits.filter((el) => el !== nodes[0] && nodes[0].contains(el));
+      const innerOuter = inner.filter(
+        (el) => !inner.some((other) => other !== el && other.contains(el))
+      );
+      if (innerOuter.length > 1) nodes = innerOuter;
+    }
+
+    // 照 DOM 順序排（就是畫面上的順序）
+    const ordered = nodes.sort((a, b) =>
+      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1
+    );
+
+    let unknownRun = 0;
+    const messages = ordered
+      .map((el, index) => {
+        let author = domRoleOf(el);
+        if (!author) {
+          // 認不出角色時就用「一問一答」交錯推，並記下來讓使用者知道這是推的
+          unknownRun += 1;
+          author = index % 2 === 0 ? 'user' : 'assistant';
+        }
+        return { author, text: htmlToMarkdown(el), createdAt: '' };
+      })
+      .filter((message) => message.text.trim());
+
+    if (messages.length === 0) return null;
+    if (unknownRun > 0) {
+      rememberAttempt('DOM 角色判斷', `${unknownRun}/${ordered.length} 則認不出角色，用交錯順序推`);
+    }
+
+    return {
+      url: location.href,
+      data: { chatName: document.title || '', domScrape: true },
+      messages,
+    };
+  }
+
   async function resolveConversation(ids) {
     const hit = pickCaptured(ids) || (await waitForCapture(ids));
     if (hit) return { ...hit, source: 'network-capture' };
@@ -695,6 +990,11 @@
       const api = await fromLoggedInHistory(ids.conversationId);
       if (api) return { ...api, source: 'api (未實測)' };
     }
+
+    // 最後一條路：讀畫面。可能不完整（virtualized 列表只留可視範圍的節點），
+    // 所以放在最後，而且來源標籤會明講。
+    const dom = fromDom();
+    if (dom) return { ...dom, source: 'dom-scrape (可能不完整)' };
 
     throw new Error(
       '抓不到對話資料。這支腳本是實驗性的——請按 "Copy Diagnostics" 把結果回報，' +
@@ -814,7 +1114,12 @@
 
     return {
       source: 'm365-copilot',
-      sourceLabel: 'Microsoft 365 Copilot Chat',
+      // 從畫面刮下來的可能不完整，標籤要講清楚——殘缺的 transcript 比沒有更糟，
+      // agent 不會知道少了什麼（見 chatgpt-export-markdown 的 README）。
+      sourceLabel:
+        hit.source === 'dom-scrape (可能不完整)'
+          ? 'Microsoft 365 Copilot Chat（從畫面擷取，可能不完整）'
+          : 'Microsoft 365 Copilot Chat',
       title: pickTitle(hit.data),
       url: ctx.url,
       ids: { conversation_id: ctx.conversationId || '', share_id: ctx.shareId || '' },
