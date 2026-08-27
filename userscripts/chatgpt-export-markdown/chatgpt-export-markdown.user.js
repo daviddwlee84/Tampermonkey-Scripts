@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      1.2.0
+// @version      1.3.0
 // @description  把整段 ChatGPT 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用
 // @author       Da-Wei Lee
 // @license      MIT
@@ -19,7 +19,7 @@
 // @downloadURL  https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
 // ==/UserScript==
 
-/* global createExportPanel, downloadText, fence, filenameFor, renderTranscript */
+/* global createExportPanel, downloadText, fence, filenameFor, formatUtc, renderTranscript */
 
 /**
  * 把一整段 ChatGPT 對話匯成 Markdown，格式仿 SpecStory 的 chat history
@@ -40,7 +40,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.2.0';
+  const VERSION = '1.3.0';
   const NS = 'cgpt-export-md';
   const EXPORTER = `chatgpt-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[chatgpt-export-markdown]';
@@ -51,8 +51,12 @@
 
   // ---------------------------------------------------------------- 設定
 
-  const SETTINGS_KEYS = ['includeThinking', 'includeTools'];
-  const settings = { includeThinking: false, includeTools: false };
+  const SETTINGS_KEYS = ['includeThinking', 'includeTools', 'includeResearchDetails'];
+  const settings = {
+    includeThinking: false,
+    includeTools: false,
+    includeResearchDetails: false,
+  };
 
   for (const key of SETTINGS_KEYS) {
     settings[key] = GM_getValue(key, settings[key]) === true;
@@ -291,6 +295,7 @@
     'system_error',
   ]);
   const THINKING_CONTENT_TYPES = new Set(['thoughts', 'reasoning_recap']);
+  const DEEP_RESEARCH_STATE = Symbol('deepResearchState');
   // citation 是私有區 unicode sentinel：\uE200cite\uE202turn0search1\uE201
   // （寫成 escape 而不是直接放字元，那些是看不見的私有區字碼，很容易被編輯器吃掉）
   const CITATION_SENTINEL = /\uE200[\s\S]*?\uE201/g;
@@ -311,6 +316,142 @@
       id = mapping[id].parent;
     }
     return thread.reverse();
+  }
+
+  function looksLikeMessage(value) {
+    return (
+      !!value &&
+      typeof value === 'object' &&
+      !!value.author &&
+      typeof value.author === 'object' &&
+      !!value.content &&
+      typeof value.content === 'object'
+    );
+  }
+
+  function isDeepResearchMessage(message) {
+    const sdk = message.metadata?.chatgpt_sdk || {};
+    const resource = message.metadata?.invoked_resource || {};
+    return [
+      sdk.resource_name,
+      sdk.attribution_id,
+      sdk.resolved_pineapple_uri,
+      resource.app_name,
+      resource.resource_uri,
+    ].some((value) => /deep[_\s-]?research/i.test(String(value || '')));
+  }
+
+  function parseWidgetState(value, { strict = false } = {}) {
+    if (!value) return null;
+    if (typeof value === 'object') return value;
+    if (typeof value !== 'string') return null;
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (error) {
+      if (strict) throw new Error(`Deep Research widget state 無法解析：${error.message}`);
+      return null;
+    }
+  }
+
+  /** Deep Research 把最終報告藏在 app widget state，不會放進一般 conversation thread。 */
+  function deepResearchInfo(message) {
+    const sdk = message.metadata?.chatgpt_sdk;
+    if (!sdk || typeof sdk !== 'object') return null;
+
+    const isDeepResearch = isDeepResearchMessage(message);
+    const candidates = [
+      sdk.widget_state,
+      sdk.venus_widget_state,
+      sdk.tool_response_metadata?.venus_widget_state,
+    ];
+    let fallbackState = null;
+
+    for (const candidate of candidates) {
+      const state = parseWidgetState(candidate, { strict: isDeepResearch });
+      if (!state) continue;
+      if (!fallbackState) fallbackState = state;
+      if (looksLikeMessage(state.report_message)) {
+        return { state, report: state.report_message };
+      }
+    }
+
+    if (!isDeepResearch) return null;
+    if (fallbackState?.status === 'completed') {
+      throw new Error('Deep Research 已完成，但找不到可匯出的 report_message。');
+    }
+    return fallbackState ? { state: fallbackState, report: null } : null;
+  }
+
+  function candidateTimestamp(candidate) {
+    const values = [
+      candidate.state?.last_updated_at,
+      candidate.state?.research_stopped_at,
+      candidate.report?.update_time,
+      candidate.report?.create_time,
+      candidate.host?.update_time,
+      candidate.host?.create_time,
+    ];
+    for (const value of values) {
+      const time =
+        typeof value === 'number' ? value * (value < 1e12 ? 1000 : 1) : Date.parse(value);
+      if (Number.isFinite(time)) return time;
+    }
+    return 0;
+  }
+
+  function attachResearchState(message, state) {
+    const copy = { ...message };
+    Object.defineProperty(copy, DEEP_RESEARCH_STATE, { value: state });
+    return copy;
+  }
+
+  /** 插回 app 內嵌訊息；同一份 report 出現多個 snapshot 時採最新的 completed state。 */
+  function expandDeepResearchMessages(messages, opts) {
+    const topLevelIds = new Set(messages.map((message) => message.id).filter(Boolean));
+    const best = new Map();
+
+    messages.forEach((host, index) => {
+      const info = deepResearchInfo(host);
+      if (!info) return;
+      const key = info.state?.plan?.plan_id || info.report?.id || host.id || `research-${index}`;
+      const candidate = { ...info, host, hostIndex: index };
+      const score = (info.state?.status === 'completed' ? 1e15 : 0) + candidateTimestamp(candidate);
+      if (!best.has(key) || score >= best.get(key).score) best.set(key, { ...candidate, score });
+    });
+
+    const stateForTopLevel = new Map();
+    const insertions = new Map();
+    for (const candidate of best.values()) {
+      if (candidate.report?.id && topLevelIds.has(candidate.report.id)) {
+        stateForTopLevel.set(candidate.report.id, candidate.state);
+        continue;
+      }
+      if (!candidate.report && !opts.includeResearchDetails) continue;
+
+      const message = candidate.report || {
+        id: `deep-research-state-${candidate.state?.plan?.plan_id || candidate.host.id}`,
+        author: { role: 'assistant', metadata: {} },
+        create_time: candidate.host.update_time || candidate.host.create_time,
+        content: { content_type: 'text', parts: [] },
+        status: 'finished_successfully',
+        recipient: 'all',
+      };
+      const items = insertions.get(candidate.hostIndex) || [];
+      items.push(attachResearchState(message, candidate.state));
+      insertions.set(candidate.hostIndex, items);
+    }
+
+    const expanded = [];
+    messages.forEach((message, index) => {
+      expanded.push(
+        message.id && stateForTopLevel.has(message.id)
+          ? attachResearchState(message, stateForTopLevel.get(message.id))
+          : message
+      );
+      expanded.push(...(insertions.get(index) || []));
+    });
+    return expanded;
   }
 
   /** 這串判斷是照 ChatGPT UI 自己的判準寫的。 */
@@ -413,14 +554,45 @@
     return 'Assistant';
   }
 
+  function researchDetailsOf(message) {
+    const state = message[DEEP_RESEARCH_STATE];
+    if (!state) return '';
+
+    const clean = (value) =>
+      String(value || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    const lines = ['> **Deep Research details**'];
+    if (state.status) lines.push(`> Status: \`${clean(state.status)}\``);
+    if (state.research_started_at) lines.push(`> Started: ${formatUtc(state.research_started_at)}`);
+    if (state.research_stopped_at)
+      lines.push(`> Finished: ${formatUtc(state.research_stopped_at)}`);
+
+    const plan = state.plan;
+    if (plan?.title) lines.push('>', `> Plan: **${clean(plan.title)}**`);
+    for (const step of plan?.steps || []) {
+      const status = clean(step.status || 'pending');
+      const marker = status === 'completed' ? 'x' : ' ';
+      const suffix = status === 'pending' || status === 'completed' ? '' : ` _(${status})_`;
+      lines.push(`> - [${marker}] ${clean(step.text)}${suffix}`);
+    }
+    return lines.join('\n');
+  }
+
   /** 把 ChatGPT 的對話 JSON 轉成 shared/chat-export.js 吃的正規化 doc。 */
   function normalize(data, ctx, opts) {
-    const sections = visibleMessages(buildThread(data), opts).map((message) => ({
-      role: roleOf(message),
-      model: roleOf(message) === 'Assistant' ? message.metadata?.model_slug || '' : '',
-      time: message.create_time,
-      body: applyCitations(textOf(message), message),
-    }));
+    const messages = expandDeepResearchMessages(buildThread(data), opts);
+    const sections = visibleMessages(messages, opts).map((message) => {
+      const role = roleOf(message);
+      const details = opts.includeResearchDetails ? researchDetailsOf(message) : '';
+      const body = applyCitations(textOf(message), message);
+      return {
+        role,
+        model: role === 'Assistant' ? message.metadata?.model_slug || '' : '',
+        time: message.create_time,
+        body: [details, body].filter(Boolean).join('\n\n'),
+      };
+    });
 
     return {
       source: 'chatgpt',
@@ -504,6 +676,11 @@
         get: () => settings.includeTools,
         set: (value) => setSetting('includeTools', value),
       },
+      {
+        label: '含 Deep Research 計畫／狀態',
+        get: () => settings.includeResearchDetails,
+        set: (value) => setSetting('includeResearchDetails', value),
+      },
     ],
     shareInput: {
       placeholder: '貼上任意 share URL…',
@@ -536,6 +713,11 @@
       setSetting('includeTools', !settings.includeTools);
       ui.openPanel();
       ui.setStatus(`工具呼叫：${settings.includeTools ? '含' : '不含'}`);
+    });
+    GM_registerMenuCommand('Toggle Deep Research 計畫／狀態', () => {
+      setSetting('includeResearchDetails', !settings.includeResearchDetails);
+      ui.openPanel();
+      ui.setStatus(`Deep Research 計畫／狀態：${settings.includeResearchDetails ? '含' : '不含'}`);
     });
     GM_registerMenuCommand('Reset button position', () => {
       ui.mount();

@@ -18,8 +18,9 @@
 | Download .md | 同 transcript，存成 `chatgpt-<標題>-<時間>.md` |
 | Download .json | 原始對話 JSON，之後要重新 render / 建索引用 |
 
-外加兩個開關（預設關，會記住）：**含 thinking / reasoning**、**含工具呼叫與搜尋結果**。
-預設輸出就是最乾淨的問答本文。
+外加三個開關（預設關，會記住）：**含 thinking / reasoning**、**含工具呼叫與搜尋結果**、
+**含 Deep Research 計畫／狀態**。Deep Research 的最終報告不必開任何選項就會匯出；
+第三個開關只控制研究狀態、起訖時間與 plan steps。預設輸出就是最乾淨的問答本文。
 
 按鈕**可以直接拖到畫面上任何位置**（滑鼠、觸控都行），位置會記住；
 面板會自動判斷該往上還是往下開。想放回右下角就用選單的 `Reset button position`。
@@ -72,7 +73,10 @@ code fence、表格、citation 都可能失真。
   `matched_text` 是「一個半形空白」，全文替換會把整篇的空白刪光。
 - **合併同 role 的連續訊息**：一輪 assistant 常被拆成「開場白 → 搜尋 → 正文」好幾則。
 - **只匯出目前選中的那條 branch**，編輯／重生過的分支不會混進來。
-- **未知的 content_type**（Deep Research、canvas 之類的新東西）會以 JSON code block
+- **Deep Research**：最終報告其實藏在工具訊息的
+  `metadata.chatgpt_sdk.widget_state.report_message`，不在一般 conversation thread 裡。
+  腳本會把它還原成 Assistant 訊息，再走同一套 raw Markdown 與 citation pipeline。
+- **未知的 content_type**（canvas 之類的新東西）會以 JSON code block
   原樣留著，不會靜默消失。
 
 ## 已知限制
@@ -82,11 +86,12 @@ code fence、表格、citation 都可能失真。
   選它是因為更穩的那層（DOM）根本拿不到完整資料。壞掉的徵兆是按鈕跳「抓不到對話資料」。
 - 只在 share 頁做過端到端驗證（`npm run preview`）。登入中的 `/c/` 走的是第 1/3 條路，
   沒有登入 session 的 harness 驗不到，得實機確認。
-- Deep Research 報告目前沒有真實樣本可驗；官方本來就有 Download → Markdown，混合的
-  對話建議兩邊都留一份。
+- 尚未完成的 Deep Research 還沒有 `report_message`；預設不會替它虛構回答。開啟
+  **含 Deep Research 計畫／狀態**時，仍可匯出目前的 plan 與執行狀態。
 - 圖片只輸出 `![image](<asset_pointer>)` 佔位，不會下載檔案。
 - 從 v1.2.0 起，render 與浮動 UI 搬到 [`shared/`](../../shared/) 用 `@require` 引入
   （跟 claude / copilot 兩支共用），所以安裝時多一個 raw.githubusercontent.com 的網路相依。
+- 從 v1.3.0 起，支援 Deep Research app widget 裡的完整最終報告。
 
 ## 測試
 
@@ -96,3 +101,11 @@ npm run preview -- chatgpt-export-markdown \
 ```
 
 `--wait` 不能省：抓資料是 async 的，harness 預設只等 300ms。
+
+Deep Research 的回歸樣本：
+
+```bash
+npm run preview -- chatgpt-export-markdown \
+  "https://chatgpt.com/share/6a8fb589-9e78-83ec-af2e-ac24d3aeefec" \
+  --menu "Copy Markdown" --wait 30000
+```
