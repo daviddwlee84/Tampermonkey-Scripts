@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         M365 Copilot Chat Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.11.0
+// @version      0.12.0
 // @description  【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，優先讀原始資料、失敗退回畫面
 // @author       Da-Wei Lee
 // @license      MIT
@@ -28,9 +28,9 @@
 
 /**
  * ⚠️ 實驗性：早期實測中 `GetConversation` 一律回 403，所以 v0.8.0 加了最後一條
- * 「讀畫面」fallback。v0.11.0 的真實回報顯示，重用頁面 request headers 後 API 已回 200
- * 並取得 15 筆原始訊息；因此現在歷史對話優先走 API，失敗才走可能受 virtualized 列表
- * 影響的 `fromDom`，輸出也會標示來源。
+ * 「讀畫面」fallback。v0.11.0 起重用頁面 request headers 後 API 已能回傳完整原始訊息；
+ * v0.12.0 修正單筆 WebSocket 增量訊息搶先勝出的問題，歷史對話會真正優先走 API，
+ * 失敗才走可能受 virtualized 列表影響的 capture / `fromDom`，輸出也會標示來源。
  *
  * 背景：這是 `copilot-export-markdown`（消費版 copilot.microsoft.com）的姊妹腳本，
  * 目標是 Microsoft 365 的企業版／個人版 Copilot Chat。這兩個產品**不是同一個 API**：
@@ -99,7 +99,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.11.0';
+  const VERSION = '0.12.0';
   const NS = 'm365-copilot-export-md';
   const EXPORTER = `m365-copilot-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[m365-copilot-export-markdown]';
@@ -129,6 +129,22 @@
 
   // ------------------------------------------------- 來源 1：攔截網站自己的請求
 
+  // 實測中被 EventListener/telemetry 回應誤判成「一則訊息」：那類回應也常有
+  // 一個看起來像 author/content 的欄位，所以除了形狀，還要求有 id 或時間戳
+  // 這種訊息才會有的欄位，降低誤判機率。
+  function isMessageLike(item) {
+    if (!item || typeof item !== 'object') return false;
+    const hasIdentity =
+      'messageId' in item ||
+      'id' in item ||
+      'createdAt' in item ||
+      'timestamp' in item ||
+      'create_time' in item;
+    const hasBody =
+      Array.isArray(item.content) || typeof item.content === 'string' || 'text' in item;
+    return !!(item.author || item.sender || item.role) && hasBody && hasIdentity;
+  }
+
   /**
    * 深掃找「訊息列表」：元素同時有 author/sender/role 與 content/text 的陣列，
    * 取最長的那個。跟 `copilot-export-markdown.user.js` 是同一套邏輯，因為我們也不知道
@@ -138,23 +154,6 @@
     const seen = new Set();
     let best = null;
 
-    // 實測中被 EventListener/telemetry 回應誤判成「一則訊息」：那類回應也常有
-    // 一個看起來像 author/content 的欄位，所以除了形狀，還要求有 id 或時間戳
-    // 這種訊息才會有的欄位，降低誤判機率。
-    const hasMessageIdentity = (item) =>
-      'messageId' in item ||
-      'id' in item ||
-      'createdAt' in item ||
-      'timestamp' in item ||
-      'create_time' in item;
-
-    const isMessage = (item) =>
-      !!item &&
-      typeof item === 'object' &&
-      (item.author || item.sender || item.role) &&
-      (Array.isArray(item.content) || typeof item.content === 'string' || 'text' in item) &&
-      hasMessageIdentity(item);
-
     // 已知的 telemetry / event-listener key：底下不管形狀多像都不要當成對話內容
     // （實測到 EventListener/Client?EventId=ExecuteAction 的 result 欄位誤判過一次）。
     const SKIP_KEYS = new Set(['telemetry', 'instrumentation', 'diagnostics']);
@@ -163,9 +162,11 @@
       if (!node || typeof node !== 'object' || depth > maxDepth || seen.has(node)) return;
       seen.add(node);
       if (Array.isArray(node)) {
-        if (node.length > 0 && node.every(isMessage)) {
-          if (!best || node.length > best.length) best = node;
-          return;
+        // WebSocket 的 messages 可能混入純工具／狀態事件；不能因其中一筆沒有文字就把整包
+        // user/assistant 訊息丟掉。先保留符合一般訊息 shape 的子集，再繼續深掃其他元素。
+        const messageItems = node.filter(isMessageLike);
+        if (messageItems.length > 0 && (!best || messageItems.length > best.length)) {
+          best = messageItems;
         }
         for (const item of node) walk(item, depth + 1);
         return;
@@ -182,6 +183,8 @@
 
   /** [{ url, data, messages }]，最新的排最後。 */
   const captured = [];
+  /** 成功的 GetConversation 結果留在記憶體，Diagnostics 後匯出不用重打也不會遺失。 */
+  const apiConversations = new Map();
   /** 每一個攔到的 JSON 都記一筆（不含內容），供 Copy Diagnostics 用。 */
   const diagnostics = [];
   const DIAGNOSTICS_LIMIT = 100;
@@ -317,7 +320,10 @@
     if (NON_CONVERSATION_URL_RE.test(url)) return;
     const messages = findMessageList(payload);
     if (!messages) return;
-    captured.push({ url, data: payload, messages });
+    // 有些 endpoint / frame 本身不帶 conversationId；記下 capture 當下的頁面 context，
+    // share 頁面才不會因為 URL 沒有明碼 ID 而失去可用候選，也不會吃到 SPA 上一頁的資料。
+    const pageConversationId = currentIds().conversationId;
+    captured.push({ url, data: payload, messages, pageConversationId });
     log('captured conversation:', url, `${messages.length} messages`);
   }
 
@@ -632,6 +638,7 @@
 
   async function fromLoggedInHistory(conversationId) {
     if (!conversationId) return null;
+    if (apiConversations.has(conversationId)) return apiConversations.get(conversationId);
     let msalIds;
     try {
       msalIds = getMsalAccount();
@@ -712,8 +719,29 @@
             log('GetConversation failed:', status, label);
             continue;
           }
-          const messages = findMessageList(json);
-          if (messages) return { url, data: json, messages };
+          if (json.conversationId && json.conversationId !== conversationId) {
+            rememberAttempt(
+              'GetConversation 回了別的對話',
+              `${label} | requested/current id mismatch`
+            );
+            continue;
+          }
+
+          // GetConversation 的已知 contract 就是頂層 messages；不要因為單一元素多了新版 shape
+          // 而讓通用 heuristic 放棄整包。頂層不存在時才退回深掃。
+          const messages =
+            Array.isArray(json.messages) && json.messages.length > 0
+              ? json.messages.filter((message) => message && typeof message === 'object')
+              : findMessageList(json);
+          if (messages?.length) {
+            const hit = { url, data: json, messages };
+            apiConversations.set(conversationId, hit);
+            rememberAttempt(
+              'GetConversation 可匯出訊息',
+              `${label} | raw ${Array.isArray(json.messages) ? json.messages.length : 'unknown'} | accepted ${messages.length}`
+            );
+            return hit;
+          }
           rememberAttempt('GetConversation 回 2xx 但找不到訊息列表', label);
         } catch (error) {
           // fetch 丟例外通常代表 CORS 被擋（跨網域 + 自訂 header 會觸發 preflight）
@@ -757,13 +785,58 @@
     return match ? match[1] : null;
   }
 
-  function pickCaptured(ids) {
-    if (ids.conversationId) {
-      for (let i = captured.length - 1; i >= 0; i--) {
-        if (captured[i].url.includes(ids.conversationId)) return captured[i];
+  function capturedConversationId(hit) {
+    if (typeof hit?.data?.conversationId === 'string') return hit.data.conversationId;
+    const match = String(hit?.url || '').match(/[?&]ConversationId=([^&#]+)/i);
+    if (match) {
+      try {
+        return decodeURIComponent(match[1]);
+      } catch {
+        return match[1];
       }
     }
-    return captured[captured.length - 1] || null;
+    return hit?.pageConversationId || null;
+  }
+
+  function exportableMessageCount(hit) {
+    return (hit?.messages || []).reduce((count, message) => {
+      try {
+        return messageToBody(message, { includeTools: false }).trim() ? count + 1 : count;
+      } catch {
+        return count;
+      }
+    }, 0);
+  }
+
+  /** 同一個 conversation 可能有多個增量 frame；選能匯出正文最多的，不選最新的一筆。 */
+  function pickCaptured(ids) {
+    let candidates = captured;
+    if (ids.conversationId) {
+      candidates = captured.filter((hit) => {
+        const candidateId = capturedConversationId(hit);
+        return candidateId
+          ? candidateId === ids.conversationId
+          : String(hit.url || '').includes(ids.conversationId);
+      });
+      // 已知 conversationId 時不能退回任意 capture，否則 SPA 上一個對話會污染目前輸出。
+      if (candidates.length === 0) return null;
+    }
+
+    let best = null;
+    let bestScore = [-1, -1, -1];
+    for (const hit of candidates) {
+      const score = [
+        exportableMessageCount(hit),
+        hit.messages?.length || 0,
+        captured.indexOf(hit), // 前兩項相同才選最新的
+      ];
+      const firstDifference = score.findIndex((value, index) => value !== bestScore[index]);
+      if (firstDifference >= 0 && score[firstDifference] > bestScore[firstDifference]) {
+        best = hit;
+        bestScore = score;
+      }
+    }
+    return best;
   }
 
   async function waitForCapture(ids, { timeout = 8_000, interval = 200 } = {}) {
@@ -1067,18 +1140,27 @@
   }
 
   async function resolveConversation(ids) {
-    // 1. 已經攔到的（最理想：原始 JSON，citation 之類都完整）
-    const hit = pickCaptured(ids);
-    if (hit) return { ...hit, source: 'network-capture' };
-
-    // 2. 2026-08-26 的真實回報顯示：重用頁面 request headers 後 GetConversation 已回 200，
-    //    而且拿到 15 筆原始訊息；DOM 當時只 render 6 則。完整性優先，先走 API。
+    // 1. 歷史對話的 GetConversation 是完整 snapshot；WebSocket capture 常只是單一增量 frame。
+    //    v0.11.0 雖然宣稱 API 優先，實際上 capture 仍在前面，造成 37 筆 API response 最後只
+    //    匯出 1 筆。現在先用 cache（例如 Copy Diagnostics 已拿到的），沒有才呼叫 API。
     if (!ids.shareId && ids.conversationId) {
+      const cachedApi = apiConversations.get(ids.conversationId);
+      if (cachedApi) return { ...cachedApi, source: 'api (cached)' };
       const api = await fromLoggedInHistory(ids.conversationId);
       if (api) return { ...api, source: 'api' };
     }
 
-    // 3. API 不可用時，認得出版面就直接讀畫面。
+    // 2. API 不可用或 share 頁面才用 capture；多個增量 frame 中選可匯出內容最多的。
+    const hit = pickCaptured(ids);
+    if (hit) {
+      rememberAttempt(
+        '選用 network capture',
+        `raw ${hit.messages.length} | exportable ${exportableMessageCount(hit)}`
+      );
+      return { ...hit, source: 'network-capture' };
+    }
+
+    // 3. 認得出版面就直接讀畫面。
     const knownDom = fromDom({ knownLayoutOnly: true });
     if (knownDom) return { ...knownDom, source: 'dom-scrape (可能不完整)' };
 
@@ -1099,10 +1181,18 @@
   // ------------------------------------------------------------ 轉成 Markdown
 
   function roleOf(message) {
-    const raw = message.author?.type || message.author || message.sender || message.role || '';
+    const raw =
+      message.author?.type ||
+      message.author?.role ||
+      message.author ||
+      message.sender?.type ||
+      message.sender?.role ||
+      message.sender ||
+      message.role ||
+      '';
     const type = String(raw);
     if (/human|user/i.test(type)) return 'User';
-    if (/^(ai|bot|assistant|copilot)$/i.test(type)) return 'Assistant';
+    if (/^(ai|bot|assistant|copilot)/i.test(type)) return 'Assistant';
     return type ? type[0].toUpperCase() + type.slice(1) : 'Unknown';
   }
 
@@ -1163,6 +1253,7 @@
       const texts = message.content.map((part) => partToText(part, opts)).filter(Boolean);
       if (texts.length > 0) return texts.join('\n\n');
     }
+    if (typeof message.content === 'string' && message.content.trim()) return message.content;
 
     if (typeof message.text === 'string' && message.text.trim()) return message.text;
 
@@ -1190,27 +1281,50 @@
     return look(data, 0) || 'M365 Copilot conversation';
   }
 
+  function hasUserFacingText(message) {
+    if (typeof message?.text === 'string' && message.text.trim()) return true;
+    if (typeof message?.content === 'string' && message.content.trim()) return true;
+    return Array.isArray(message?.content)
+      ? message.content.some(
+          (part) =>
+            typeof part === 'string' ||
+            (part && part.type === 'text' && typeof part.text === 'string' && part.text.trim())
+        )
+      : false;
+  }
+
   function normalize(hit, ctx, opts) {
     const messages = [...hit.messages].sort((a, b) => {
       const at = new Date(a.createdAt || a.timestamp || 0).getTime() || 0;
       const bt = new Date(b.createdAt || b.timestamp || 0).getTime() || 0;
       return at - bt;
     });
+    const roleCounts = {};
+    let bodyCount = 0;
 
     const sections = messages
       .map((message) => {
         const role = roleOf(message);
+        roleCounts[role] = (roleCounts[role] || 0) + 1;
+        const shouldKeep =
+          role === 'User' || role === 'Assistant' || opts.includeTools || hasUserFacingText(message);
+        const body = shouldKeep ? messageToBody(message, opts) : '';
+        if (body.trim()) bodyCount += 1;
         return {
           role,
           model: '',
           time: message.createdAt || message.timestamp,
-          body:
-            role === 'User' || role === 'Assistant' || opts.includeTools
-              ? messageToBody(message, opts)
-              : '',
+          body,
         };
       })
       .filter((section) => section.body.trim());
+
+    rememberAttempt(
+      '匯出訊息統計',
+      `source ${hit.source || 'unknown'} | raw ${messages.length} | roles ${Object.entries(roleCounts)
+        .map(([role, count]) => `${role}:${count}`)
+        .join(',')} | body ${bodyCount} | sections ${sections.length}`
+    );
 
     return {
       source: 'm365-copilot',

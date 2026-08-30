@@ -2,9 +2,10 @@
 
 ## ⚠️ 這支是實驗性的
 
-已經在真實帳號上持續實測（見下面各次紀錄）。v0.11.0 的最新回報顯示，重用頁面送出的
-request headers 後，`GetConversation` 已成功回傳完整原始資料（15 筆），因此歷史對話會優先
-走 API；API 不可用或 share 頁面才退回**直接讀畫面上 render 出來的內容**。DOM fallback 代表：
+已經在真實帳號上持續實測（見下面各次紀錄）。v0.12.0 修正「`GetConversation` 已回傳
+37 筆完整原始資料，但單筆 WebSocket frame 搶先勝出，最後只匯出 1 筆」的問題。登入中的
+歷史對話現在會真正優先走 API；API 不可用或 share 頁面才退回 capture／**直接讀畫面上
+render 出來的內容**。DOM fallback 代表：
 
 - 匯出的內容**可能不完整**——如果訊息列表是 virtualized 的，沒 render 出來的抓不到。
   輸出會標示「從畫面擷取，可能不完整」，但腳本沒辦法自己知道少了幾則。
@@ -51,9 +52,9 @@ Microsoft 有兩個完全不同的 Copilot 產品：
 
 ## 資料是從哪來的
 
-> **v0.8.0 起實際能用的是第 3 條（讀畫面）**：前兩條在真實帳號上都試過了，
-> v0.11.0 的最新回報則確認 `GetConversation` 已回 200 並取得 15 筆原始訊息，所以登入中的
-> 歷史對話現在優先走 API；失敗才退回 DOM。
+> **v0.8.0 起實際能用的是第 3 條（讀畫面）**：前兩條在真實帳號上都試過了；
+> v0.11.0 確認 `GetConversation` 可回完整原始訊息，v0.12.0 進一步修正單筆 WebSocket
+> capture 搶先返回的 regression。登入中的歷史對話現在優先走 API；失敗才退回 capture／DOM。
 
 **來源 1：攔截（跟 chatgpt / claude / copilot 三支同一個模式）**。`@run-at document-start`
 攔 `fetch` 與 `XMLHttpRequest`，**不限定 URL host**——把攔到的每個 JSON 回應丟進形狀辨識
@@ -452,9 +453,25 @@ DOM 改回 fallback。原始 `text` 也比 HTML 反推 Markdown 更能保留 ASC
 屬於敏感資訊外洩。v0.11.0 起所有 diagnostics URL 都會先遮蔽 token 類 query 值；舊版產生的
 diagnostics 不應公開分享。DOM fallback 也會移除常見的 line-number/gutter 節點。
 
+## 第十一次真實測試：修正完整 API 被單筆 WebSocket 蓋掉（v0.12.0，2026-08-30）
+
+實際 diagnostics 顯示同一個 conversation 的 `GetConversation` 已回 **200**，頂層
+`messages` 有 **37 筆**；但是 Agent Handoff 最後只有 1 筆 User 訊息。原因不是 API、token
+或 Markdown renderer，而是來源調度的順序：
+
+1. Chathub 的 WebSocket URL 帶有正確 `ConversationId`，其中一個增量 frame 被辨識成 1 筆訊息。
+2. `resolveConversation()` 在呼叫 `GetConversation` 前就把這筆 capture 返回。
+3. `Copy Diagnostics` 雖然另外成功拿到 37 筆，但成功結果沒有保存成匯出候選。
+
+v0.12.0 將 conversation 頁面的順序改成 **API cache → `GetConversation` → 最佳 capture → DOM**。
+成功的 API response 會保存在記憶體，頂層 `messages` 直接採用並驗證 `conversationId`；capture
+fallback 則只比較目前 conversation 的候選，依「可匯出正文數、原始訊息數、最後才看新舊」
+選擇，不再讓最新單筆增量 frame 自動勝出。diagnostics 另加入 raw／role／non-empty body／section
+純計數，不包含對話內容或 token。
+
 ## 已知限制
 
-- `GetConversation` 已在一個真實歷史對話成功回傳 15 筆訊息，但這是 Microsoft 私有 API，
+- `GetConversation` 已在真實歷史對話成功回傳 15 與 37 筆訊息，但這是 Microsoft 私有 API，
   其他帳號、租戶或 share 頁面仍可能失敗；失敗時會退回 DOM。
 - share 連結沒有任何已知的直接呼叫方式，完全依賴攔截；攔不到就會老實報錯，不會假裝有資料。
 - `copilot.cloud.microsoft` 與 `m365.cloud.microsoft` 是否真的共用同一套後端 API 未知。
