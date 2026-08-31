@@ -463,8 +463,10 @@ diagnostics 不應公開分享。DOM fallback 也會移除常見的 line-number/
 2. `resolveConversation()` 在呼叫 `GetConversation` 前就把這筆 capture 返回。
 3. `Copy Diagnostics` 雖然另外成功拿到 37 筆，但成功結果沒有保存成匯出候選。
 
-v0.12.0 將 conversation 頁面的順序改成 **API cache → `GetConversation` → 最佳 capture → DOM**。
-成功的 API response 會保存在記憶體，頂層 `messages` 直接採用並驗證 `conversationId`；capture
+v0.12.0 將 conversation 頁面的順序改成 **`GetConversation` → API cache → 最佳 capture → DOM**。
+成功的 API response 會保存在記憶體，但**只當 API 重打失敗時的 fallback**——對話還在繼續時
+直接吃 cache 會漏掉最新幾則（`Copy Diagnostics` 先跑過就會踩到）。頂層 `messages` 直接
+採用並驗證 `conversationId`；capture
 fallback 則只比較目前 conversation 的候選，依「可匯出正文數、原始訊息數、最後才看新舊」
 選擇，不再讓最新單筆增量 frame 自動勝出。diagnostics 另加入 raw／role／non-empty body／section
 純計數，不包含對話內容或 token。

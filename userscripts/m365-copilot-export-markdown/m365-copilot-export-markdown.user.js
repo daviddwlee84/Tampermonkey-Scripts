@@ -638,7 +638,6 @@
 
   async function fromLoggedInHistory(conversationId) {
     if (!conversationId) return null;
-    if (apiConversations.has(conversationId)) return apiConversations.get(conversationId);
     let msalIds;
     try {
       msalIds = getMsalAccount();
@@ -1142,12 +1141,15 @@
   async function resolveConversation(ids) {
     // 1. 歷史對話的 GetConversation 是完整 snapshot；WebSocket capture 常只是單一增量 frame。
     //    v0.11.0 雖然宣稱 API 優先，實際上 capture 仍在前面，造成 37 筆 API response 最後只
-    //    匯出 1 筆。現在先用 cache（例如 Copy Diagnostics 已拿到的），沒有才呼叫 API。
+    //    匯出 1 筆。現在每次都重打 API 拿最新 snapshot，失敗才退回上次成功的 cache
+    //    （例如 Copy Diagnostics 已拿到的），這樣對話繼續下去也不會匯出過期內容。
     if (!ids.shareId && ids.conversationId) {
-      const cachedApi = apiConversations.get(ids.conversationId);
-      if (cachedApi) return { ...cachedApi, source: 'api (cached)' };
       const api = await fromLoggedInHistory(ids.conversationId);
       if (api) return { ...api, source: 'api' };
+      // cache 只當 fallback：對話還在繼續時，snapshot 會過期（Copy Diagnostics 先跑過、
+      // 之後又聊了幾則，直接吃 cache 就會少掉最新那幾則）。重打失敗才用上次成功的結果。
+      const cachedApi = apiConversations.get(ids.conversationId);
+      if (cachedApi) return { ...cachedApi, source: 'api (cached)' };
     }
 
     // 2. API 不可用或 share 頁面才用 capture；多個增量 frame 中選可匯出內容最多的。
@@ -1307,7 +1309,10 @@
         const role = roleOf(message);
         roleCounts[role] = (roleCounts[role] || 0) + 1;
         const shouldKeep =
-          role === 'User' || role === 'Assistant' || opts.includeTools || hasUserFacingText(message);
+          role === 'User' ||
+          role === 'Assistant' ||
+          opts.includeTools ||
+          hasUserFacingText(message);
         const body = shouldKeep ? messageToBody(message, opts) : '';
         if (body.trim()) bodyCount += 1;
         return {
@@ -1321,7 +1326,9 @@
 
     rememberAttempt(
       '匯出訊息統計',
-      `source ${hit.source || 'unknown'} | raw ${messages.length} | roles ${Object.entries(roleCounts)
+      `source ${hit.source || 'unknown'} | raw ${messages.length} | roles ${Object.entries(
+        roleCounts
+      )
         .map(([role, count]) => `${role}:${count}`)
         .join(',')} | body ${bodyCount} | sections ${sections.length}`
     );
