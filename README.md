@@ -19,6 +19,7 @@
 | [Hello Userscript](userscripts/hello-userscript/) | 教學用 demo：示範 metadata、GM API、MutationObserver 與注入 UI | `https://example.com/*`<br>`https://www.example.com/*` | 1.0.2 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/hello-userscript/hello-userscript.user.js) |
 | [M365 Copilot Chat Export Markdown](userscripts/m365-copilot-export-markdown/) | 【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，優先讀原始資料、失敗退回畫面 | `https://m365.cloud.microsoft/*`<br>`https://copilot.cloud.microsoft/*` | 0.12.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js) |
 | [Page Title Tag](userscripts/page-title-tag/) | 在分頁標題前面加上網站標籤（如 [GPT]），一堆分頁時好找 | `https://chatgpt.com/*`<br>`https://claude.ai/*`<br>`https://gemini.google.com/*` | 1.0.1 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/page-title-tag/page-title-tag.user.js) |
+| [YouTube Gemini Summary](userscripts/youtube-gemini-summary/) | 在 YouTube 影片卡片與觀看頁一鍵開啟 Gemini，送出繁中摘要提示 | `https://www.youtube.com/*`<br>`https://gemini.google.com/app*` | 0.1.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/youtube-gemini-summary/youtube-gemini-summary.user.js) |
 
 <!-- END SCRIPT INDEX -->
 
