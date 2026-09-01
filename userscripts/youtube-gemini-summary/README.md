@@ -20,18 +20,18 @@
 安裝後，在 YouTube 影片卡片或已開啟的影片按 **✨ Gemini** 即可完成同一件事：
 
 1. 從 card 或目前頁面取得 video ID。
-2. 正規化成 `https://www.youtube.com/watch?v=<id>`，去掉 playlist、timestamp 與 tracking parameters。
+2. 一般影片正規化成 `https://www.youtube.com/watch?v=<id>`，Shorts 則保留 `https://www.youtube.com/shorts/<id>`；兩者都去掉 playlist、timestamp 與 tracking parameters。
 3. 用短效 GM storage 保存 URL，再以 URL fragment 裡的 random request ID 指定剛開出的 `https://gemini.google.com/app` 分頁；prompt 本身不放進 URL。
 4. Gemini 載入後填入 `總結 <canonical URL>`，確認文字正確才按一次 Send。
-5. 找不到 composer／Send、輸入框已有草稿或無法確認送出時，把 prompt 複製到 clipboard，顯示人工操作 panel，不會 silent fail、覆寫草稿或重複 click。
+5. 送出後會重新尋找目前的 composer 或已送出的 user prompt，避免 Gemini 替換 composer DOM 時誤判失敗；真正無法確認時才把 prompt 複製到 clipboard 並顯示人工操作 panel。
 
 它會掃描首頁、搜尋、頻道、訂閱、related videos、playlist panel 等常見 card，也認得 Shorts card；playlist/course collection card 不會誤用第一支 lesson。一般 watch／live page 的按鈕會優先放進 action row；Shorts 或找不到 action row 的 layout 則顯示右下角浮動按鈕。
 
 ## 使用方式
 
-1. 先登入 [Gemini](https://gemini.google.com/app)。
+1. 先登入 [Gemini](https://gemini.google.com/app)，並確認 [Keep Activity 已開啟](https://support.google.com/gemini/answer/16622858)。
 2. 在 YouTube：
-   - 瀏覽頁：把滑鼠移到影片 card，按左上角的 **✨ Gemini**。
+   - 瀏覽頁：把滑鼠移到影片 card，按右下角的 **✨ Gemini**。
    - 已開啟影片：按 action row 或右下角的 **✨ Gemini**。
 3. 腳本會開一個新的 Gemini 分頁並自動送出摘要請求。
 4. 若右下角出現「無法自動完成」，prompt 已盡量複製到 clipboard；依 panel 指示貼上或手動按 Send。
@@ -51,7 +51,7 @@
 
 - 不需要 Gemini API key，也不呼叫 Gemini API。
 - 沒有 `@connect`，不對第三方 server 發 request。
-- 不抓 transcript、title、channel 或 Gemini 對話內容；GM storage 只交接 canonical YouTube URL 與短效 request metadata。
+- 不抓 transcript、title、channel 或 Gemini 對話內容；GM storage 只交接 canonical YouTube URL 與短效 request metadata，也不保留 `si` 等分享 tracking parameters。
 - 新分頁 URL fragment 只含 random request ID，不含 video URL 或 prompt；瀏覽器的 HTTP request 不會攜帶 fragment。
 - 使用你已登入的 Gemini Web session；送出 prompt 後的資料處理由 Google Gemini 負責。
 
@@ -60,11 +60,11 @@
 - Gemini Web composer 不是公開 API，DOM selector 改版後可能需要更新。
 - Gemini 沒有公開、受支援的 prompt-prefill deep link；本腳本必須等待並操作 composer。
 - YouTube card 與 action row 也是 private DOM；新 renderer 可能暫時沒有按鈕或改用浮動 fallback。
-- 需要先登入 Gemini。Pending request 兩分鐘後過期，避免舊 request 在日後意外送出。
+- 需要先登入 Gemini 並開啟 Keep Activity，YouTube Connected App 的實際可用性仍由帳號類型、地區與 Google 設定決定。Pending request 兩分鐘後過期，避免舊 request 在日後意外送出。
 - 一次只支援一筆 request，不做 queue、既有 Gemini tab reuse 或跨分頁 acknowledgement；random ID 只負責避免其他 `/app` tab 搶走這一筆。
 - 只注入 top-level desktop `www.youtube.com` UI；URL parser 雖認得 mobile／Music YouTube URL，腳本不會在那些站點或 iframe 加入按鈕。
 - Gemini `/app` 若恢復了未送出的文字或附件草稿，腳本不會覆寫／夾帶送出，而會保留草稿並退回人工操作。
-- 自動 click 後若原 composer 沒清空，腳本只會提示「可能未送出」，不以 route change 當成功，也不按第二次 Send。
+- 自動 click 後會以目前可見的空 composer 或相同 user prompt 確認送出；若仍無法確認，只會提示人工檢查，不以 route change 當成功，也不按第二次 Send。
 
 ## 手動驗證
 

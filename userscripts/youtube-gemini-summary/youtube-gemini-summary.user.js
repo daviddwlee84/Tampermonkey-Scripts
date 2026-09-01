@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Gemini Summary
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.1.1
+// @version      0.1.2
 // @description  在 YouTube 影片卡片與觀看頁一鍵開啟 Gemini，送出繁中摘要提示
 // @author       Da-Wei Lee
 // @license      MIT
@@ -80,11 +80,18 @@
     'button[aria-label*="send" i]',
     'button[mattooltip*="send" i]',
   ];
+  const USER_MESSAGE_SELECTORS = [
+    'user-query-content',
+    'user-query .query-text',
+    'user-query .user-query',
+    'user-query',
+    '[data-message-author="user"]',
+  ];
 
   const log = (...args) => console.log(LOG_PREFIX, ...args);
   let noticeTimer = null;
 
-  function extractYouTubeVideoId(rawUrl) {
+  function parseYouTubeVideoUrl(rawUrl) {
     if (typeof rawUrl !== 'string' || !rawUrl.trim()) return null;
 
     let url;
@@ -97,6 +104,7 @@
 
     const host = url.hostname.toLowerCase();
     let id = null;
+    let route = 'watch';
 
     if (host === 'youtu.be') {
       id = url.pathname.split('/').filter(Boolean)[0] ?? null;
@@ -104,16 +112,21 @@
       if (url.pathname === '/watch') {
         id = url.searchParams.get('v');
       } else {
-        id = url.pathname.match(/^\/(?:shorts|live|embed|v)\/([^/?#]+)/)?.[1] ?? null;
+        const pathMatch = url.pathname.match(/^\/(shorts|live|embed|v)\/([^/?#]+)/);
+        route = pathMatch?.[1] === 'shorts' ? 'shorts' : 'watch';
+        id = pathMatch?.[2] ?? null;
       }
     }
 
-    return typeof id === 'string' && VIDEO_ID_RE.test(id) ? id : null;
+    return typeof id === 'string' && VIDEO_ID_RE.test(id) ? { id, route } : null;
   }
 
   function canonicalizeYouTubeUrl(rawUrl) {
-    const id = extractYouTubeVideoId(rawUrl);
-    return id ? `https://www.youtube.com/watch?v=${id}` : null;
+    const video = parseYouTubeVideoUrl(rawUrl);
+    if (!video) return null;
+    return video.route === 'shorts'
+      ? `https://www.youtube.com/shorts/${video.id}`
+      : `https://www.youtube.com/watch?v=${video.id}`;
   }
 
   function promptFor(videoUrl) {
@@ -716,9 +729,11 @@
     return null;
   }
 
-  function normalizedEditorText(editor) {
+  function normalizedElementText(element) {
     const text =
-      editor instanceof HTMLTextAreaElement ? editor.value : editor.innerText || editor.textContent;
+      element instanceof HTMLTextAreaElement
+        ? element.value
+        : element.innerText || element.textContent;
     return (text || '').replaceAll(' ', ' ').replaceAll('​', '').trim();
   }
 
@@ -762,7 +777,7 @@
 
   async function fillEditor(editor, prompt) {
     editor.focus();
-    if (normalizedEditorText(editor) !== '' || hasAttachmentDraft(editor)) return 'has-draft';
+    if (normalizedElementText(editor) !== '' || hasAttachmentDraft(editor)) return 'has-draft';
 
     if (editor instanceof HTMLTextAreaElement) {
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
@@ -782,14 +797,14 @@
         log('execCommand insertText failed:', error);
       }
 
-      if (normalizedEditorText(editor) !== prompt) {
+      if (normalizedElementText(editor) !== prompt) {
         editor.replaceChildren(document.createTextNode(prompt));
         dispatchInput(editor, prompt);
       }
     }
 
     await sleep(150);
-    return normalizedEditorText(editor) === prompt ? 'filled' : 'failed';
+    return normalizedElementText(editor) === prompt ? 'filled' : 'failed';
   }
 
   function isFreshGeminiPath() {
@@ -819,14 +834,29 @@
     clearRequestFragment();
   }
 
-  async function waitForSubmission(editor, timeout) {
+  function submittedPromptIsVisible(prompt) {
+    return USER_MESSAGE_SELECTORS.some((selector) =>
+      Array.from(document.querySelectorAll(selector)).some((element) => {
+        const text = normalizedElementText(element);
+        return text === prompt || text.includes(prompt);
+      })
+    );
+  }
+
+  async function waitForSubmission(prompt, timeout) {
     const deadline = Date.now() + timeout;
     do {
-      // Route change 本身不代表這一則真的送出；只接受原 composer 清空。
-      if (editor.isConnected && normalizedEditorText(editor) === '') return true;
+      // Gemini 送出後可能替換整個 composer；每次都重找目前可見的 editor，避免 stale reference。
+      const currentEditor = findCandidate(EDITOR_SELECTORS, isVisible);
+      if (currentEditor && normalizedElementText(currentEditor) === '') return 'submitted';
+      if (submittedPromptIsVisible(prompt)) return 'submitted';
       await sleep(200);
     } while (Date.now() < deadline);
-    return false;
+
+    const currentEditor = findCandidate(EDITOR_SELECTORS, isVisible);
+    return currentEditor && normalizedElementText(currentEditor) === prompt
+      ? 'prompt-in-editor'
+      : 'unknown';
   }
 
   async function consumePendingOnGemini() {
@@ -911,7 +941,7 @@
 
       const fillResult = await fillEditor(editor, prompt);
       if (isPendingExpired(pending)) {
-        fallbackExpired(pending, prompt, normalizedEditorText(editor) === prompt);
+        fallbackExpired(pending, prompt, normalizedElementText(editor) === prompt);
         return;
       }
       if (fillResult === 'has-draft') {
@@ -942,7 +972,7 @@
       );
       if (!sendButton) {
         if (isPendingExpired(pending)) {
-          fallbackExpired(pending, prompt, normalizedEditorText(editor) === prompt);
+          fallbackExpired(pending, prompt, normalizedElementText(editor) === prompt);
         } else {
           fallbackAndDiscard(
             pending,
@@ -954,12 +984,12 @@
         return;
       }
       if (isPendingExpired(pending)) {
-        fallbackExpired(pending, prompt, normalizedEditorText(editor) === prompt);
+        fallbackExpired(pending, prompt, normalizedElementText(editor) === prompt);
         return;
       }
       if (
         !isFreshGeminiPath() ||
-        normalizedEditorText(editor) !== prompt ||
+        normalizedElementText(editor) !== prompt ||
         hasAttachmentDraft(editor)
       ) {
         fallbackAndDiscard(
@@ -993,7 +1023,16 @@
       clearRequestFragment();
       sendButton.click(); // 只 click 一次；不補 pointer/mouse events，避免重複送出。
 
-      if (!(await waitForSubmission(editor, 5_000))) {
+      const submissionResult = await waitForSubmission(prompt, 5_000);
+      if (submissionResult === 'prompt-in-editor') {
+        showManualFallback(
+          'Gemini 沒有接受 Send。',
+          prompt,
+          'Prompt 仍在輸入框；請確認內容後手動按 Send，不要再次貼上。'
+        );
+        return;
+      }
+      if (submissionResult !== 'submitted') {
         showManualFallback(
           '無法確認 Gemini 是否已送出。',
           prompt,
