@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Gemini Summary
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.1.0
+// @version      0.1.1
 // @description  在 YouTube 影片卡片與觀看頁一鍵開啟 Gemini，送出繁中摘要提示
 // @author       Da-Wei Lee
 // @license      MIT
@@ -228,12 +228,12 @@
       .${CARD_BUTTON_CLASS} {
         position: absolute;
         z-index: 2147483645;
-        top: 8px;
-        left: 8px;
+        right: 8px;
+        bottom: 8px;
         padding: 7px 10px;
         opacity: 0;
         pointer-events: none;
-        transform: translateY(-2px);
+        transform: translateY(2px);
         transition: opacity 120ms ease, transform 120ms ease;
       }
 
