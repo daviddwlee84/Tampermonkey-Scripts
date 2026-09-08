@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <title>把網頁留在自己的工作流程</title>
+    <meta property="og:site_name" content="閱讀實驗室" />
+    <meta name="author" content="測試作者" />
+    <meta property="article:published_time" content="2026-09-08T09:00:00+08:00" />
+    <style>
+      body {
+        margin: 0;
+        background: #f3f5f1;
+        color: #34463b;
+        font: 17px/1.8 system-ui;
+        min-height: 2400px;
+      }
+      header {
+        padding: 18px 8%;
+        background: white;
+        border-bottom: 1px solid #dce3dc;
+      }
+      nav {
+        float: right;
+      }
+      main {
+        max-width: 820px;
+        margin: 60px auto;
+        padding: 36px;
+        background: white;
+      }
+      img {
+        max-width: 240px;
+      }
+      pre {
+        padding: 20px;
+        background: #eef2ee;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <b>閱讀實驗室</b>
+      <nav>NAVIGATION_SENTINEL ｜ 首頁 ｜ 廣告 ｜ 聯絡我們</nav>
+    </header>
+    <main>
+      <article>
+        <h1>把網頁留在自己的工作流程</h1>
+        <p>
+          瀏覽器已經載入的文章，是閱讀與研究最直接的素材。當我們把內容帶到另一個工具時，標題、來源和段落之間的關係也應該一起保留下來。這是一篇用來測試文章擷取的範例，確保清理後的內容仍然完整而容易閱讀。
+        </p>
+        <p id="selection-paragraph">
+          這一段可以單獨圈選。<strong>保留重要的語意</strong>，以及指向<a href="/reference?q=保留"
+            >背景文件</a
+          >的連結。引用文章時留下來源，後續就能回到原始資料，核對段落與圖片所表達的意思，而不需要猜測文字是從哪裡取得。
+        </p>
+        <h2 id="workflow">讓閱讀與匯出各自做好一件事</h2>
+        <p>
+          閱讀模式提供安靜的版面，讓字體、行距和欄寬保持一致。匯出功能則保存原始內容，方便之後整理。兩者可以共享資料，但翻譯畫面的改變不應該反過來改寫原文。即使加入雙語翻譯，每次下載的來源仍然清楚。
+        </p>
+        <ul>
+          <li>保留段落與清楚的標題。</li>
+          <li>將圖片及附件對應回原文。</li>
+        </ul>
+        <blockquote><p>可閱讀，也可追溯。</p></blockquote>
+        <pre><code class="language-js">const example = "```";
+console.log(example);</code></pre>
+        <table>
+          <thead>
+            <tr>
+              <th>模式</th>
+              <th>用途</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Reader</td>
+              <td>閱讀</td>
+            </tr>
+            <tr>
+              <td>Markdown</td>
+              <td>引用與整理</td>
+            </tr>
+          </tbody>
+        </table>
+        <p><a href="#workflow">回到工作流程</a></p>
+        <figure>
+          <img src="https://assets.test/photo.png?signature=keep" alt="範例圖片" />
+          <figcaption>圖片說明</figcaption>
+        </figure>
+        <p><img src="https://assets.test/photo.png?signature=keep" alt="同一張圖片" /></p>
+        <img
+          src="data:image/gif;base64,R0lGODlhAQABAAAAACw="
+          data-src="https://assets.test/lazy.png"
+          alt="延遲載入圖片"
+        />
+        <p><a href="https://assets.test/文件.pdf?token=keep#page=2">下載 PDF 文件</a></p>
+        <p><a href="https://other.test/文件.pdf">另一份同名文件</a></p>
+        <p><a href="https://assets.test/download?id=42" download="報告.docx">Office 文件</a></p>
+        <p><a href="https://assets.test/protected.pdf">需登入的文件</a></p>
+        <p><a href="https://assets.test/missing.pdf">不存在的文件</a></p>
+        <p>
+          <a href="https://assets.test/movie.mp4">影片連結</a
+          ><a href="https://assets.test/read-more">延伸閱讀</a>
+        </p>
+        <div class="advertisement">ADVERTISEMENT_SENTINEL 不應匯出</div>
+        <div class="related-posts">RELATED_SENTINEL 不應匯出</div>
+        <div hidden>HIDDEN_SENTINEL 不應匯出</div>
+        <script>
+          window.fixtureScriptRan = true;
+        </script>
+      </article>
+    </main>
+    <footer>FOOTER_SENTINEL</footer>
+  </body>
+</html>

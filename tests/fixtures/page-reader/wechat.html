@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>微信文章測試</title>
+  </head>
+  <body>
+    <h1 id="activity-name">微信文章標題</h1>
+    <span id="copyright_logo" class="rich_media_meta_text">原創</span>
+    <span id="js_name">公眾號名稱</span><span id="js_author_name">微信作者</span>
+    <span id="publish_time">2026年9月8日</span>
+    <div id="js_content">
+      <section>
+        <p>
+          微信文章的正文已經在瀏覽器顯示，擷取時應該直接使用這份內容。標題、作者和發表時間位於正文外面，也應該被整理到
+          metadata，讓後續閱讀與引用能夠保留來源。
+        </p>
+      </section>
+      <section>
+        <p>
+          有些圖片使用 data-src 儲存真實網址，因此即使還沒有滾動到圖片的位置，也要能將它對應到
+          Markdown。文章底部的推薦與廣告則不應一起放進內容。
+        </p>
+      </section>
+      <img data-src="https://assets.test/wechat.png?wx_fmt=png" alt="微信圖片" />
+      <p><a href="https://assets.test/paper.pdf">研究文件</a></p>
+      <div id="js_ad_area">WECHAT_AD_SENTINEL</div>
+    </div>
+    <div id="js_article_bottom_bar">WECHAT_TOOLBAR_SENTINEL</div>
+  </body>
+</html>

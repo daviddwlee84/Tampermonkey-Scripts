@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Technical reference</title>
+    <base href="https://docs.test/guide/" />
+    <script type="application/ld+json">
+      {
+        "@type": "TechArticle",
+        "headline": "Technical reference",
+        "author": [{ "name": "Ada" }, { "name": "Lin" }],
+        "datePublished": "2026-09-07"
+      }
+    </script>
+  </head>
+  <body>
+    <nav>DOC_NAV_SENTINEL</nav>
+    <main>
+      <h1>Technical reference</h1>
+      <p>
+        Technical documentation needs to retain executable examples, relative links and the
+        structure of tables. The introduction establishes the context for the examples below, and
+        should remain part of the extracted article rather than disappearing during conversion.
+      </p>
+      <h2 id="examples">Examples</h2>
+      <section>
+        <pre><code class="language-python">print("first example")</code></pre>
+      </section>
+      <p>
+        The second example belongs to the same article. Both code blocks should preserve their
+        language labels so the exported Markdown can be rendered with useful syntax highlighting.
+      </p>
+      <section>
+        <pre><code class="language-sh">echo second-example</code></pre>
+      </section>
+      <table>
+        <tr>
+          <th colspan="2">Combined heading</th>
+        </tr>
+        <tr>
+          <td>First cell</td>
+          <td><img src="https://assets.test/photo.png" alt="Table image" /></td>
+        </tr>
+      </table>
+      <p><a href="../reference.pdf">Relative reference</a></p>
+      <picture
+        ><source srcset="https://assets.test/selected.png" />
+        <img src="https://assets.test/fallback.png" alt="Responsive image"
+      /></picture>
+    </main>
+  </body>
+</html>
