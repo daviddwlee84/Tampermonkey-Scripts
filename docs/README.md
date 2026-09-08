@@ -21,6 +21,7 @@
 | 12 | [安全性](./12-security.md)                                        | 別把 secret 放腳本裡，以及安裝別人的腳本前該看什麼            |
 | 13 | [Playwright vs. userscript](./13-playwright-vs-userscript.md)          | 什麼時候該用哪個，以及 `npm run preview` 測試 harness |
 | 14 | [iOS Userscripts 評估](./14-ios-userscripts.md) | 安裝／同步、API 差異、逐支腳本相容性與實機驗收 |
+| 15 | [同步到 iPad](./15-sync-to-ipad.md) | 用 just 經 USB 或 iCloud 平鋪同步腳本、預覽差異與保留備份 |
 
 ## 只想快速上手
 

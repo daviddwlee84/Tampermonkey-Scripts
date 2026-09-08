@@ -2,6 +2,9 @@
 
 多台機器、多個瀏覽器 profile，怎麼不用每次手動匯入一遍。
 
+要直接把目前工作區的腳本搬到 iPad Userscripts，可用 `just sync-ipad`（USB）或
+`just sync-folder`（本機／iCloud），第一次設定見 [15 · 同步到 iPad](./15-sync-to-ipad.md)。
+
 ## 三層機制，各司其職
 
 ```text

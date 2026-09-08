@@ -29,7 +29,7 @@
 > [Violentmonkey](https://violentmonkey.github.io/) —— 本 repo 以這兩者為相容目標，
 > `npm run check` 檢查 metadata／API 規則，不代替瀏覽器實測（見 [09 Manager 比較](./docs/09-managers-comparison.md)）。
 > **iPhone／iPad 的 Userscripts 使用者**請先看 [相容性評估](./docs/14-ios-userscripts.md)：
-> 目前 8 支中只有 Page Title Tag 未發現靜態阻礙，其餘 7 支需適配，尚未做 iOS 實測。
+> 2026-09-08 評估的 8 支中只有 Page Title Tag 未發現靜態阻礙，其餘 7 支需適配，尚未做 iOS 執行實測。
 >
 > Chromium 系瀏覽器（Chrome / Edge / Brave / Vivaldi / **Arc**）還要到
 > `<browser>://extensions` 開啟 **Developer mode**，否則腳本裝了不會執行。
@@ -57,6 +57,21 @@
 | 12 | [安全性](./docs/12-security.md)                                   | 別把 secret 放腳本裡，以及安裝別人的腳本前該看什麼            |
 | 13 | [Playwright vs. userscript](./docs/13-playwright-vs-userscript.md)          | 什麼時候該用哪個，以及 `npm run preview` 測試 harness |
 | 14 | [iOS Userscripts 評估](./docs/14-ios-userscripts.md) | 安裝／同步、API 差異、逐支腳本相容性與實機驗收 |
+| 15 | [同步到 iPad](./docs/15-sync-to-ipad.md) | 用 just 經 USB 或 iCloud 平鋪同步腳本、預覽差異與保留備份 |
+
+## 同步腳本到 iPad
+
+Mac 裝好 `just`、`uv`，用 USB 接上已在 Finder 信任的 iPad：
+
+```bash
+just sync-plan           # 列出要同步的正式腳本
+just sync-ipad --dry-run # 比較差異，不寫入
+just sync-ipad           # 同步；覆寫前備份，不刪其他腳本
+```
+
+第一次在 iPad 的 Userscripts 選取「**我的 iPad / Userscripts / Tampermonkey-Scripts**」，
+再開 Safari 的擴充功能彈窗並重新整理。也支援 `just sync-folder "<iCloud 資料夾>"`。
+同步保留原始碼，不會自動修正 iOS API 相容性；完整設定與限制見 [15 · 同步到 iPad](./docs/15-sync-to-ipad.md)。
 
 ## 這個 repo 怎麼運作
 

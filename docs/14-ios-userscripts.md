@@ -31,6 +31,9 @@
 
 ## iPhone／iPad 安裝與同步
 
+本 repo 現在提供 `just sync-ipad`，可把工作區腳本經 USB 平鋪同步到 iPad；也有
+`just sync-folder` 支援 iCloud。命令與首次目錄設定見 [15 · 同步到 iPad](./15-sync-to-ipad.md)。
+
 1. 安裝 App，開啟 Userscripts，確認 Scripts Directory。可使用本機資料夾；要和 Mac 同步可選 iCloud Drive 專用資料夾。
 2. 到設定中的 **Safari → Extensions → Userscripts** 啟用，允許要執行腳本的網站；較新 iOS 的 Safari 設定可能位於「設定 → App」下。若從 GitHub raw 安裝，也要讓擴充功能能讀取該安裝頁。
 3. 在 **Safari** 開本倉庫 README 的 Install 連結（URL 路徑以 `.user.js` 結尾），再開 Userscripts 的擴充功能彈窗，使用安裝提示。另一個方式是把 `.user.js` 存入已選資料夾。

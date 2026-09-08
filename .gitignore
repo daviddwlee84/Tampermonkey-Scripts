@@ -1,5 +1,7 @@
 # Dependencies
 node_modules/
+__pycache__/
+*.pyc
 
 # Build output (only if a bundler is introduced later; see docs/07-dev-workflow.md)
 dist/

@@ -15,12 +15,15 @@ jobs:
         with:
           node-version: 22
 
-      # scripts/ 只用 Node 內建模組，所以驗證不需要 npm install。
+      # metadata / index 驗證只用 Node 內建模組，不需要 npm install。
       - name: Validate userscript metadata
         run: node scripts/check-meta.mjs
 
       - name: Ensure README script index is up to date
         run: node scripts/build-index.mjs --check
+
+      - name: Test userscript sync without a device
+        run: python3 -m unittest discover -s tests -p 'test_sync_userscripts.py'
 
   vim-navigation:
     runs-on: ubuntu-latest

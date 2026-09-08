@@ -454,3 +454,446 @@ _**Agent (gpt-6-astra 2026-09-08 09:21:52Z)**_
 已提交：`e7dd5c3` — `docs: evaluate iOS Userscripts compatibility`
 
 包含 6 份文件；`.specstory` 變動未納入。
+
+---
+
+_**User (2026-09-08 16:51:58Z)**_
+
+我們是不是能做一個Justfile 然後有一個功能是 可以somehow把目前已有的userscripts同步到iPad的Userscript folder （如果有插上的話）
+
+---
+
+_**Agent (gpt-6-astra 2026-09-08 16:52:07Z)**_
+
+我會先查看專案的工具慣例，以及這台 Mac 能否存取已連接 iPad 的 Userscripts 資料夾，再加入 Justfile 同步命令。
+
+
+_**Agent (gpt-6-astra 2026-09-08 16:52:07Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+const results=await Promise.allSettled([
+tools.exec_command({cmd:"git status --short\nrg --files -g 'AGENTS.md' -g '*just*' -g 'package.json' -g 'scripts/**' -g 'docs/**' -g '.gitignore'\ncat package.
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:52:30Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+const rs=await Promise.allSettled([
+tools.exec_command({cmd:"cat scripts/lib/meta.mjs\nrg --files userscripts tests\ncommand -v uv\ncommand -v pymobiledevice3\nxcode-select -p\nls /Volumes\nls \"$HOME
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:52:40Z)**_
+
+<think><details><summary>Thought Process</summary>
+**Investigating USB connection**
+
+I’m noticing that no USB devices seem to be connected. I need to determine if the task "是不是能做" can be implemented, depending on whether the default local directory supports USB when plugged in. I also want to find real evidence, like checking the App UIFileSharing boolean to see if the source in /tmp is retained. Let's inspect this to figure out what's going on!
+</details></think>
+
+_**Agent (gpt-6-astra 2026-09-08 16:52:40Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+text(await tools.exec_command({cmd:"rg -n 'UIFileSharingEnabled|LSSupportsOpeningDocumentsInPlace|PRODUCT_BUNDLE_IDENTIFIER|CFBundleIdentifier|scripts' /tmp/userscripts-review.RVlGfK/xcode/App-iOS /tm
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:53:12Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+const rs=await Promise.allSettled([
+tools.exec_command({cmd:"cat /tmp/userscripts-review.RVlGfK/xcode/xcconfig/iOS-App.xcconfig\nrg -n 'APP_IDENTIFIER|UIFileSharingEnabled|LSSupportsOpeningDocumentsIn
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:53:40Z)**_
+
+可以做。Userscripts 有開啟 iOS 檔案共享，因此可透過 USB 寫入它的 Documents；這台 Mac 目前沒有偵測到 USB 裝置。我會加入 `just sync-ipad`，把腳本平鋪同步到專用資料夾，並提供預覽、指定裝置及 iCloud／本機資料夾同步。第一次需要在 iPad 的 Userscripts 選取該資料夾；同步檔案不會自動修正前面提到的 API 相容性問題。
+
+
+_**Agent (gpt-6-astra 2026-09-08 16:53:40Z)**_
+
+<think><details><summary>Thought Process</summary>
+**Implementing Python Async Code**
+
+I need to write some actual Python code that uses async features based on the user's needs. The user didn't specifically mention Python, but it seems like a good fit. I'll work on implementing a script, particularly in "scripts/sync-userscripts.py" while incorporating async adapters. Testing will be important, so I plan to use unittest and create fake remote data to ensure everything works correctly without affecting actual files. I estimate adding around twelve tests for snapshot safety.**Refining Recipe Setup**
+
+I’m working on creating a recipe using `just` that includes variadic arguments with `*args`. The command `uv run --script scripts/sync-userscripts.py "$@"` will automatically pin dependencies according to Python's PEP 723. This should ensure that when I run folder operations, everything downloads correctly. 
+
+For instance, `just sync-ipad` will execute the sync for iPads, while `just sync-folder directory *args` passes all positional arguments. I’m creating these scripts to streamline interactions, like listing devices and syncing plans without dependencies or connections. It's a bit of a puzzle, but it should simplify processes overall!**Creating Local Backups**
+
+I need to establish a local atomic backup process for dedicated hidden backups. The goal is to copy files and allow overwriting while preserving prior versions, which seems prudent, even if it's less frequently requested by the user. If the file names differ, I should skip deletion entirely.
+
+I’ll use a temporary name like `.slug.user.js.uuid.tmp` as it has a safe extension. I'll ensure that if the target is a symlink, I don’t follow it and refuse the action if the filesystem looks unsafe. Finally, I’ll manage backup timestamps effectively to avoid unnecessary complexity.**Handling File Renames Safely**
+
+I’m considering how to manage renaming return objects in Apple File Coordination (AFC). To test this, I could simulate a commit using an existing backup before renaming the target. If something goes wrong, I can restore from that temporary backup.
+
+I want to keep per-file backups in `.sync-backups/{uuid}/{filename}.bak`, since these won’t interfere with loading. It’s good to avoid deleting old scripts, which suggests I should document this process clearly. While existing files with the same name won’t require a mandatory backup, having a rotating one in `.sync-backups` seems prudent for safety.
+</details></think>
+
+_**Agent (gpt-6-astra 2026-09-08 16:53:40Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+text(await tools.exec_command({cmd:"cat /tmp/userscripts-review.RVlGfK/xcode/xcconfig/Userscripts-Release.xcconfig\nsed -n '35,48p' /tmp/userscripts-review.RVlGfK/xcode/App-iOS/Info.plist","max_output
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:53:57Z)**_
+
+<think><details><summary>Thought Process</summary>
+**Figuring out release sources**
+
+I need a pinned release source for the version tag v11.10.2, comparing it to master. Maybe I should check for asynchronous stability while fetching the tar and installing the UV dependencies, which are quite a lot—around 100 packages. It should take about 5 seconds over the network. I’m thinking I can run UV with a script after writing the metadata manually. I’ll fetch UV ephemerally using a specific command and confirm the current Python version. For the iOS/iPad app, I’ll ensure the product type is set correctly.**Identifying USB devices**
+
+I need to detect all USB devices accurately. The command `list-devices` shows lock info, and when autoread is set to yes, it triggers a trust dialog to pair devices. If there’s no connected device, the script exits with code 1, which isn't ideal. Should I add a flag for the UDID if an iPhone is connected? It seems that when selecting, I can limit choices to iPads. The script needs to verify the product type to ensure it recognizes the iPad. Plus, I should quickly grab the bundle ID from iTunes when needed.
+</details></think>
+
+_**Agent (gpt-6-astra 2026-09-08 16:53:57Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+text(await tools.exec_command({cmd:"python3 - <<'PY'\nimport json\nprint(json.load(open('/tmp/userscripts-appstore.json'))['results'][0].get('bundleId'))\nPY\nsed -n '1364,1417p' /tmp/pymobiledevice3-
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:55:06Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+text(await tools.apply_patch("*** Begin Patch\n*** Add File: /Users/zhouhanru/Documents/David/Program/Tampermonkey-Scripts/justfile\n+set positional-arguments\n+\n+# 列出常用命令\n+default:\n+  
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:55:20Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input: ```
+text(await tools.exec_command({cmd:"just --list\njust sync-plan\njust ipad-devices","yield_time_ms":1000,"max_output_tokens":2000}));
+
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:56:13Z)**_
+
+同步命令已加入，目前會自動收集 10 支正式腳本並排除 `_template`。它會保留來源內容、跳過相同檔案，覆寫前先備份，也不刪除目標中的其他腳本。接下來會驗證重複同步、dry-run 和傳輸失敗時的行為，並把 iPad 第一次設定的步驟寫入文件。
+
+
+_**Agent (gpt-6-astra 2026-09-08 16:56:13Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+text(await tools.apply_patch("*** Begin Patch\n*** Update File: /Users/zhouhanru/Documents/David/Program/Tampermonkey-Scripts/scripts/sync-userscripts.py\n@@\n-        self.root = Path(root).expanduse
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:56:26Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+text(await tools.exec_command({cmd:"just sync-ipad --dry-run","yield_time_ms":1000,"max_output_tokens":2000}));
+text(await tools.write_stdin({session_id:72370,chars:"",yield_time_ms:1000,max_output_to
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:56:34Z)**_
+
+<think><details><summary>Thought Process</summary>
+**Figuring out USB connection**
+
+I’m trying to understand how to connect an iPhone via USB. It seems like the connection might be empty; maybe there's no evidence showing the device is recognized. I need to check if I have the right documentation on how to verify if the iPad is connected properly. I'll need to communicate and double-check the results more accurately to ensure everything is set up correctly. It feels a bit confusing, but I’ll get there!
+</details></think>
+
+_**Agent (gpt-6-astra 2026-09-08 16:56:34Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+text(await tools.write_stdin({session_id:90527,chars:"",yield_time_ms:1000,max_output_tokens:2000}));
+text(await tools.exec_command({cmd:"git status --short\nsed -n '1,55p' README.md\nsed -n '1,50p' d
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:56:44Z)**_
+
+用 iOS 的裝置連線介面重新檢查後，已找到你的 iPad Pro，且能讀取 Userscripts 的檔案共享空間；剛才 `system_profiler` 的結果不完整。USB dry-run 已成功，我會實際同步到新建的 `Tampermonkey-Scripts` 資料夾，再讀回確認。
+
+
+_**Agent (gpt-6-astra 2026-09-08 16:56:44Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input: ```
+text(await tools.exec_command({cmd:"just sync-ipad","yield_time_ms":1000,"max_output_tokens":2000}));
+
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:56:56Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+text(await tools.exec_command({cmd:"sed -n '25,76p' README.md\nsed -n '1,32p' docs/08-distribution-and-sync.md\ncat .github/workflows/*.yml 2>/dev/null\nsed -n '105,150p' README.md","max_output_tokens
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:58:33Z)**_
+
+<think><details><summary>Thought Process</summary>
+**Assessing USB and Python Setup**
+
+I'm excited about the USB success and need to verify the read process since there's no test yet. I’m checking if I have `pymobiledevice3==11.10.2` installed, as it requires Python 3.10 and uses the current environment of Python 3.14. I'm also aligning USB output IDs and exploring if I should add a CI test step in the workflow. Finally, I want to avoid cache issues in the testing script to keep things organized!**Updating Script Validation**
+
+I’m updating the comment scripts for node metadata to make it clear that it's only for "metadata/index validation" to avoid any confusion. I want to leverage Python's formatting tools like `ruff`, but since it’s optional, I plan to keep it simple with standard black formatting. The tests I've written cover major operations, including backups and restores, though I need to make sure they work across operating systems. I also have to confirm that the USB support is consistent for macOS and Windows through iTunes.**Clarifying Security and Commit Practices**
+
+I noticed there's an accidental connection to an external device, and there’s no need for secrecy around the user ID since there's only one iPad involved. For future tasks, I'll ensure I don’t ask about previous git commits unless it's explicitly stated. Users typically don’t want auto-commits unless they specify so. I'll leave anything uncommitted as an option and won’t offer to commit unless asked. It’s essential to be clear and attentive to these details!
+</details></think>
+
+_**Agent (gpt-6-astra 2026-09-08 16:58:33Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+text(await tools.apply_patch("*** Begin Patch\n*** Update File: /Users/zhouhanru/Documents/David/Program/Tampermonkey-Scripts/.gitignore\n@@\n node_modules/\n+__pycache__/\n+*.pyc\n*** Update File: /U
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:58:57Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+text(await tools.exec_command({cmd:"python3 - <<'PY'\nfrom pathlib import Path\np=Path('docs/15-sync-to-ipad.md')\ns=p.read_text().replace('没有装置','沒有裝置').replace('沒有装置','沒有
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:59:11Z)**_
+
+<think><details><summary>Thought Process</summary>
+**Providing final status update**
+
+I need to give a final status update after a successful live session. The user can set the folder, but it seems the tool only opens via the UI app. Unfortunately, it can't be configured directly on Mac or iPad. I have to manually handle some steps, but everything else is in place. The user just needs to confirm their selection. Their question about whether the sync is complete means I need to ensure we wrap this up concisely.**Conducting USB tests**
+
+I need to run tests on a new USB overwrite since the previous tests were just additions and fake updates. The main risk is that existing iPad files might be backed up, but currently, they don't exist in the tested setup. I should conduct a direct safe test with a dedicated scratch file. The sync validation correctly accepts any filename, so I’ll create a separate temp directory for testing. I’ll manage 14 tests to ensure everything runs smoothly without extra burdens involved. It's vital to fetch the script outputs without ignoring results.
+</details></think>
+
+_**Agent (gpt-6-astra 2026-09-08 16:59:11Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+const rs = await Promise.allSettled([
+tools.write_stdin({session_id:78815,chars:"",yield_time_ms:1000,max_output_tokens:3000}),
+tools.write_stdin({session_id:22429,chars:"",yield_time_ms:1000,max_outp
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 16:59:40Z)**_
+
+<think><details><summary>Thought Process</summary>
+**Correcting integration documents**
+
+I need to work on the correction document regarding using a backup file, particularly if there's a symbolic link in the selected root path that rejects the directory. DeviceStore has to ensure that it handles multiple traversals efficiently. It sounds like I also need to integrate a `justfile` for a user case, ensuring it meets standards. I might report that the task is done, maybe in a simple message indicating synchronization to the user’s iPad Pro. Finally, I should clarify the requirements for local documents without needing external citations.
+</details></think>
+
+_**Agent (gpt-6-astra 2026-09-08 16:59:40Z)**_
+
+10 支腳本已同步到 iPad Pro，重新讀回比對全部顯示 `unchanged`。14 項同步測試與 repo 驗證都通過。現在只需要在 iPad 的 Userscripts 選取「我的 iPad／Userscripts／Tampermonkey-Scripts」，再開一次 Safari 擴充功能彈窗。
+
+
+_**Agent (gpt-6-astra 2026-09-08 16:59:40Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+text(await tools.apply_patch("*** Begin Patch\n*** Update File: /Users/zhouhanru/Documents/David/Program/Tampermonkey-Scripts/docs/15-sync-to-ipad.md\n@@\n-2026-09-09 已在連接的 iPad 上完成 US
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 17:00:05Z)**_
+
+已做好 [justfile](/Users/zhouhanru/Documents/David/Program/Tampermonkey-Scripts/justfile)，而且**已實際同步 10 支腳本到你的 iPad Pro**，讀回比對全部一致。
+
+```bash
+just sync-ipad           # USB 同步
+just sync-ipad --dry-run # 預覽差異
+just ipad-devices        # 列出連接裝置
+```
+
+第一次請在 iPad 的 Userscripts 選取：
+
+**我的 iPad → Userscripts → Tampermonkey-Scripts**
+
+再開 Safari 擴充功能彈窗並重新整理。同步會備份覆寫的檔案、不刪其他腳本，但不會修正 API 相容性。
+
+14 項測試通過；iCloud 同步與完整操作見 [說明文件](/Users/zhouhanru/Documents/David/Program/Tampermonkey-Scripts/docs/15-sync-to-ipad.md)。
+
+---
+
+_**User (2026-09-08 17:05:11Z)**_
+
+```
+zhouhanru in 🌐 Mac in Tampermonkey-Scripts on  main [!] via  v24.13.0
+❯ just ipad-devices
+00008112-000539C81ADA201E
+
+zhouhanru in 🌐 Mac in Tampermonkey-Scripts on  main [!?] via  v24.13.0
+❯  just sync-ipad --dry-run
+iPad: David’s iPad Pro
+Folder: On My iPad / Userscripts / Tampermonkey-Scripts
+unchanged chatgpt-export-markdown.user.js
+unchanged claude-export-markdown.user.js
+unchanged copilot-export-markdown.user.js
+unchanged gemini-export-markdown.user.js
+unchanged hello-userscript.user.js
+unchanged m365-copilot-export-markdown.user.js
+unchanged page-reader-markdown.user.js
+unchanged page-title-tag.user.js
+unchanged vim-navigation.user.js
+unchanged youtube-gemini-summary.user.js
+Would sync 0 file(s); 10 unchanged. No pruning.
+
+zhouhanru in 🌐 Mac in Tampermonkey-Scripts on  main [!?] via  v24.13.0 took 2s
+❯  just sync-ipad
+iPad: David’s iPad Pro
+Folder: On My iPad / Userscripts / Tampermonkey-Scripts
+unchanged chatgpt-export-markdown.user.js
+unchanged claude-export-markdown.user.js
+unchanged copilot-export-markdown.user.js
+unchanged gemini-export-markdown.user.js
+unchanged hello-userscript.user.js
+unchanged m365-copilot-export-markdown.user.js
+unchanged page-reader-markdown.user.js
+unchanged page-title-tag.user.js
+unchanged vim-navigation.user.js
+unchanged youtube-gemini-summary.user.js
+Synced 0 file(s); 10 unchanged. No pruning.
+
+zhouhanru in 🌐 Mac in Tampermonkey-Scripts on  main [!?] via  v24.13.0
+❯  just sync-ipad -h
+usage: sync-userscripts.py [-h] [--folder FOLDER | --plan | --list-devices] [--udid UDID] [--remote-folder REMOTE_FOLDER] [--only SLUG] [--dry-run]
+
+Copy repo userscripts, unchanged and flat, to a folder or an iPad over USB. USB uses the app's supported Documents file sharing (House Arrest / AFC). It cannot access a directory selected from a different iOS app or iCloud.
+
+options:
+  -h, --help            show this help message and exit
+  --folder FOLDER       Local/iCloud destination, instead of USB
+  --plan                List sources without accessing any destination
+  --list-devices        List USB device IDs without writing
+  --udid UDID           Select one USB iPad (required when multiple devices are attached)
+  --remote-folder REMOTE_FOLDER
+                        Subfolder inside Userscripts Documents
+  --only SLUG           Sync only this script; repeatable
+  --dry-run             Compare with destination without writing
+```
+同步都成功了 唯一小bug是理論上要顯示synced才對
+
+ok了的話可以commit our changes
+
+---
+
+_**Agent (gpt-6-astra 2026-09-08 17:05:22Z)**_
+
+我會讓同步結果把「已確認一致的檔案」也計入 synced，另列實際更新數量，避免成功時顯示 `Synced 0`。修好並驗證後，就提交這次的同步工具與文件。
+
+
+_**Agent (gpt-6-astra 2026-09-08 17:05:22Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+text(await tools.exec_command({cmd:"git status --short\ngit diff --cached --stat\nrg -n 'prefix =|Synced|Would sync|unchanged|def test_' scripts/sync-userscripts.py tests/test_sync_userscripts.py docs
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 17:05:44Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+text(await tools.apply_patch("*** Begin Patch\n*** Update File: /Users/zhouhanru/Documents/David/Program/Tampermonkey-Scripts/scripts/sync-userscripts.py\n@@\n     changed = 0\n     for name, content,
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 17:05:56Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+const results = await Promise.allSettled([
+tools.write_stdin({session_id:74769,chars:"",yield_time_ms:1000,max_output_tokens:2000}),
+tools.write_stdin({session_id:83382,chars:"",yield_time_ms:1000,max
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 17:06:09Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+text(await tools.exec_command({cmd:"python3 - <<'PY'\nimport subprocess\nimport tempfile\nwith tempfile.TemporaryDirectory(prefix='userscript-sync-status-') as directory:\n    command = ['just', 'sync
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 17:06:18Z)**_
+
+已修好，之後會顯示 `synced … (unchanged)`，總結為 `Synced 10 file(s); 0 written, 10 unchanged`。目前 iPad 已離線，因此這次用暫存資料夾驗證了新增、dry-run 與重複同步；14 項測試及 repo 檢查也通過。接著提交相關變更，排除 `.specstory`。
+
+
+_**Agent (gpt-6-astra 2026-09-08 17:06:18Z)**_
+
+<tool-use data-tool-type="unknown" data-tool-name="exec"><details>
+<summary>Tool use: **exec**</summary>
+Input (truncated): ```
+text(await tools.exec_command({cmd:"git add .github/workflows/ci.yml .gitignore README.md docs/README.md docs/08-distribution-and-sync.md docs/14-ios-userscripts.md docs/15-sync-to-ipad.md justfile sc
+...
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-09-08 17:06:24Z)**_
+
+已修正並提交：`e331849` — `feat: sync userscripts to iPad via just`
+
+成功時現在會顯示：
+
+```text
+synced    page-title-tag.user.js (unchanged)
+Synced 10 file(s); 0 written, 10 unchanged. No pruning.
+```
+
+14 項測試、CLI 驗證及 repo 檢查通過。`.specstory` 未納入提交。
