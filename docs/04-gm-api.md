@@ -3,6 +3,10 @@
 GM API 是 userscript **比一般網頁 JS 多出來的能力**。用哪個就要在 metadata 加對應的
 `// @grant`，否則該函式是 `undefined`。
 
+本章範例以 **Tampermonkey／Violentmonkey** 為目標。Safari 的 Userscripts
+主要提供非同步 `GM.*`，且沒有 `GM_registerMenuCommand` 或 `unsafeWindow`；
+底線 API 不能直接照抄，差異見 [14 · iOS Userscripts 評估](./14-ios-userscripts.md)。
+
 ## 持久化儲存
 
 ```js

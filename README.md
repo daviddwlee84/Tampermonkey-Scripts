@@ -25,8 +25,10 @@
 <!-- END SCRIPT INDEX -->
 
 > 點 **Install** 之前要先裝好 [Tampermonkey](https://www.tampermonkey.net/) 或
-> [Violentmonkey](https://violentmonkey.github.io/) —— 本 repo 的腳本**兩者皆相容**，
-> `npm run check` 會強制這件事（見 [09 Manager 比較](./docs/09-managers-comparison.md)）。
+> [Violentmonkey](https://violentmonkey.github.io/) —— 本 repo 以這兩者為相容目標，
+> `npm run check` 檢查 metadata／API 規則，不代替瀏覽器實測（見 [09 Manager 比較](./docs/09-managers-comparison.md)）。
+> **iPhone／iPad 的 Userscripts 使用者**請先看 [相容性評估](./docs/14-ios-userscripts.md)：
+> 目前 8 支中只有 Page Title Tag 未發現靜態阻礙，其餘 7 支需適配，尚未做 iOS 實測。
 >
 > Chromium 系瀏覽器（Chrome / Edge / Brave / Vivaldi / **Arc**）還要到
 > `<browser>://extensions` 開啟 **Developer mode**，否則腳本裝了不會執行。
@@ -53,6 +55,7 @@
 | 11 | [疑難排解](./docs/11-troubleshooting.md)                          | 症狀 → 原因 → 修法對照表                                      |
 | 12 | [安全性](./docs/12-security.md)                                   | 別把 secret 放腳本裡，以及安裝別人的腳本前該看什麼            |
 | 13 | [Playwright vs. userscript](./docs/13-playwright-vs-userscript.md)          | 什麼時候該用哪個，以及 `npm run preview` 測試 harness |
+| 14 | [iOS Userscripts 評估](./docs/14-ios-userscripts.md) | 安裝／同步、API 差異、逐支腳本相容性與實機驗收 |
 
 ## 這個 repo 怎麼運作
 

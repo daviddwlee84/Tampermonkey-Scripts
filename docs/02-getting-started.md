@@ -6,10 +6,14 @@
 | ----------------- | ------------------------------------------- |
 | Chrome / Edge / Brave | [Tampermonkey](https://www.tampermonkey.net/) 或 [Violentmonkey](https://violentmonkey.github.io/) |
 | Firefox           | Violentmonkey 或 Tampermonkey               |
-| Safari            | Userscripts（App Store）                    |
+| Safari            | [Userscripts（App Store）](https://apps.apple.com/us/app/userscripts/id1463298887)，先看 [iOS 評估](./14-ios-userscripts.md) |
 
 差別見 [09 Manager 比較](./09-managers-comparison.md)。本教學兩者通用，
 metadata 與 GM API 在 Tampermonkey / Violentmonkey 上大致相容。
+
+**Userscripts 不適用本教學所有 GM API 範例**：下方 `@grant none` 的入門程式
+沒有明顯 API 障礙，但本倉庫的 Hello Userscript 與多數正式腳本需要適配。
+iOS 的安裝與外部編輯方式也不同，請依 [14 的步驟](./14-ios-userscripts.md#iphoneipad-安裝與同步)操作。
 
 ### Chrome 需要打開 Developer mode
 

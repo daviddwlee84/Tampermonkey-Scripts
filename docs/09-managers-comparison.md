@@ -15,13 +15,18 @@
 
 ## 結論先講
 
-**本 repo 的腳本兩邊都能跑**，開發時建議：
+**本 repo 目前以 Tampermonkey／Violentmonkey 為相容目標**，開發時建議：
 
 ```text
 主力開發        Violentmonkey   （OSS、external editor workflow 成熟）
 相容性驗證      Tampermonkey    （順便涵蓋 Safari / iOS）
 腳本本身        只用兩邊都有的 API，不綁任何一家
 ```
+
+Safari 的 **Userscripts 是另一個 manager**，不能由 TM／VM 的檢查結果推論相容。
+截至 2026-09-08，8 支正式腳本中只有 Page Title Tag 未發現靜態阻礙，其餘 7 支有
+啟動阻礙，尚未做 iOS 實測。完整產品評估、安裝及逐支結果見
+[14 · iOS Userscripts 評估](./14-ios-userscripts.md)。
 
 ## 對照（2026）
 
@@ -59,6 +64,7 @@
 | 如果你…                          | 選              |
 | -------------------------------- | --------------- |
 | 想在 iPhone / iPad Safari 也用   | **Tampermonkey**（VM 沒有 Safari 版）|
+| 想在 iPhone / iPad 跑免費開源的 DOM／CSS 腳本 | **Userscripts**；本倉庫多數腳本需先適配，見 [14](./14-ios-userscripts.md) |
 | 在意 OSS / 可稽核                | **Violentmonkey** |
 | 用 TypeScript + 外部 IDE 開發    | **Violentmonkey** |
 | 需要企業 policy 部署、或想試 MCP | **Tampermonkey** |
@@ -91,25 +97,26 @@ Arc 另外要注意它的 Chromium base 更新步調可能落後主線；遇到 
 
 ## 寫腳本時的相容性守則
 
-本 repo 的所有腳本都照這幾條寫：
+本 repo 的 TM／VM 開發慣例如下；這些不是跨所有 manager 的通用規格：
 
 1. **明寫每一個 `// @grant`**，不要靠 manager 自動推斷
 2. **明寫 `@run-at`** —— 預設值兩邊不同（TM 是 `document-idle`，VM 是 `document-end`）
 3. **`@updateURL` 和 `@downloadURL` 兩個都寫** —— VM 只看後者
-4. **用底線版 GM API**（`GM_setValue`）而非 `GM.setValue`，避免 async 傳染
-5. **避開 manager 限定的 key**：`@sandbox`（TM）、`@inject-into`（VM）、`@antifeature`
+4. **目前採用同步底線版 GM API**（`GM_setValue`）；這正是 Userscripts 適配的主要障礙，不能當成 Safari 通用寫法
+5. **避開未納入本 repo 跨 manager 規則的 key**：`@sandbox`、`@inject-into`、`@antifeature`；`@inject-into` 也被 Userscripts 支援，並非 VM 獨有
 6. **避開 manager 限定的參數**：`GM_registerMenuCommand` 的 `accessKey`（TM 限定）；
    要反註冊就自己指定 `{ id: '...' }`
 7. **少碰 `unsafeWindow` 與 sandbox 細節** —— 這是兩邊差異最大的地方
 8. **不要用 manager 專屬的 helper**（例如 `VM.observe`、`VM.shortcut`）；
    它們很好用，但會把腳本綁在 Violentmonkey 上
 
-`npm run check` 會自動擋掉第 1、2、3、5 條，其餘靠 review。
+`npm run check` 會自動檢查第 1、2、3、5 條，其餘靠 review；它不能證明執行時相容，
+也沒有檢查 Userscripts 的 API 白名單、非同步語義或 Safari 隔離環境。
 
 ## 也可以考慮的其他 manager
 
 - **Greasemonkey**（Firefox）：這一切的老祖宗，但 GM API 較舊，新專案沒理由選它。
-- **Userscripts**（Safari，開源）：Safari 上 Tampermonkey 之外的選擇，GM API 支援較有限。
+- **Userscripts**（Safari，免費開源）：適合 DOM／CSS 與檔案同步工作流；本倉庫的同步 GM API、選單與頁面全域依賴需適配，見 [完整評估](./14-ios-userscripts.md)。
 
 ## 下一步
 
