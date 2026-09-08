@@ -19,7 +19,8 @@
     "format:check": "prettier --check .",
     "verify": "npm run check && npm run index:check",
     "preview": "node scripts/preview.mjs",
-    "test:page-reader": "node --test tests/page-reader-markdown.test.mjs"
+    "test:page-reader": "node --test tests/page-reader-markdown.test.mjs",
+    "test:vim-navigation": "node --test tests/vim-navigation.test.mjs"
   },
   "devDependencies": {
     "prettier": "^3.4.2",
