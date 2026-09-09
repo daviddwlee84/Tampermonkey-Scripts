@@ -56,7 +56,8 @@ npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selec
 並截圖到 `.preview/<slug>.png`（agent 可以直接 Read 那張圖驗證）。
 
 **這是 shim 不是 manager**：它不驗 `@match`、`@run-at`、sandbox、`@grant`
-是否正確、也沒有真的跨域能力。那些只有裝進真的 manager 才算數，需要使用者操作。
+是否正確、也沒有真的跨域能力。那些只有裝進真的 manager 才算數；可用隔離的
+browser profile 經 manager UI 自動化安裝與互動，見 userscript-development skill。
 邊界寫在 `docs/13-playwright-vs-userscript.md`，改 harness 前先讀。
 
 寫 exporter 類腳本時，一定要用 `--menu` 把輸出印出來看——
@@ -117,3 +118,20 @@ npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selec
 - `TODO.md`、`backlog/`、`pitfalls/` 是 repo 維護資料；本 repo 直接分發各 `.user.js`，不需要新增打包排除設定。
 
 <!-- project-knowledge-harness:agent-guidance --> (end)
+
+## Userscript 開發 skill
+
+`.agents/skills/userscript-development/` 是此專案維護的 canonical skill；
+`.claude/skills/userscript-development` 是它的 discovery symlink。
+累積可重用的 metadata、SPA、匯出、瀏覽器測試或 reference extension 經驗時，
+同步更新這份 skill。其 references 將 fixture／GM shim 與真實 manager 驗證分開；
+`assets/fixture.test.mjs` 是可執行的 Chromium／Firefox 起點。
+
+`daviddwlee84/agent-skills` 的 `skills/owned/userscript-development/` 只是分發副本。
+在本 repo 修改、驗證並發布後，再於 agent-skills 執行同步；不要在兩邊各維護一份。
+
+此 repo 的命令與慣例只記在本檔及專案文件；分發 skill 不應要求使用者擁有本 repo。
+依變更範圍選擇既有 browser suite：`npm run test:page-reader`、
+`npm run test:vim-navigation`、`npm run test:vimium-c-companion`。
+單一引擎分別以 `PRM_BROWSERS`、`VN_BROWSERS`、`VCC_BROWSERS` 指定。
+Skill 內的通用 fixture 範例則先複製到工作專案，再用該專案的 Playwright 執行。
