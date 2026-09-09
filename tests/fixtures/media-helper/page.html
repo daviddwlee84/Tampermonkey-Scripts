@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <title>Media / Helper: fixture</title>
+    <style>
+      body {
+        margin: 24px;
+        font: 16px system-ui;
+        background: #f7f8fb;
+      }
+      main {
+        max-width: 1100px;
+      }
+      .frame {
+        position: relative;
+        width: 320px;
+        height: 200px;
+      }
+      .frame img,
+      picture img {
+        width: 320px;
+        height: 200px;
+        object-fit: cover;
+      }
+      .overlay {
+        position: absolute;
+        inset: 0;
+        cursor: pointer;
+      }
+      .css-photo {
+        width: 300px;
+        height: 180px;
+        background: center / cover url('/assets/background.webp');
+      }
+      video {
+        display: block;
+        width: 320px;
+        height: 180px;
+        margin: 12px 0;
+      }
+      section {
+        margin: 20px 0;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Media Helper fixture</h1>
+      <p>
+        原頁互動：<input id="editor" aria-label="原頁輸入" />
+        <button id="original">原頁按鈕</button>
+      </p>
+      <div class="row">
+        <section>
+          <h2>遮罩與 responsive 圖片</h2>
+          <div class="frame">
+            <img
+              id="responsive"
+              alt="海邊照片"
+              sizes="320px"
+              src="/assets/small.jpg?sig=a%2Fb&v=1"
+              srcset="
+                /assets/small.jpg?sig=a%2Fb&v=1      320w,
+                /assets/large.jpg?sig=x%2Fy&token=z 1280w
+              "
+            />
+            <div
+              id="overlay"
+              class="overlay"
+              role="button"
+              tabindex="0"
+              aria-label="開啟貼文"
+            ></div>
+          </div>
+        </section>
+        <section>
+          <h2>不同構圖的 picture</h2>
+          <picture>
+            <source
+              media="(min-width: 900px)"
+              srcset="/assets/wide-small.png 320w, /assets/wide-large.png 1280w"
+              sizes="320px"
+            />
+            <source media="(max-width: 899px)" srcset="/assets/portrait.png 2400w" sizes="320px" />
+            <img id="art" src="/assets/fallback.png" alt="橫幅構圖" />
+          </picture>
+        </section>
+        <section>
+          <h2>背景圖片</h2>
+          <div class="css-photo" id="background"></div>
+        </section>
+        <section>
+          <h2>延遲載入</h2>
+          <img
+            id="lazy"
+            alt="延遲照片"
+            width="300"
+            height="180"
+            src="/assets/placeholder.png"
+            data-original="/assets/original.png?auth=keep%2Bme"
+          />
+        </section>
+      </div>
+      <section>
+        <h2>影片與來源類型</h2>
+        <video
+          id="direct"
+          aria-label="直接影片"
+          controls
+          preload="none"
+          poster="/assets/poster.jpg"
+        >
+          <source src="/assets/sample.webm" type="video/webm" />
+        </video>
+        <video id="hls" aria-label="HLS 影片" preload="none">
+          <source src="/assets/stream.m3u8" type="application/vnd.apple.mpegurl" />
+        </video>
+        <video id="dash" aria-label="DASH 影片" preload="none" src="/assets/stream.mpd"></video>
+        <video id="opaque-stream" aria-label="無副檔名串流" preload="none">
+          <source src="/manifest?id=42" type="application/dash+xml" />
+        </video>
+        <video
+          id="partial"
+          aria-label="分段影片"
+          preload="none"
+          src="/assets/part.mp4?bytestart=0&byteend=300"
+        ></video>
+        <video id="local" aria-label="暫存影片" preload="none"></video>
+        <video id="unresolved" aria-label="播放器尚未提供來源" preload="none"></video>
+      </section>
+    </main>
+    <script>
+      window.originalClicks = 0;
+      window.originalKeys = [];
+      document.querySelector('#original').onclick = () => window.originalClicks++;
+      document.querySelector('#overlay').onclick = () => window.originalClicks++;
+      document.addEventListener('keydown', (event) => window.originalKeys.push(event.key));
+      document.querySelector('#local').src = URL.createObjectURL(
+        new Blob(['fixture'], { type: 'video/webm' })
+      );
+    </script>
+  </body>
+</html>

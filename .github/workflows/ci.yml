@@ -39,6 +39,7 @@ jobs:
       - run: npx playwright install --with-deps chromium firefox
       - run: npm run test:vim-navigation
       - run: npm run test:vimium-c-companion
+      - run: npm run test:media-helper
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -47,5 +48,6 @@ jobs:
           path: |
             .preview/vim-navigation-tests/*.png
             .preview/vimium-c-companion-tests/*.png
+            .preview/media-helper-tests/*.png
           if-no-files-found: ignore
           include-hidden-files: true

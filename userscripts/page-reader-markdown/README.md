@@ -2,6 +2,8 @@
 
 直接從目前瀏覽器分頁擷取乾淨正文，提供專注閱讀、Markdown 複製／下載，以及包含圖片與文件附件的 ZIP。
 
+若只需要預覽／儲存頁面圖片與直接影片，可使用 [Media Helper](../media-helper/)，支援選擇圖片版本與多選逐檔下載。
+
 - **安裝**：[Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/page-reader-markdown/page-reader-markdown.user.js)
 - **生效網站**：所有 HTTP／HTTPS 頂層 HTML 頁面。
 - **目標環境**：桌面 Arc／Chromium、Zen／Firefox；Tampermonkey 或 Violentmonkey。

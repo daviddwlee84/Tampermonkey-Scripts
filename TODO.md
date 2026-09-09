@@ -18,5 +18,6 @@ Tampermonkey Scripts 的長期待辦索引；維護方式見 [CLAUDE.md](CLAUDE.
 ## P?
 
 - [ ] **[?/XL] Vimium C Companion 互動橋接** — 評估合作 extension 或直接改為 Companion WebExtension，確認可執行命令與狀態回饋的邊界。 → [research](backlog/vimium-c-companion-bridge.md)
+- [ ] **[?/L] Media Helper 串流完整下載** — 評估未加密 VOD HLS 分段下載與封裝，比較瀏覽器內處理與本機工具協作。 → [research](backlog/media-helper-stream-download.md)
 
 ## Done
