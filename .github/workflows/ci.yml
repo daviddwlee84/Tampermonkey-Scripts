@@ -40,6 +40,7 @@ jobs:
       - run: npm run test:vim-navigation
       - run: npm run test:vimium-c-companion
       - run: npm run test:media-helper
+      - run: npm run test:dino-ai
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -49,5 +50,6 @@ jobs:
             .preview/vim-navigation-tests/*.png
             .preview/vimium-c-companion-tests/*.png
             .preview/media-helper-tests/*.png
+            .preview/dino-ai-lab/*.png
           if-no-files-found: ignore
           include-hidden-files: true

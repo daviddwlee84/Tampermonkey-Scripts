@@ -224,11 +224,11 @@ class ZipTests(unittest.TestCase):
         select = lambda **kwargs: syncer.select_zip_scripts(syncer.REPO_ROOT, self.sources, **kwargs)
         defaults = {name for name, _ in select()}
         self.assertIn("page-reader-markdown.user.js", defaults)
-        self.assertTrue(defaults.isdisjoint({"hello-userscript.user.js", "page-title-tag.user.js", "m365-copilot-export-markdown.user.js"}))
+        self.assertTrue(defaults.isdisjoint({"hello-userscript.user.js", "page-title-tag.user.js", "m365-copilot-export-markdown.user.js", "dino-ai-lab.user.js"}))
         self.assertEqual(select(include_all=True), self.sources)
         self.assertEqual({name for name, _ in select(categories=["examples"])}, {"hello-userscript.user.js", "page-title-tag.user.js"})
         both = {name for name, _ in select(categories=["examples", "experimental", "examples"])}
-        self.assertEqual(both, {"hello-userscript.user.js", "page-title-tag.user.js", "m365-copilot-export-markdown.user.js"})
+        self.assertEqual(both, {"hello-userscript.user.js", "page-title-tag.user.js", "m365-copilot-export-markdown.user.js", "dino-ai-lab.user.js"})
         self.assertEqual([name for name, _ in select(only=["page-title-tag"])], ["page-title-tag.user.js"])
         for kwargs in ({"categories": ["typo"]}, {"only": ["typo"]}):
             with self.assertRaisesRegex(ValueError, "Unknown"):

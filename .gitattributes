@@ -1,0 +1,3 @@
+# Preserve byte-exact archives, including their original whitespace.
+playgrounds/dino/vendor/** -text -whitespace
+userscripts/dino-ai-lab/history/** -text -whitespace

@@ -30,7 +30,7 @@
     "title": "實驗性腳本",
     "description": "仍在驗證與調整，請先閱讀個別限制；不納入預設桌面安裝包。",
     "default": false,
-    "scripts": ["m365-copilot-export-markdown"]
+    "scripts": ["m365-copilot-export-markdown", "dino-ai-lab"]
   },
   {
     "id": "examples",

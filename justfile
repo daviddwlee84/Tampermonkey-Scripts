@@ -8,6 +8,10 @@ default:
 check:
     npm run verify
 
+# 啟動本地恐龍 AI 實驗場（http://127.0.0.1:8787/dino/）
+dino:
+    npm run dino
+
 # 開啟 Violentmonkey 官方安裝頁；macOS 可指定 arc/chrome/edge/zen/firefox
 vm-install *args:
     @python3 scripts/open-violentmonkey.py "$@"

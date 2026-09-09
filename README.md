@@ -48,6 +48,7 @@ Vim 式頁內操作，以及搭配原生 Vimium C 的小抄與練習。 分類�
 | Script | 用途 | 生效網站 | Version | 安裝 |
 | --- | --- | --- | --- | --- |
 | [M365 Copilot Chat Export Markdown](userscripts/m365-copilot-export-markdown/) | 【實驗性】把 Microsoft 365 Copilot Chat 對話匯成 Markdown，優先讀原始資料、失敗退回畫面 | `https://m365.cloud.microsoft/*`<br>`https://copilot.cloud.microsoft/*` | 0.12.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/m365-copilot-export-markdown/m365-copilot-export-markdown.user.js) |
+| [Little Dino AI Lab](userscripts/dino-ai-lab/) | 保留 2016 恐龍 AI，加入預測策略、浮動調參、離線加速與可重現 A/B 實驗 | `https://chromedino.com/*`<br>`https://wayou.github.io/t-rex-runner/*`<br>`http://127.0.0.1/dino/*`<br>`http://localhost/dino/*` | 0.1.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/dino-ai-lab/dino-ai-lab.user.js) |
 
 ### 入門與教學範例
 

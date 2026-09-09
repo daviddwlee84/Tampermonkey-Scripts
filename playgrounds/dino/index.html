@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Little Dino AI Lab — 2016 → 2026</title>
+    <link rel="stylesheet" href="vendor/upstream.css" />
+    <style>
+      body {
+        background: #f7f7f3;
+        color: #263d36;
+        font:
+          15px/1.7 system-ui,
+          sans-serif;
+        margin: 0;
+      }
+      header,
+      footer {
+        max-width: 760px;
+        padding: 28px 24px;
+        margin: auto;
+      }
+      header {
+        padding-top: 64px;
+      }
+      h1 {
+        font-size: clamp(28px, 5vw, 44px);
+        line-height: 1.15;
+        letter-spacing: -1.5px;
+        margin: 12px 0;
+      }
+      .eyebrow {
+        font:
+          12px ui-monospace,
+          monospace;
+        color: #657b69;
+        letter-spacing: 2px;
+      }
+      p {
+        color: #647269;
+      }
+      a {
+        color: #217052;
+      }
+      .offline .interstitial-wrapper {
+        position: relative;
+        padding-top: 20px;
+        margin: 60px auto 100px;
+        min-height: 180px;
+        width: min(600px, calc(100vw - 48px));
+      }
+      .offline .runner-container {
+        position: relative;
+        top: 0;
+        width: 100%;
+      }
+      .icon-offline {
+        display: none;
+      }
+      .offline .runner-canvas {
+        width: 100% !important;
+        height: auto !important;
+        image-rendering: pixelated;
+      }
+      .note {
+        padding: 16px 20px;
+        background: #eaf0e7;
+        border-radius: 12px;
+      }
+      footer {
+        border-top: 1px solid #dde4d9;
+        font-size: 12px;
+      }
+      kbd {
+        padding: 2px 6px;
+        background: white;
+        border: 1px solid #d0dacb;
+        border-radius: 4px;
+      }
+    </style>
+    <script src="lab-engine.js"></script>
+    <script src="runner.js"></script>
+  </head>
+  <body class="offline">
+    <header>
+      <div class="eyebrow">HACKATHON ARCHIVE / MARCH 2016</div>
+      <h1>Little Dino AI Lab</h1>
+      <p>十年前的第一步，和今天的下一跳。<br />在同一條跑道上，看看不同想法能跑多遠。</p>
+      <div class="note" id="installation-note">
+        先<a href="dino-ai-lab.user.js">安裝 Little Dino AI Lab userscript</a
+        >，再重新整理。右下角會出現恐龍控制台。<br />也能直接按 <kbd>Space</kbd> 或
+        <kbd>↑</kbd> 手動遊玩，<kbd>↓</kbd> 蹲下。
+      </div>
+    </header>
+    <main id="main-frame-error" class="interstitial-wrapper">
+      <div class="icon icon-offline"></div>
+      <div id="main-message"><h2>按空白鍵開始</h2></div>
+      <div id="offline-resources">
+        <img
+          id="offline-resources-1x"
+          src="vendor/assets/default_100_percent/100-offline-sprite.png"
+          alt=""
+        />
+        <img
+          id="offline-resources-2x"
+          src="vendor/assets/default_200_percent/200-offline-sprite.png"
+          alt=""
+        />
+        <!-- AUDIO -->
+      </div>
+    </main>
+    <footer>
+      固定 60 Hz 遊戲時間 · 種子可重現 · 所有素材在本機<br />Game: Chromium Authors / Wayou, BSD ·
+      <a href="vendor/LICENSE">License</a> · <a href="PROVENANCE.md">來源與本地調整</a>
+    </footer>
+  </body>
+</html>
