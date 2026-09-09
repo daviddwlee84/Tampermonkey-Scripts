@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Vim Navigation interaction regression fixture</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: #20332b;
+        background: #fafbf8;
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+      }
+      main {
+        display: grid;
+        grid-template-columns: 340px 1fr;
+        gap: 36px;
+        padding: 20px 34px;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 24px;
+      }
+      h2 {
+        position: relative;
+        margin: 18px 0 8px;
+        font-size: 19px;
+      }
+      [role='tree'] {
+        width: 260px;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+        background: #fff;
+        border: 1px solid #c7d6cb;
+      }
+      [role='treeitem'] {
+        height: 29px;
+        padding: 2px 8px;
+        border-bottom: 1px solid #edf1eb;
+      }
+      .tree-row-content {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        cursor: pointer;
+      }
+      .tree-label {
+        flex: 1;
+      }
+      .tree-secondary {
+        padding: 0 8px;
+        font: inherit;
+        line-height: 23px;
+      }
+      button,
+      input {
+        font: inherit;
+      }
+      button {
+        border: 1px solid #becdbf;
+        border-radius: 4px;
+        background: #eef5ed;
+        padding: 4px 8px;
+      }
+      .fixtures > div {
+        margin: 9px 0;
+      }
+      .pointable {
+        cursor: pointer;
+      }
+      .permalink {
+        position: absolute;
+        left: -24px;
+        top: 0;
+        width: 22px;
+        opacity: 0;
+      }
+      h2:hover > .permalink {
+        opacity: 1;
+      }
+      #multi-wrap {
+        position: relative;
+        width: 170px;
+        margin: 18px 0;
+      }
+      #multi-link {
+        background: #eaf3e7;
+      }
+      #line-cover {
+        margin: 0;
+        position: fixed;
+        z-index: 20;
+        background: #778278;
+        pointer-events: auto;
+      }
+      #full-cover-wrap {
+        position: relative;
+        width: 180px;
+      }
+      #full-cover {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        background: #d5dcd3;
+      }
+      .hover-wrap {
+        position: relative;
+        display: inline-block;
+        margin-right: 10px;
+      }
+      .hover-menu {
+        position: absolute;
+        top: 35px;
+        left: 0;
+        width: 230px;
+        padding: 12px;
+        background: #fff;
+        border: 1px solid #799075;
+        z-index: 30;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      #css-menu {
+        display: none;
+      }
+      #css-hover:hover + #css-menu {
+        display: block;
+      }
+      .reading {
+        margin-top: 40px;
+        background: #fff;
+        padding: 16px;
+      }
+      .reading p {
+        margin: 12px 0;
+      }
+      #zv-scroll {
+        overflow: auto;
+        height: 100px;
+        border: 1px solid #afc1a9;
+        padding: 8px;
+      }
+      #zv-scroll p {
+        margin: 0;
+      }
+      #empty-caret {
+        height: 30px;
+        background: #f0f2ef;
+      }
+      .bottom {
+        height: 800px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section>
+        <h1>Repository tree</h1>
+        <ul id="repository-tree" role="tree" aria-label="Repository files"></ul>
+      </section>
+      <section class="fixtures">
+        <h1>Visible interaction targets</h1>
+        <a id="native-link" href="#content">Native link</a>
+        <div id="aria-tab" role="tab" tabindex="-1">Inactive but operable ARIA tab</div>
+        <div id="explicit-click" onclick="window.__actions.push('explicit-click')">
+          Explicit click region
+        </div>
+        <div id="cursor-only" class="pointable">Cursor transition region</div>
+        <div id="weak-pair" class="button" tabindex="-1">Two weak cues</div>
+        <div id="weak-single" tabindex="-1">Only a weak tabindex</div>
+        <h2 id="content">
+          <a id="heading-anchor" class="permalink" href="#content" aria-label="Permalink">#</a
+          >Heading with hover permalink
+        </h2>
+        <div style="opacity: 0">
+          <h2>
+            <a id="hidden-heading-anchor" class="permalink" href="#hidden-heading">#</a>Invisible
+            heading
+          </h2>
+        </div>
+        <button id="invisible-button" style="opacity: 0" type="button">
+          Unrelated transparent button
+        </button>
+        <div id="multi-wrap">
+          <a id="multi-link" href="#content"
+            >A long link with several rendered lines and an obstructed first line</a
+          >
+        </div>
+        <div id="line-cover" aria-hidden="true"></div>
+        <div id="full-cover-wrap">
+          <button id="covered-button">Fully covered</button>
+          <div id="full-cover">Covered</div>
+        </div>
+        <div>
+          <div class="hover-wrap" id="js-hover-wrap">
+            <button id="js-hover" type="button">JavaScript hover menu</button>
+            <div id="js-menu" class="hover-menu" hidden>
+              <button id="hover-menu-action" type="button">Menu action</button>
+              <p id="hover-text">Hover menu readable paragraph.</p>
+            </div>
+          </div>
+          <div class="hover-wrap">
+            <button id="css-hover" type="button">CSS-only hover</button>
+            <div id="css-menu" class="hover-menu">
+              CSS menu remains hidden during synthetic hover
+            </div>
+          </div>
+        </div>
+        <input id="site-input" aria-label="Website input" />
+        <section class="reading" id="reading-blocks">
+          <!-- prettier-ignore -->
+          <p id="zv-leading">   <span hidden>Hidden prefix</span><span>  First meaningful text</span> after inline nodes.</p>
+          <blockquote id="zv-wrapper">
+            <p id="zv-inner">Inner paragraph wins over its wrapper.</p>
+          </blockquote>
+          <p id="empty-caret">
+            <span hidden>Hidden only</span
+            ><input aria-label="Excluded input" value="Not reading text" />
+          </p>
+          <div id="zv-scroll">
+            <p id="zv-long">
+              Paragraph start above the viewport.<br />Second visual line.<br />Third visual
+              line.<br />Fourth visual line.<br />Fifth visual line.<br />Sixth visual line.<br />Seventh
+              visual line.
+            </p>
+          </div>
+        </section>
+        <div class="bottom"></div>
+      </section>
+    </main>
+    <script>
+      window.__actions = [];
+      window.__hoverEvents = [];
+      window.__siteKeys = [];
+      window.__hostileKeys = false;
+      window.__removeHoverText = false;
+      const tree = document.querySelector('#repository-tree');
+      for (let index = 0; index < 17; index++) {
+        const row = document.createElement('li');
+        row.id = `tree-row-${index}`;
+        row.setAttribute('role', 'treeitem');
+        row.tabIndex = index ? -1 : 0;
+        row.setAttribute('aria-selected', String(index === 0));
+        row.setAttribute('aria-labelledby', `tree-label-${index}`);
+        const content = document.createElement('div');
+        content.id = `tree-wrapper-${index}`;
+        content.className = 'tree-row-content';
+        content.innerHTML = `<span aria-hidden="true">▱</span><span class="tree-label" id="tree-label-${index}">File ${String(index + 1).padStart(2, '0')}.js</span>`;
+        if (index === 0) {
+          const chevron = content.firstElementChild;
+          chevron.id = 'tree-chevron';
+          chevron.removeAttribute('aria-hidden');
+          chevron.setAttribute('aria-label', 'Expand first file');
+          chevron.textContent = '▸';
+          chevron.onclick = (event) => {
+            event.stopPropagation();
+            window.__actions.push('chevron');
+          };
+        }
+        if (index === 7) {
+          const action = document.createElement('button');
+          action.id = 'tree-secondary';
+          action.className = 'tree-secondary';
+          action.textContent = '⋯';
+          action.setAttribute('aria-label', 'More actions for file 8');
+          action.addEventListener('click', (event) => {
+            event.stopPropagation();
+            window.__actions.push('secondary');
+          });
+          content.append(action);
+        }
+        content
+          .querySelector('.tree-label')
+          .addEventListener('click', () => window.__actions.push(`tree-${index}`));
+        row.append(content);
+        tree.append(row);
+      }
+      for (const id of [
+        'native-link',
+        'heading-anchor',
+        'multi-link',
+        'aria-tab',
+        'cursor-only',
+        'weak-pair',
+        'hover-menu-action',
+      ]) {
+        document.getElementById(id).addEventListener('click', (event) => {
+          event.preventDefault();
+          window.__actions.push(id);
+        });
+      }
+      const trigger = document.querySelector('#js-hover');
+      const menu = document.querySelector('#js-menu');
+      for (const type of [
+        'pointerover',
+        'pointerenter',
+        'mouseover',
+        'mouseenter',
+        'pointermove',
+        'mousemove',
+        'pointerout',
+        'pointerleave',
+        'mouseout',
+        'mouseleave',
+        'click',
+        'pointerdown',
+        'mousedown',
+        'focus',
+      ]) {
+        trigger.addEventListener(type, (event) =>
+          window.__hoverEvents.push({ type, trusted: event.isTrusted })
+        );
+      }
+      trigger.addEventListener('mouseenter', () => {
+        menu.hidden = false;
+      });
+      document.querySelector('#js-hover-wrap').addEventListener('mouseleave', () => {
+        menu.hidden = true;
+        if (window.__removeHoverText) menu.querySelector('#hover-text')?.remove();
+      });
+      document
+        .querySelector('#css-hover')
+        .addEventListener('click', () => window.__actions.push('css-click'));
+      for (const target of [window, document]) {
+        for (const capture of [true, false]) {
+          for (const type of [
+            'keydown',
+            'keypress',
+            'keyup',
+            'compositionstart',
+            'compositionupdate',
+            'compositionend',
+            'beforeinput',
+            'input',
+          ]) {
+            target.addEventListener(
+              type,
+              (event) => {
+                if (!window.__hostileKeys) return;
+                window.__siteKeys.push({
+                  type,
+                  key: event.key || event.data,
+                  phase: `${target === window ? 'window' : 'document'}-${capture ? 'capture' : 'bubble'}`,
+                });
+                if (type.startsWith('key')) {
+                  event.preventDefault();
+                  event.stopImmediatePropagation();
+                }
+              },
+              capture
+            );
+          }
+        }
+      }
+      requestAnimationFrame(() => {
+        const rect = document.querySelector('#multi-link').getClientRects()[0];
+        Object.assign(document.querySelector('#line-cover').style, {
+          left: `${rect.left}px`,
+          top: `${rect.top}px`,
+          width: `${rect.width}px`,
+          height: `${rect.height}px`,
+        });
+        window.__layoutReady = true;
+      });
+    </script>
+  </body>
+</html>

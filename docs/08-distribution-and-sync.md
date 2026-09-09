@@ -24,21 +24,32 @@
         └────────────┼─────────────┘
                      │
              Tampermonkey Sync
-           bootstrap / 設定同步
+           bootstrap / 可選同步
 ```
 
-| 層                  | 負責                                       |
-| ------------------- | ------------------------------------------ |
-| **Git**             | 原始碼、歷史、diff、rollback、branch        |
-| **`@updateURL`**    | 部署：把新版推到所有已安裝的機器            |
-| **Manager Sync**    | bootstrap：新機器一次把所有腳本裝起來       |
+| 層               | 負責                                   |
+| ---------------- | -------------------------------------- |
+| **Git**          | 原始碼、歷史、diff、rollback、branch   |
+| **`@updateURL`** | manager 檢查新版，配合下載來源更新程式 |
+| **Manager Sync** | bootstrap：新機器一次把所有腳本裝起來  |
 
 這兩件事**是不同機制**，別搞混：
 
 ```text
 GitHub repo → @updateURL       = code distribution（發佈）
-Drive/WebDAV → Manager Sync    = state synchronization（狀態同步）
+Drive/WebDAV → Manager Sync    = manager 定義的同步範圍
 ```
+
+還要把 **腳本寫入的 GM values** 單獨看待：`GM_setValue` 保存的是某個 manager／profile 中，
+某份已安裝腳本的資料。Script Sync 會同步哪些原始碼、安裝設定與 values，取決於 manager、
+版本、服務及選項，不能因為「腳本出現在另一台電腦」就推斷「腳本的設定也完整同步」。
+
+| 資料               | 例子                                | 可靠的移轉方式                                            |
+| ------------------ | ----------------------------------- | --------------------------------------------------------- |
+| 腳本原始碼         | `.user.js`、版本與 metadata         | GitHub raw URL／manager 更新                              |
+| manager 的安裝狀態 | 已安裝清單、啟用與更新選項          | 核對 manager 的同步／備份選項                             |
+| 腳本 GM values     | Vim Navigation 鍵位、主題、本站規則 | 腳本的 JSON 匯出／匯入，或明確包含 values 的 manager 備份 |
+| 頁面記憶體         | Insert／Visual、本頁暫停、暫時搜尋  | 重新建立；不當成可同步的設定                              |
 
 ## 設定自動更新
 
@@ -46,8 +57,8 @@ Drive/WebDAV → Manager Sync    = state synchronization（狀態同步）
 
 ```js
 // @version      0.3.2
-// @updateURL    https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/chatgpt-export/chatgpt-export.user.js
-// @downloadURL  https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/chatgpt-export/chatgpt-export.user.js
+// @updateURL    https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+// @downloadURL  https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
 ```
 
 流程：
@@ -64,8 +75,10 @@ remote    0.3.3
 
 3. 有新版就從 `@downloadURL` 抓完整腳本
 
-**`@version` 是唯一的判斷依據。**改了 code 卻沒動版本號，其他機器永遠不會更新。
-這是最常見的「我明明推上去了但沒生效」。
+**一般自動更新需要提高 `@version`。**只改程式碼、維持同一版本，不能期待已安裝的腳本自動跟進。
+是否更新還受到 manager 的更新開關、來源 URL、網路及本機修改處理政策影響；手動重裝或匯入也和
+自動版本檢查不同。[Violentmonkey metadata 說明](https://violentmonkey.github.io/api/metadata-block/#downloadurl)
+亦說明下載來源與缺少版本號時的限制。
 
 本 repo 的 `npm run check` 會驗證這兩個 URL 指向正確的 raw 路徑，
 但**它無法知道你有沒有記得加版本號**——那是 commit 前的自覺。
@@ -80,12 +93,12 @@ remote    0.3.3
 
 ### 更新頻率
 
-Tampermonkey 預設每天檢查一次。要立刻拿到新版：
+更新頻率以目前 manager 設定為準。要立刻拿到新版，可使用：
 Dashboard → 該腳本 → **Check for userscript updates**。
 
 ## 新機器 bootstrap：第一次怎麼把腳本裝進去
 
-只用 GitHub 的話，第一次要手動裝一輪，之後就全自動。所以不是
+只用 GitHub 的話，第一次要手動裝一輪；更新設定正確時，之後可由 manager 自動檢查。所以不是
 「每次都重新匯入」，而是**每個 browser profile bootstrap 一次**。
 
 ### 方法 A：Install from URL（最可靠，建議用這個）
@@ -111,21 +124,22 @@ README 那張自動產生的表格裡，Install 連結就是這種網址。
 ⚠️ 但這招在 Chromium 系瀏覽器上**不一定穩**——瀏覽器有時會直接把檔案下載下來
 而不是交給 manager 攔截。遇到這種情況就改用方法 A。
 
-### ⚠️ 不要用「New from file」/「Import from zip」
+### 本機檔案與 ZIP 也能安裝，但要核對來源與資料
 
 這兩個看起來也能把腳本弄進去，但意義完全不同：
 
-| 選項                     | 實際上是                                        |
-| ------------------------ | ----------------------------------------------- |
-| **Install from URL**     | ✅ 從遠端安裝，記住來源 → 自動更新可用            |
-| New from file            | ⚠️ 從本機檔案建立一份**副本**                    |
-| Import from zip / Sync   | ⚠️ 還原 manager 自己的備份，是 **state**，不是 code |
+| 選項                 | 實際上是                                                |
+| -------------------- | ------------------------------------------------------- |
+| **Install from URL** | 從遠端安裝，來源容易核對；本 repo 的一般安裝方式        |
+| New from file        | 從本機內容建立／更新腳本；檢查 metadata、身分與更新設定 |
+| Import from zip      | 還原 ZIP 內實際包含的腳本與資料；內容受匯出選項影響     |
 
-`New from file` 匯入的腳本雖然 metadata 裡有 `@downloadURL`，
-但它是「本機來源」的一份拷貝，很容易變成和 repo 各自演化的兩份。
-`Import from zip` 更是另一回事——那是還原整個 manager 的狀態（見下面的 Sync 段落）。
+不能一概說本機匯入的腳本不會更新：保留有效的 `@updateURL`／`@downloadURL`、版本與 manager
+更新設定時，仍可能正常檢查新版。本機複製、ZIP 還原後，應確認實际安裝內容、來源、腳本身分，
+以及是否包含預期的 values。[Violentmonkey metadata](https://violentmonkey.github.io/api/metadata-block/#downloadurl)
+把下載 URL 定義為更新來源；不是只以「是否從檔案匯入」決定。
 
-**規則**：code 走 URL，state 走 zip / Sync。
+建議以 URL 管理一般程式碼安裝，以有明確內容的 JSON／ZIP 管理備份；本地開發仍可用檔案匯入。
 
 ### 確認更新設定有開
 
@@ -147,8 +161,9 @@ Update
 
 可以把「第一次 bootstrap」也省掉。
 
-Tampermonkey 的 **Script Sync** 支援 Google Drive、Dropbox、WebDAV、
-Browser Sync，較新版本另外加了 Amazon S3。
+Tampermonkey 的 **Script Sync** 提供 Google Drive、Dropbox、WebDAV、Browser Sync 等選項；
+實際可用服務與條件以目前版本為準。Browser Sync 還有容量與腳本來源限制，不能直接當成完整備份。
+[Tampermonkey 官方同步說明](https://www.tampermonkey.net/faq.php?q=Q105)
 
 ```text
 Mac A
@@ -166,7 +181,7 @@ Tampermonkey
  Windows      Mac B
 ```
 
-衝突時官方的規則是：**修改時間較新的那份勝出。**
+Tampermonkey 官方同步說明的衝突規則是：**修改時間較新的那份勝出。**
 
 新機器就變成：
 
@@ -177,6 +192,19 @@ Tampermonkey
 ```
 
 Violentmonkey 也有類似的雲端同步（Dropbox / OneDrive / Google Drive / WebDAV）。
+[可用服務見官方說明](https://violentmonkey.github.io/)。這些是 manager 同步功能，
+不表示任意腳本的 GM values 都會跟著移轉；需要 values 時，確認明確的同步／匯出選項。
+
+### 移轉腳本設定的驗證流程
+
+1. 在來源 profile 匯出腳本提供的設定 JSON；若使用 manager ZIP，確認有勾選需要的腳本資料／values。
+2. 在目標 profile 安裝相同腳本，核對 `@name`、`@namespace`、版本與更新來源。
+3. 匯入設定，再實際確認一個自訂鍵位、主題與本站設定；不要只看腳本清單。
+4. 完成核對後才清理舊副本；刪除／重裝腳本或 manager 可能改變儲存身分，不能假設資料一定沿用。
+
+同一腳本的一般版本更新通常保留 GM values；另存副本、改名稱／namespace、換 manager 或 profile
+則不能保證。以 Vim Navigation 為例，`vimNavigationConfig` 包含全域設定與 `sites[origin]`；
+設定內的「下載 JSON」可備份這些資料，本頁暫停與目前選取不在備份範圍。
 
 ### ⚠️ 兩者一起用時的注意事項
 

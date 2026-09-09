@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vim Navigation
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.1.0
+// @version      0.2.0
 // @description  Vim 式頁內導航、搜尋、文字選取與區塊複製，附可客製的常駐情境小抄
 // @author       Da-Wei Lee
 // @license      MIT
@@ -30,6 +30,7 @@
     schemaVersion: 1,
     scrollStep: 64,
     hintChars: 'asdfghjkl',
+    hintDetection: 'broad',
     theme: 'system',
     bindings: { normal: {}, caret: {}, visual: {}, line: {} },
     sites: {},
@@ -48,11 +49,14 @@
     statusKind: 'info',
     composing: false,
     hints: null,
+    hoverActive: false,
+    hoverLabel: '',
   };
   let config = clone(DEFAULTS),
     commands = [],
     ui,
     textTools,
+    hover,
     overlay,
     overlayRoot;
   let sequenceTimer, pointerTarget, lastScrollTarget, statusTimer;
@@ -60,6 +64,7 @@
     composingTimer,
     startupError = '';
   const ownHosts = new Set();
+  const uiKeyCycles = new Set();
   const parentElement = (node) => node?.parentElement || node?.getRootNode?.().host || null;
   function isOwned(node) {
     for (
@@ -176,6 +181,8 @@
       lastCommandTime: state.lastCommandTime,
       status: state.status,
       statusKind: state.statusKind,
+      hoverActive: state.hoverActive,
+      hoverLabel: state.hoverLabel,
       origin: location.origin,
       config: clone(config),
       commands: commands.map((command) => ({
@@ -246,6 +253,7 @@
     });
     add('hintsClick', '提示：點擊連結／按鈕', '連結', normal, ['f'], () => startHints('click'));
     add('hintsOpen', '提示：背景開啟連結', '連結', normal, ['F'], () => startHints('open'));
+    add('hintsHover', '提示：模擬 Hover', '連結', normal, ['zh'], () => startHints('hover'));
     add('hintsCopy', '提示：複製連結網址', '複製', normal, ['yf'], () => startHints('url'));
     add('copyUrl', '複製頁面 URL', '複製', normal, ['yy'], () => copyAndNotify(location.href));
     add('copyMarkdownLink', '複製 Markdown link', '複製', normal, ['ym'], () =>
@@ -258,11 +266,11 @@
       )
     );
     add('copySelection', '複製目前選取', '複製', normal, ['ys'], () => {
-      return textTools.copy(false);
+      return copySelectedText(false);
     });
     add('hintsCopyBlock', '提示：複製文字區塊', '複製', normal, ['yb'], () => startHints('block'));
     add('hintsCopyCode', '提示：複製程式碼', '複製', normal, ['yc'], () => startHints('code'));
-    add('hintsCaret', '提示：選擇游標起點', '選取', normal, ['zv'], () => startHints('caret'));
+    add('hintsCaret', '跳至段首', '選取', normal, ['zv'], () => startHints('caret'));
     add('enterCaret', 'Caret 游標模式', '選取', MODES, ['c'], () => textTools.enter('caret'));
     add('enterVisual', 'Visual 字元選取', '選取', MODES, ['v'], () =>
       textTools.enter(state.mode === 'visual' ? 'caret' : 'visual')
@@ -284,8 +292,8 @@
       add(id, label, '選取', TEXT_MODES, [key], (n) => textTools.move(motion, n))
     );
     add('reverseSelection', '交換選取端點', '選取', TEXT_MODES, ['o'], () => textTools.reverse());
-    add('yank', '複製選取並返回', '選取', TEXT_MODES, ['y'], () => textTools.copy(false));
-    add('yankLines', '複製完整畫面行', '選取', TEXT_MODES, ['Y'], () => textTools.copy(true));
+    add('yank', '複製選取並返回', '選取', TEXT_MODES, ['y'], () => copySelectedText(false));
+    add('yankLines', '複製完整畫面行', '選取', TEXT_MODES, ['Y'], () => copySelectedText(true));
     add('find', '搜尋頁面文字', '搜尋', normal, ['/'], () => textTools.openFind());
     add('nextMatch', '下一個搜尋命中', '搜尋', normal, ['n'], () => textTools.findNext(false));
     add('previousMatch', '上一個搜尋命中', '搜尋', normal, ['N'], () => textTools.findNext(true));
@@ -308,6 +316,13 @@
             return;
           }
           if (action.action === 'copy') return copyAndNotify(cleanBlockText(element));
+          if (action.action === 'hover') {
+            element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            const hit = hitTest(element);
+            if (hit) hover.enter(element, hit.point);
+            else notify('目前無法觸及這個 Hover 目標');
+            return;
+          }
           element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
           return activateHint({ element }, { kind: 'custom', action });
         }
@@ -333,6 +348,22 @@
             else result[key] = id;
           }
         }
+        // v0.1 users may already bind zh… or z (with zv explicitly unbound).
+        // Only retire the NEW default, never discard their existing mappings.
+        if (mode === 'normal' && result.zh === 'hintsHover') {
+          const explicit = {
+            ...candidate.bindings[mode],
+            ...candidate.sites[origin]?.bindings?.[mode],
+          };
+          if (
+            !Object.hasOwn(explicit, 'zh') &&
+            Object.entries(explicit).some(
+              ([key, id]) =>
+                id !== null && key !== 'zh' && (key.startsWith('zh') || 'zh'.startsWith(key))
+            )
+          )
+            delete result.zh;
+        }
         return [mode, result];
       })
     );
@@ -354,6 +385,10 @@
     const object = (value) => value && typeof value === 'object' && !Array.isArray(value);
     if (!object(candidate) || candidate.schemaVersion !== 1)
       throw new Error('schemaVersion 必須為 1');
+    candidate = { ...candidate };
+    if (!Object.hasOwn(candidate, 'hintDetection')) candidate.hintDetection = 'broad';
+    if (!['precise', 'broad', 'aggressive'].includes(candidate.hintDetection))
+      throw new Error('提示偵測須為 precise、broad 或 aggressive');
     if (
       !Number.isFinite(candidate.scrollStep) ||
       candidate.scrollStep < 8 ||
@@ -391,7 +426,7 @@
       if (
         typeof action.label !== 'string' ||
         !action.label.trim() ||
-        !['click', 'focus', 'scroll', 'copy'].includes(action.action) ||
+        !['click', 'focus', 'scroll', 'copy', 'hover'].includes(action.action) ||
         typeof action.selector !== 'string' ||
         !action.selector.trim()
       )
@@ -428,6 +463,11 @@
       )
         throw new Error('網站規則須使用 HTTP(S) origin 與 enabled');
       if (site.bindings) validateBindings(site.bindings);
+      if (
+        Object.hasOwn(site, 'hintDetection') &&
+        !['precise', 'broad', 'aggressive'].includes(site.hintDetection)
+      )
+        throw new Error('本站提示偵測須為 precise、broad 或 aggressive');
     }
     for (const origin of new Set([
       location.origin,
@@ -476,8 +516,30 @@
       await GM_setClipboard(value, 'text/plain');
     }
   }
+  async function copySelectedText(lines) {
+    const target = hover.getState().target;
+    const commandTime = state.lastCommandTime;
+    const copied = await textTools.copy(lines);
+    // Disconnect text observers before mouseleave can remove a preview's DOM.
+    if (
+      copied &&
+      state.mode === 'normal' &&
+      state.lastCommandTime === commandTime &&
+      hover.getState().target === target
+    )
+      hover.clear('copy');
+    return copied;
+  }
   async function copyAndNotify(value) {
+    const target = hover.getState().target;
+    const commandTime = state.lastCommandTime;
     await copyText(value);
+    if (
+      state.mode === 'normal' &&
+      state.lastCommandTime === commandTime &&
+      hover.getState().target === target
+    )
+      hover.clear('copy');
     notify('已複製 ' + value.length + ' 個字元', 'success');
   }
   function run(id, count = 1) {
@@ -499,6 +561,7 @@
     clearSequence();
     exitHints();
     textTools?.clear();
+    hover?.clear('disabled');
     state.mode = 'normal';
   }
   function toggleEnabled() {
@@ -646,37 +709,6 @@
     marker.style.top = rect.top + 'px';
     marker.style.height = Math.max(14, rect.height) + 'px';
   }
-  function hitTest(element) {
-    const rect = Array.from(element.getClientRects()).find(
-      (r) =>
-        r.width &&
-        r.height &&
-        r.bottom > 0 &&
-        r.top < innerHeight &&
-        r.right > 0 &&
-        r.left < innerWidth
-    );
-    if (!rect) return null;
-    const left = Math.max(0, rect.left),
-      right = Math.min(innerWidth - 1, rect.right);
-    const top = Math.max(0, rect.top),
-      bottom = Math.min(innerHeight - 1, rect.bottom);
-    const points = [
-      [(left + right) / 2, (top + bottom) / 2],
-      [left + 1, top + 1],
-      [right - 1, bottom - 1],
-    ];
-    for (const [x, y] of points) {
-      let hit = document.elementFromPoint(x, y);
-      while (hit?.shadowRoot?.elementFromPoint) {
-        const nested = hit.shadowRoot.elementFromPoint(x, y);
-        if (!nested || nested === hit) break;
-        hit = nested;
-      }
-      if (hit && (element === hit || element.contains(hit))) return rect;
-    }
-    return null;
-  }
   function cleanBlockText(element) {
     const target = element.matches('pre') ? element.querySelector('code') || element : element;
     const preserve = element.matches('pre,code');
@@ -708,48 +740,429 @@
           .replace(/\n{3,}/g, '\n\n')
           .trim();
   }
-  function hintCandidates(kind, action) {
-    let selector;
-    if (kind === 'custom') selector = action.selector;
-    else if (kind === 'open' || kind === 'url') selector = 'a[href],area[href]';
-    else if (kind === 'code') selector = 'pre,code';
-    else if (kind === 'block' || kind === 'caret')
-      selector = 'p,pre,h1,h2,h3,h4,h5,h6,li,blockquote,td,th';
-    else
-      selector =
-        'a[href],button,input:not([type="hidden"]),textarea,select,summary,[role="button"],[role="link"],[role="checkbox"],[role="tab"],[onclick],[tabindex]:not([tabindex="-1"])';
-    let candidates = queryAll(selector).filter(
-      (el) => isVisible(el, true) && !el.disabled && el.getAttribute('aria-disabled') !== 'true'
-    );
-    if (kind === 'caret') candidates = candidates.filter((el) => el.getRootNode() === document);
-    if (['block', 'code', 'caret'].includes(kind)) {
-      candidates = candidates.filter((el) => !isEditable(el) && el.textContent.trim());
-      candidates = candidates.filter(
-        (el) =>
-          !candidates.some(
-            (other) =>
-              other !== el &&
-              other.contains(el) &&
-              (other.matches('pre') || (el.matches('p,code') && other.matches('li,blockquote')))
-          )
-      );
-    }
-    if (kind === 'open') candidates = candidates.filter((el) => /^https?:/.test(el.href));
-    // Prefer the inner semantic control over its wrapper; do not duplicate labels.
-    if (kind === 'click')
-      candidates = candidates.filter(
-        (el) =>
-          !candidates.some(
-            (other) =>
-              el !== other &&
-              el.contains(other) &&
-              other.matches('a[href],button,input,select,textarea')
-          )
-      );
-    return candidates
-      .map((element) => ({ element, rect: hitTest(element) }))
-      .filter((candidate) => candidate.rect);
+  const NATIVE_HINTS =
+    'a[href],area[href],button,input:not([type="hidden"]),textarea,select,summary,[contenteditable="true"]';
+  const INTERACTIVE_ROLES = new Set([
+    'button',
+    'link',
+    'checkbox',
+    'radio',
+    'switch',
+    'tab',
+    'treeitem',
+    'option',
+    'menuitem',
+    'menuitemcheckbox',
+    'menuitemradio',
+    'combobox',
+    'textbox',
+    'searchbox',
+    'slider',
+    'spinbutton',
+    'gridcell',
+  ]);
+  function hintLevel() {
+    return siteConfig().hintDetection || config.hintDetection || 'broad';
   }
+  function roleOf(element) {
+    return (
+      (element.getAttribute('role') || '')
+        .toLowerCase()
+        .split(/\s+/)
+        .find((role) => INTERACTIVE_ROLES.has(role)) || ''
+    );
+  }
+  function linkURL(element) {
+    const raw =
+      typeof element.href === 'string'
+        ? element.href
+        : element.href?.baseVal || element.getAttribute('href');
+    if (!raw) return '';
+    try {
+      return new URL(raw, document.baseURI).href;
+    } catch {
+      return '';
+    }
+  }
+  function permalinkHeading(element) {
+    if (!element.matches('a[href]')) return null;
+    const url = linkURL(element);
+    if (!url) return null;
+    const parsed = new URL(url);
+    if (
+      !parsed.hash ||
+      parsed.origin !== location.origin ||
+      parsed.pathname !== location.pathname ||
+      parsed.search !== location.search
+    )
+      return null;
+    let fragment;
+    try {
+      fragment = decodeURIComponent(parsed.hash.slice(1));
+    } catch {
+      return null;
+    }
+    const destination =
+      document.getElementById(fragment) || document.getElementById('user-content-' + fragment);
+    const containing = element.closest('h1,h2,h3,h4,h5,h6');
+    const sibling = Array.from(element.parentElement?.children || []).find((node) =>
+      node.matches('h1,h2,h3,h4,h5,h6')
+    );
+    return (
+      [containing, destination, sibling].find(
+        (node) => node?.matches('h1,h2,h3,h4,h5,h6') && isVisible(node, true)
+      ) || null
+    );
+  }
+  // A zero-opacity permalink can be deliberately hidden until hover; invisible
+  // wrappers and text remain excluded. Do not weaken the shared text visibility.
+  function hintVisible(element) {
+    if (!element?.isConnected || element.nodeType !== 1 || isOwned(element)) return false;
+    const style = getComputedStyle(element);
+    if (
+      style.display === 'none' ||
+      style.visibility !== 'visible' ||
+      style.contentVisibility === 'hidden' ||
+      element.matches('[hidden],[inert],[aria-hidden="true"]')
+    )
+      return false;
+    if (Number(style.opacity) === 0 && !permalinkHeading(element)) return false;
+    for (let node = parentElement(element); node?.nodeType === 1; node = parentElement(node)) {
+      const inherited = getComputedStyle(node);
+      if (
+        inherited.display === 'none' ||
+        Number(inherited.opacity) === 0 ||
+        inherited.contentVisibility === 'hidden' ||
+        node.matches('[hidden],[inert],[aria-hidden="true"]')
+      )
+        return false;
+    }
+    return true;
+  }
+  function rectSources(element) {
+    const rects = Array.from(element.getClientRects()).filter((r) => r.width > 0 && r.height > 0);
+    if (rects.length || getComputedStyle(element).display !== 'contents') return rects;
+    // display:contents has no own box. Bound the fallback to its immediate
+    // rendered subtree; hit testing still requires an actual descendant.
+    const descendants = Array.from(element.querySelectorAll('*')).slice(0, 100);
+    return descendants
+      .filter(hintVisible)
+      .flatMap((node) =>
+        Array.from(node.getClientRects()).filter((r) => r.width > 0 && r.height > 0)
+      );
+  }
+  function clippedRect(rect, element) {
+    let left = Math.max(0, rect.left),
+      right = Math.min(innerWidth, rect.right);
+    let top = Math.max(0, rect.top),
+      bottom = Math.min(innerHeight, rect.bottom);
+    for (let node = parentElement(element); node?.nodeType === 1; node = parentElement(node)) {
+      const style = getComputedStyle(node);
+      if (style.display === 'contents') continue;
+      const bounds = node.getBoundingClientRect();
+      if (/(auto|scroll|hidden|clip|overlay)/.test(style.overflowX)) {
+        left = Math.max(left, bounds.left + node.clientLeft);
+        right = Math.min(right, bounds.left + node.clientLeft + node.clientWidth);
+      }
+      if (/(auto|scroll|hidden|clip|overlay)/.test(style.overflowY)) {
+        top = Math.max(top, bounds.top + node.clientTop);
+        bottom = Math.min(bottom, bounds.top + node.clientTop + node.clientHeight);
+      }
+    }
+    return right > left && bottom > top
+      ? { left, top, right, bottom, width: right - left, height: bottom - top }
+      : null;
+  }
+  function deepElementAt(x, y) {
+    let hit = document.elementFromPoint(x, y);
+    const seen = new Set();
+    while (hit?.shadowRoot?.elementFromPoint && !seen.has(hit)) {
+      seen.add(hit);
+      const nested = hit.shadowRoot.elementFromPoint(x, y);
+      if (!nested || nested === hit) break;
+      hit = nested;
+    }
+    return hit;
+  }
+  function containsComposed(owner, node) {
+    for (let current = node; current; current = parentElement(current)) {
+      if (current === owner) return true;
+    }
+    return false;
+  }
+  function hitTest(element, options = {}) {
+    const region = options.region || element;
+    if (!hintVisible(element) || !region?.isConnected) return null;
+    for (const rect of rectSources(region)) {
+      const clipped = clippedRect(rect, region);
+      if (!clipped) continue;
+      const { left, right, top, bottom } = clipped;
+      const dx = Math.min(1, (right - left) / 4),
+        dy = Math.min(1, (bottom - top) / 4);
+      const points = [
+        [(left + right) / 2, (top + bottom) / 2],
+        [left + dx, top + dy],
+        [right - dx, top + dy],
+        [left + dx, bottom - dy],
+        [right - dx, bottom - dy],
+      ];
+      for (const [x, y] of points) {
+        const hit = deepElementAt(x, y);
+        if (!hit || !containsComposed(region, hit)) continue;
+        if (
+          options.owner?.getAttribute('role') === 'treeitem' &&
+          hit.closest('[role="treeitem"]') !== options.owner
+        )
+          continue;
+        const independent = (options.exclusions || []).some(
+          (other) => other !== element && other !== region && containsComposed(other, hit)
+        );
+        if (independent) continue;
+        return { rect: clipped, point: { x, y }, hit };
+      }
+    }
+    return null;
+  }
+  function labelledRegion(owner) {
+    const root = owner.getRootNode();
+    for (const id of (owner.getAttribute('aria-labelledby') || '').split(/\s+/)) {
+      if (!id) continue;
+      const node = root.getElementById?.(id) || root.querySelector('#' + CSS.escape(id));
+      if (
+        node &&
+        owner.contains(node) &&
+        node.closest('[role="treeitem"]') === owner &&
+        hintVisible(node)
+      )
+        return node;
+    }
+    return (
+      Array.from(owner.children).find(
+        (node) =>
+          !node.matches('ul,ol,[role="group"],[role="treeitem"],button,input,select') &&
+          hintVisible(node)
+      ) || owner
+    );
+  }
+  function hasHandler(element, names) {
+    return names.some((name) => element.hasAttribute(name) || typeof element[name] === 'function');
+  }
+  function classifyHint(element, kind, level) {
+    if (element.matches('html,body,iframe,script,style,template') || isOwned(element)) return null;
+    if (
+      !rectSources(element).some(
+        (r) => r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth
+      )
+    )
+      return null;
+    if (!hintVisible(element)) return null;
+    const role = roleOf(element);
+    const native = element.matches(NATIVE_HINTS);
+    const control = element.matches('label') ? element.control : null;
+    const disabled =
+      element.matches(':disabled,[aria-disabled="true"]') ||
+      Boolean(element.closest('[aria-disabled="true"]')) ||
+      control?.matches(':disabled,[type="hidden"]');
+    const hoverOnly = kind === 'hover';
+    if (!hoverOnly && disabled) return null;
+    const clickHandler = hasHandler(element, ['onclick', 'onmousedown', 'onpointerdown']);
+    const hoverHandler = hasHandler(element, [
+      'onmouseover',
+      'onmouseenter',
+      'onpointerover',
+      'onpointerenter',
+    ]);
+    let score = native
+      ? 400
+      : role
+        ? 350
+        : control
+          ? 300
+          : element.hasAttribute('tabindex') && element.tabIndex >= 0
+            ? 280
+            : 0;
+    let reason = score ? 'semantic' : '';
+    if (hoverOnly && hoverHandler) {
+      score = Math.max(score, 320);
+      reason ||= 'hover-handler';
+    }
+    if (level !== 'precise') {
+      if (clickHandler) {
+        score = Math.max(score, 250);
+        reason ||= 'handler';
+      }
+      const cursor = getComputedStyle(element).cursor;
+      const parentCursor = parentElement(element)
+        ? getComputedStyle(parentElement(element)).cursor
+        : '';
+      if (cursor === 'pointer' && cursor !== parentCursor) {
+        score = Math.max(score, 200);
+        reason ||= 'pointer';
+      }
+      if (
+        hoverOnly &&
+        (element.hasAttribute('title') ||
+          element.hasAttribute('aria-describedby') ||
+          element.matches('[data-tooltip],[data-tooltip-content],[data-original-title]') ||
+          (cursor === 'help' && cursor !== parentCursor))
+      ) {
+        score = Math.max(score, 220);
+        reason ||= 'tooltip';
+      }
+    }
+    if (level === 'aggressive') {
+      const signals = [
+        element.hasAttribute('tabindex') && element.tabIndex < 0,
+        element.matches('[aria-selected],[aria-pressed],[aria-expanded],[aria-haspopup]'),
+        /(?:^|\s)(?:btn|button|clickable|tree-item|menu-item)(?:\s|$)/i.test(
+          element.getAttribute('class') || ''
+        ),
+      ].filter(Boolean).length;
+      if (signals >= 2) {
+        score = Math.max(score, 100);
+        reason ||= 'weak';
+      }
+    }
+    if (!score) return null;
+    if (
+      hoverOnly &&
+      disabled &&
+      !hoverHandler &&
+      !element.matches('[title],[aria-describedby],[data-tooltip]')
+    )
+      return null;
+    const region = role === 'treeitem' ? labelledRegion(element) : element;
+    const focusOnly =
+      element.matches(
+        'textarea,select,input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not([type="file"]),[contenteditable="true"]'
+      ) ||
+      ['textbox', 'searchbox', 'combobox', 'spinbutton', 'slider'].includes(role) ||
+      (!native && !role && !control && !clickHandler && reason === 'semantic');
+    return {
+      element,
+      region,
+      target: region,
+      identity: control || region,
+      operation: hoverOnly ? 'hover' : focusOnly ? 'focus' : 'click',
+      score,
+      reason,
+      url: element.matches('a[href],area[href]') ? linkURL(element) : '',
+    };
+  }
+  function hintCandidates(kind, action) {
+    let items;
+    if (kind === 'caret') {
+      items = textTools.caretTargets().map(({ element, point }) => ({
+        element,
+        target: element,
+        region: element,
+        identity: element,
+        caretPoint: point,
+        score: 400,
+      }));
+    } else if (kind === 'block' || kind === 'code') {
+      const selector = kind === 'code' ? 'pre,code' : 'p,pre,h1,h2,h3,h4,h5,h6,li,blockquote,td,th';
+      let elements = queryAll(selector).filter(
+        (element) => isVisible(element, true) && !isEditable(element) && element.textContent.trim()
+      );
+      elements = elements.filter(
+        (element) =>
+          !elements.some(
+            (other) =>
+              other !== element &&
+              other.contains(element) &&
+              (other.matches('pre') ||
+                (element.matches('p,code') && other.matches('li,blockquote')))
+          )
+      );
+      items = elements.map((element) => ({
+        element,
+        target: element,
+        region: element,
+        identity: element,
+        score: 400,
+      }));
+    } else if (kind === 'open' || kind === 'url') {
+      items = queryAll('a[href],area[href]')
+        .filter(
+          (element) =>
+            hintVisible(element) &&
+            !element.matches(':disabled,[aria-disabled="true"]') &&
+            !element.closest('[aria-disabled="true"]')
+        )
+        .map((element) => ({
+          element,
+          target: element,
+          region: element,
+          identity: element,
+          score: 400,
+          url: linkURL(element),
+        }))
+        .filter((item) => item.url && (kind !== 'open' || /^https?:/.test(item.url)));
+    } else if (kind === 'custom') {
+      items = queryAll(action.selector)
+        .filter(
+          (element) =>
+            hintVisible(element) &&
+            (action.action === 'hover' || !element.matches(':disabled,[aria-disabled="true"]'))
+        )
+        .map((element) => ({
+          element,
+          target: element,
+          region: element,
+          identity: element,
+          score: 400,
+          operation: action.action,
+        }));
+    } else {
+      const level = hintLevel();
+      items = queryAll('*')
+        .map((element) => classifyHint(element, kind, level))
+        .filter(Boolean);
+    }
+    // Every candidate must stand on its own reachable region before de-duplication.
+    const regions = items.filter((item) => item.score >= 300).map((item) => item.region);
+    items = items
+      .map((item) => {
+        const exclusions =
+          item.operation === 'click' && item.reason !== 'semantic'
+            ? regions.filter((region) => item.region.contains(region) && region !== item.region)
+            : [];
+        const hit = hitTest(item.element, { region: item.region, owner: item.element, exclusions });
+        return hit ? { ...item, exclusions, ...hit } : null;
+      })
+      .filter(Boolean);
+    const seen = new Map();
+    for (const item of items) {
+      const previous = seen.get(item.identity);
+      if (!previous || item.score > previous.score) seen.set(item.identity, item);
+    }
+    const unique = Array.from(seen.values());
+    return unique.filter(
+      (item) =>
+        !unique.some((other) => {
+          if (other === item || other.score <= item.score || !item.region.contains(other.region))
+            return false;
+          // The pointer row wrapper and its ARIA-labelled item perform the same
+          // primary action. Keep a sibling chevron/secondary handler independently.
+          if (
+            item.reason === 'pointer' &&
+            other.element.getAttribute('role') === 'treeitem' &&
+            item.element.closest('[role="treeitem"]') === other.element
+          )
+            return true;
+          const a = item.rect,
+            b = other.rect;
+          return (
+            Math.abs(a.left - b.left) < 2 &&
+            Math.abs(a.top - b.top) < 2 &&
+            Math.abs(a.right - b.right) < 2 &&
+            Math.abs(a.bottom - b.bottom) < 2
+          );
+        })
+    );
+  }
+
   function exitHints() {
     if (!state.hints) return;
     state.hints.observer?.disconnect();
@@ -762,22 +1175,31 @@
     const hintState = state.hints;
     if (!hintState) return;
     for (const hint of hintState.items) {
-      const rect = hitTest(hint.element);
-      if (!hint.element.isConnected || !rect) {
+      const hit = hitTest(hint.element, {
+        region: hint.region,
+        owner: hint.element,
+        exclusions: hint.exclusions,
+      });
+      if (!hint.element.isConnected || !hit) {
         exitHints();
         notify('提示目標已變更，請重新按提示鍵');
         return;
       }
-      hint.marker.style.left = Math.max(2, Math.min(innerWidth - 40, rect.left)) + 'px';
-      hint.marker.style.top = Math.max(2, rect.top) + 'px';
+      hint.rect = hit.rect;
+      hint.point = hit.point;
+      hint.marker.style.left = Math.max(2, Math.min(innerWidth - 40, hit.point.x)) + 'px';
+      hint.marker.style.top = Math.max(2, Math.min(innerHeight - 22, hit.point.y)) + 'px';
     }
   }
   function startHints(kind, action) {
     exitHints();
     textTools.exit();
     ensureOverlay();
+    // The compact Hints dock can uncover page targets hidden by the practice card.
+    setMode('hints');
     const candidates = hintCandidates(kind, action);
     if (!candidates.length) {
+      setMode('normal');
       notify('目前畫面沒有符合條件的目標');
       return;
     }
@@ -799,11 +1221,11 @@
       marker.textContent = label;
       marker.dataset.hint = label;
       marker.dataset.targetId = candidate.element.id;
+      marker.dataset.activationId = candidate.target.id;
       overlayRoot.append(marker);
       return { ...candidate, label, marker };
     });
     state.hints = { kind, action, items, input: '', controller };
-    setMode('hints');
     positionHints();
     const refresh = () => requestAnimationFrame(positionHints);
     document.addEventListener('scroll', refresh, {
@@ -826,56 +1248,80 @@
       attributeFilter: ['class', 'style', 'hidden', 'disabled', 'aria-disabled'],
     });
     state.hints.observer = observer;
-    notify('輸入字母選擇目標 · Esc 取消');
+    notify(
+      kind === 'hover'
+        ? '選擇模擬 Hover 目標 · 不點擊 · Esc 取消'
+        : kind === 'caret'
+          ? '選擇段首 → v 開始選取 → 移動 → y 複製'
+          : '輸入字母選擇目標 · Esc 取消'
+    );
   }
   async function activateHint(item, hintState) {
     const { element } = item;
-    if (!element.isConnected || !hitTest(element)) {
+    const target = item.target || element;
+    const hit = hitTest(element, {
+      region: item.region || target,
+      owner: element,
+      exclusions: item.exclusions,
+    });
+    if (!element.isConnected || !target.isConnected || !hit) {
       notify('目標已變更，請重新選擇');
       return;
     }
     const kind = hintState.kind;
-    if (kind === 'url') return copyAndNotify(element.href);
+    if (kind === 'url') return copyAndNotify(item.url || linkURL(element));
     if (kind === 'open') {
-      GM_openInTab(element.href, { active: false, insert: true });
+      GM_openInTab(item.url || linkURL(element), { active: false, insert: true });
+      hover.clear('open');
       return;
     }
     if (kind === 'block' || kind === 'code') return copyAndNotify(cleanBlockText(element));
     if (kind === 'caret') {
-      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
-        acceptNode: (node) =>
-          node.textContent.trim() &&
-          !isEditable(node.parentElement) &&
-          isVisible(node.parentElement)
-            ? NodeFilter.FILTER_ACCEPT
-            : NodeFilter.FILTER_REJECT,
-      });
-      const node = walker.nextNode();
-      if (!node) return notify('此區塊沒有可選取文字');
-      const selection = getSelection();
-      selection.setBaseAndExtent(node, 0, node, 0);
-      textTools.enter('caret');
+      textTools.enterAt(item.caretPoint, 'caret');
       return;
     }
-    const action = kind === 'custom' ? hintState.action.action : 'click';
+    const action =
+      kind === 'hover'
+        ? 'hover'
+        : kind === 'custom'
+          ? hintState.action.action
+          : item.operation || 'click';
+    if (action === 'hover') {
+      hover.enter(target, hit.point);
+      return;
+    }
     if (action === 'copy') return copyAndNotify(cleanBlockText(element));
     if (action === 'scroll') {
       element.scrollIntoView({ block: 'center' });
       return;
     }
-    if (action === 'focus' || element.matches('input,textarea,select,[contenteditable="true"]')) {
+    if (action === 'focus') {
       if (
-        !element.hasAttribute('tabindex') &&
-        !element.matches('input,textarea,select,button,a[href]') &&
-        !element.isContentEditable
+        !target.hasAttribute('tabindex') &&
+        !target.matches('input,textarea,select,button,a[href]') &&
+        !target.isContentEditable
       ) {
-        element.setAttribute('tabindex', '-1');
-        element.addEventListener('blur', () => element.removeAttribute('tabindex'), { once: true });
+        target.setAttribute('tabindex', '-1');
+        target.addEventListener('blur', () => target.removeAttribute('tabindex'), { once: true });
       }
-      element.focus();
+      target.focus();
       return;
     }
-    element.click();
+    if (typeof target.click === 'function') target.click();
+    else
+      target.dispatchEvent(
+        new MouseEvent('click', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          view: window,
+          clientX: hit.point.x,
+          clientY: hit.point.y,
+          button: 0,
+          buttons: 0,
+        })
+      );
+    hover.clear('click');
   }
   function handleHint(event) {
     if (event.repeat) {
@@ -901,8 +1347,11 @@
     if (exact) {
       exitHints();
       clearSequence();
+      // Validate/activate against the compact dock's geometry before Normal
+      // rendering can cover the chosen target again.
+      const activation = activateHint(exact, hints);
       render();
-      Promise.resolve(activateHint(exact, hints)).catch((error) => notify(error.message, 'error'));
+      Promise.resolve(activation).catch((error) => notify(error.message, 'error'));
     }
   }
 
@@ -935,7 +1384,31 @@
     event.preventDefault();
     event.stopImmediatePropagation();
   }
+  function protectUIKeys(event) {
+    const owned = event.composedPath().some((node) => isOwned(node));
+    const cycle = event.code || event.key;
+    const tracked = uiKeyCycles.has(cycle);
+    if (!owned && !tracked) return false;
+    if (event.type === 'keydown' && owned) uiKeyCycles.add(cycle);
+    if (event.type === 'keyup') uiKeyCycles.delete(cycle);
+    // Retargeting exposes our shadow input as a DIV to website shortcuts.
+    // Stop at window, but preserve native typing, editing and control defaults.
+    event.stopImmediatePropagation();
+    // A held Enter/Space must not activate a newly focused website control.
+    if (tracked && !owned) event.preventDefault();
+    if (event.type === 'keydown' && owned) {
+      const composing = state.composing || event.isComposing || event.keyCode === 229;
+      if (!composing && eventToken(event) === '<a-s-v>') {
+        event.preventDefault();
+        if (!event.repeat) toggleEnabled();
+      } else {
+        ui?.handleKeyDown(event);
+      }
+    }
+    return true;
+  }
   function onKey(event) {
+    if (protectUIKeys(event)) return;
     if (state.composing || event.isComposing || event.keyCode === 229) return;
     if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Dead', 'Process'].includes(event.key))
       return;
@@ -948,7 +1421,6 @@
     }
     if (!enabled()) return;
     const path = event.composedPath();
-    if (path.some((node) => isOwned(node))) return;
     if (state.mode === 'insert') {
       if (event.key === 'Escape') {
         consume(event);
@@ -986,6 +1458,11 @@
         consume(event);
         clearSequence();
         render();
+        return;
+      }
+      if (state.hoverActive) {
+        consume(event);
+        hover.clear('escape');
       }
       return;
     }
@@ -1049,6 +1526,17 @@
     setCaretRect,
     setFindUI: (value) => ui?.setFindUI(value),
   });
+  hover = createHoverController({
+    isOwned,
+    parentElement,
+    notify,
+    isReachable: (target) => Boolean(hintVisible(target) && hitTest(target)),
+    onChange: ({ active, label }) => {
+      state.hoverActive = active;
+      state.hoverLabel = label || '';
+      render();
+    },
+  });
   ui = createNavigationUI({
     getSnapshot: snapshot,
     toggleEnabled,
@@ -1069,9 +1557,13 @@
     if (startupError) {
       notify(startupError, 'error');
       startupError = '';
+    } else if (!Object.values(maps.normal).includes('hintsHover')) {
+      notify('Hover 目前未綁定；已保留既有客製鍵位，可在設定中為它指定按鍵。');
     }
   }
   window.addEventListener('keydown', onKey, true);
+  window.addEventListener('keypress', protectUIKeys, true);
+  window.addEventListener('keyup', protectUIKeys, true);
   window.addEventListener(
     'compositionstart',
     () => {
@@ -1091,6 +1583,7 @@
     true
   );
   window.addEventListener('blur', () => {
+    uiKeyCycles.clear();
     clearSequence();
     state.composing = false;
     exitHints();
@@ -1139,6 +1632,7 @@
     });
 
   // Native, read-only text navigation and literal find. This factory owns no global API.
+
   function createTextTools(api) {
     'use strict';
 
@@ -1278,6 +1772,47 @@
         if (fallback) return fallback;
       }
       return null;
+    }
+
+    function firstReadablePoint(element) {
+      if (!readable(element)) return null;
+      const walker = textWalker(element);
+      let node;
+      while ((node = walker.nextNode())) {
+        const offset = node.data.search(/\S/u);
+        if (offset < 0) continue;
+        const start = point(node, offset);
+        if (validPoint(start)) return start;
+      }
+      return null;
+    }
+
+    // A visible paragraph owns its true start, even when that start is above the
+    // viewport. Containers only substitute for missing finer reading blocks.
+    function caretTargets() {
+      if (destroyed) return [];
+      const fineSelector = 'p,h1,h2,h3,h4,h5,h6,pre';
+      const fallbackSelector = 'li,blockquote,td,th';
+      const starts = new WeakMap();
+      const hasFineBlock = new WeakSet();
+      const elements = [...document.querySelectorAll(`${fineSelector},${fallbackSelector}`)];
+      for (const element of elements) {
+        const start = firstReadablePoint(element);
+        if (!start) continue;
+        starts.set(element, start);
+        if (!element.matches(fineSelector)) continue;
+        for (let ancestor = element.parentElement; ancestor; ancestor = ancestor.parentElement) {
+          if (ancestor.matches(fallbackSelector)) hasFineBlock.add(ancestor);
+        }
+      }
+      return elements
+        .filter(
+          (element) =>
+            starts.has(element) &&
+            readable(element, true) &&
+            (element.matches(fineSelector) || !hasFineBlock.has(element))
+        )
+        .map((element) => ({ element, point: starts.get(element) }));
     }
 
     function selectionVisible(saved) {
@@ -1501,6 +2036,42 @@
       } catch {
         restore(previous);
         api.notify('無法在這段文字啟用選取。', 'warning');
+        return false;
+      }
+    }
+
+    // Explicit hint entry deliberately bypasses selectionVisible/seedPoint.
+    // A stale hint must never relocate the user to unrelated text.
+    function enterAt(start, kind = 'caret') {
+      if (destroyed || !TEXT_MODES.has(kind)) return false;
+      if (!validPoint(start)) {
+        exit();
+        api.notify('這個文字起點已失效，請重新選擇。', 'warning');
+        return false;
+      }
+      if (!nativeAvailable()) return false;
+      const previous = snapshot();
+      try {
+        if (!applyPoints(start)) throw new Error('stale text point');
+        if (kind === 'visual') {
+          selection().modify('extend', 'forward', 'character');
+          if (selection().isCollapsed) selection().modify('extend', 'backward', 'character');
+        } else if (kind === 'line') {
+          lineAnchor = point(start.node, start.offset);
+          lineFocus = point(start.node, start.offset);
+          lineForward = true;
+          if (!renderLine()) throw new Error('unavailable line');
+        }
+        if (!selectionWithinReadingText()) throw new Error('outside reading text');
+        api.setMode(kind);
+        lastTextSelection = snapshot();
+        watchText();
+        scrollToFocus();
+        return true;
+      } catch {
+        restore(previous);
+        exit();
+        api.notify('這個文字起點無法使用，請重新選擇。', 'warning');
         return false;
       }
     }
@@ -1986,6 +2557,8 @@
 
     return {
       enter,
+      enterAt,
+      caretTargets,
       move,
       reverse,
       copy,
@@ -1998,6 +2571,324 @@
       clear,
       destroy,
     };
+  }
+
+  // Synthetic hover is independent of keyboard mode. It never clicks, focuses,
+  // moves the physical pointer, or establishes the browser's CSS :hover state.
+  function createHoverController(api) {
+    let current = null;
+    let destroyed = false;
+    let checkFrame = 0;
+    let listening = false;
+
+    const observer = new MutationObserver((records) => {
+      if (current && records.some((record) => !api.isOwned(record.target))) scheduleCheck();
+    });
+
+    function ancestorPath(target) {
+      const result = [];
+      const seen = new Set();
+      for (
+        let element = target;
+        element?.nodeType === Node.ELEMENT_NODE;
+        element = api.parentElement(element)
+      ) {
+        if (seen.has(element)) break;
+        seen.add(element);
+        result.unshift(element);
+      }
+      return result;
+    }
+
+    function within(element, target) {
+      if (!element || !target) return false;
+      return ancestorPath(element).includes(target);
+    }
+
+    function usable(target) {
+      if (
+        !target ||
+        target.nodeType !== Node.ELEMENT_NODE ||
+        !target.isConnected ||
+        target.ownerDocument !== document ||
+        api.isOwned(target)
+      )
+        return false;
+      try {
+        return Boolean(api.isReachable(target));
+      } catch {
+        return false;
+      }
+    }
+
+    function describe(target) {
+      const root = target.getRootNode();
+      const named = (target.getAttribute('aria-labelledby') || '')
+        .trim()
+        .split(/\s+/u)
+        .filter(Boolean)
+        .map((id) => root.getElementById?.(id)?.textContent || '')
+        .join(' ')
+        .trim();
+      const value =
+        named ||
+        target.getAttribute('aria-label') ||
+        target.getAttribute('title') ||
+        target.getAttribute('alt') ||
+        target.textContent ||
+        target.getAttribute('role') ||
+        target.localName;
+      return value.replace(/\s+/gu, ' ').trim().slice(0, 100);
+    }
+
+    function coordinates(target, supplied) {
+      const x = supplied?.x ?? supplied?.clientX;
+      const y = supplied?.y ?? supplied?.clientY;
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        return {
+          x: Math.max(0, Math.min(innerWidth - 1, x)),
+          y: Math.max(0, Math.min(innerHeight - 1, y)),
+        };
+      }
+      for (const rect of target.getClientRects()) {
+        const left = Math.max(0, rect.left);
+        const right = Math.min(innerWidth, rect.right);
+        const top = Math.max(0, rect.top);
+        const bottom = Math.min(innerHeight, rect.bottom);
+        if (right > left && bottom > top) return { x: (left + right) / 2, y: (top + bottom) / 2 };
+      }
+      return null;
+    }
+
+    function send(element, type, position, relatedTarget = null) {
+      if (!element?.isConnected || api.isOwned(element)) return false;
+      const view = element.ownerDocument.defaultView || window;
+      const pointer = type.startsWith('pointer');
+      const enterLeave = type.endsWith('enter') || type.endsWith('leave');
+      const Constructor = pointer ? view.PointerEvent : view.MouseEvent;
+      if (typeof Constructor !== 'function') return true;
+      const options = {
+        bubbles: !enterLeave,
+        cancelable: !enterLeave,
+        composed: !enterLeave,
+        view,
+        detail: 0,
+        clientX: position.x,
+        clientY: position.y,
+        button: pointer ? -1 : 0,
+        buttons: 0,
+        relatedTarget,
+      };
+      if (pointer)
+        Object.assign(options, {
+          pointerId: 1,
+          pointerType: 'mouse',
+          isPrimary: true,
+          width: 1,
+          height: 1,
+          pressure: 0,
+        });
+      element.dispatchEvent(new Constructor(type, options));
+      return true;
+    }
+
+    function publish() {
+      api.onChange({ active: Boolean(current), label: current?.label || '' });
+    }
+
+    function stopWatching() {
+      observer.disconnect();
+      if (checkFrame) cancelAnimationFrame(checkFrame);
+      checkFrame = 0;
+      if (!listening) return;
+      window.removeEventListener('pointermove', physicalMove, true);
+      window.removeEventListener('mousemove', physicalMove, true);
+      window.removeEventListener('scroll', scheduleCheck, true);
+      window.removeEventListener('resize', scheduleCheck);
+      window.removeEventListener('pagehide', pageHide);
+      listening = false;
+    }
+
+    function watch() {
+      stopWatching();
+      if (!current) return;
+      const roots = new Set([document.documentElement]);
+      for (const element of current.path) {
+        const root = element.getRootNode();
+        if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) roots.add(root);
+      }
+      for (const root of roots) {
+        if (root)
+          observer.observe(root, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'style', 'hidden', 'inert', 'aria-hidden', 'disabled'],
+          });
+      }
+      window.addEventListener('pointermove', physicalMove, { capture: true, passive: true });
+      window.addEventListener('mousemove', physicalMove, { capture: true, passive: true });
+      window.addEventListener('scroll', scheduleCheck, { capture: true, passive: true });
+      window.addEventListener('resize', scheduleCheck, { passive: true });
+      window.addEventListener('pagehide', pageHide);
+      listening = true;
+    }
+
+    // Keep common ancestors entered when moving between descendants. Out events
+    // still bubble from the old leaf with the new leaf as relatedTarget.
+    function leave(session, relatedTarget = null, retained = new Set()) {
+      if (!session) return;
+      if (session.pointerOver) send(session.target, 'pointerout', session.point, relatedTarget);
+      for (const element of [...session.pointerEntered].reverse()) {
+        if (!retained.has(element)) send(element, 'pointerleave', session.point, relatedTarget);
+      }
+      if (session.mouseOver) send(session.target, 'mouseout', session.point, relatedTarget);
+      for (const element of [...session.mouseEntered].reverse()) {
+        if (!retained.has(element)) send(element, 'mouseleave', session.point, relatedTarget);
+      }
+    }
+
+    function clear(reason = 'manual', relatedTarget = null, bookkeepingOnly = false) {
+      const previous = current;
+      current = null;
+      stopWatching();
+      if (!previous) return false;
+      if (!bookkeepingOnly) leave(previous, relatedTarget);
+      publish();
+      if (reason === 'invalid') api.notify('懸停目標已變更，請重新選擇。', 'info');
+      return true;
+    }
+
+    function validateCurrent() {
+      checkFrame = 0;
+      if (current && !usable(current.target)) clear('invalid');
+    }
+
+    function scheduleCheck() {
+      if (current && !checkFrame && !destroyed) checkFrame = requestAnimationFrame(validateCurrent);
+    }
+
+    function physicalMove(event) {
+      if (!current || !event.isTrusted) return;
+      const target =
+        event.composedPath?.().find((node) => node?.nodeType === Node.ELEMENT_NODE) || event.target;
+      // Browser-generated enter events have already established real hover here;
+      // sending a synthetic leave would immediately undo the website's state.
+      clear('pointer', target, within(target, current.target));
+    }
+
+    function pageHide() {
+      clear('navigation');
+    }
+
+    function enter(target, suppliedPoint) {
+      if (destroyed) return false;
+      const position = usable(target) && coordinates(target, suppliedPoint);
+      if (!position) {
+        if (current?.target === target) clear('invalid');
+        else api.notify('目前無法懸停這個目標，請重新選擇。', 'warning');
+        return false;
+      }
+      if (current?.target === target) {
+        current.point = position;
+        send(target, 'pointermove', position);
+        send(target, 'mousemove', position);
+        scheduleCheck();
+        return true;
+      }
+
+      const previous = current;
+      const path = ancestorPath(target);
+      const retained = new Set(previous?.path.filter((element) => path.includes(element)) || []);
+      stopWatching();
+      // A transition temporarily has no published owner, preventing stale checks.
+      current = null;
+      leave(previous, target, retained);
+      if (!usable(target)) {
+        leave(
+          previous && {
+            ...previous,
+            pointerOver: false,
+            mouseOver: false,
+            pointerEntered: previous.pointerEntered.filter((element) => retained.has(element)),
+            mouseEntered: previous.mouseEntered.filter((element) => retained.has(element)),
+          }
+        );
+        if (previous) publish();
+        api.notify('懸停目標已變更，請重新選擇。', 'warning');
+        return false;
+      }
+      const session = {
+        target,
+        point: position,
+        path,
+        label: describe(target),
+        pointerOver: false,
+        mouseOver: false,
+        pointerEntered: path.filter(
+          (element) => retained.has(element) && previous?.pointerEntered.includes(element)
+        ),
+        mouseEntered: path.filter(
+          (element) => retained.has(element) && previous?.mouseEntered.includes(element)
+        ),
+      };
+      current = session;
+      try {
+        session.pointerOver = true;
+        send(target, 'pointerover', position, previous?.target || null);
+        for (const element of path) {
+          if (!target.isConnected) break;
+          if (session.pointerEntered.includes(element)) continue;
+          session.pointerEntered.push(element);
+          send(element, 'pointerenter', position, previous?.target || null);
+        }
+        if (!target.isConnected) {
+          clear('invalid');
+          return false;
+        }
+        session.mouseOver = true;
+        send(target, 'mouseover', position, previous?.target || null);
+        for (const element of path) {
+          if (!target.isConnected) break;
+          if (session.mouseEntered.includes(element)) continue;
+          session.mouseEntered.push(element);
+          send(element, 'mouseenter', position, previous?.target || null);
+        }
+        if (!target.isConnected) {
+          clear('invalid');
+          return false;
+        }
+        send(target, 'pointermove', position);
+        send(target, 'mousemove', position);
+        if (!target.isConnected) {
+          clear('invalid');
+          return false;
+        }
+        watch();
+        publish();
+        api.notify(`懸停：${session.label} · Esc 結束`, 'info');
+        return true;
+      } catch {
+        clear('error');
+        api.notify('無法模擬這個目標的懸停。', 'warning');
+        return false;
+      }
+    }
+
+    function getState() {
+      return {
+        active: Boolean(current),
+        label: current?.label || '',
+        target: current?.target || null,
+      };
+    }
+
+    function destroy() {
+      clear('destroy');
+      destroyed = true;
+    }
+
+    return { enter, clear, getState, destroy };
   }
 
   function createNavigationUI(api) {
@@ -2087,6 +2978,10 @@
       .footer .toggle { color:var(--accent); margin-right:auto; }
       .status { padding:0 14px 9px; font-size:11px; color:var(--muted); overflow-wrap:anywhere; }
       .status[data-kind="error"] { color:var(--danger); }
+      .practice-flow { display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin:0 14px 9px; padding-top:8px; border-top:1px solid var(--border); color:var(--muted); font-size:10px; }
+      .practice-flow kbd { font-size:10px; }
+      .hover-status { margin:0 14px 9px; padding:8px; border:1px solid var(--border); border-radius:8px; color:var(--muted); background:var(--paper); font-size:10px; }
+      .hover-status strong { display:block; color:var(--accent); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
       .panel { width:min(680px,calc(100vw - 32px)); max-height:calc(100vh - 40px); left:336px; bottom:18px; display:flex; flex-direction:column; overflow:hidden; }
       .panel-header { display:flex; align-items:center; gap:8px; padding:16px 18px 12px; border-bottom:1px solid var(--border); }
       .panel-title { flex:1; } .panel-title h2 { font-size:18px; line-height:1.5; } .panel-title p { color:var(--muted); font-size:11px; margin:2px 0 0; }
@@ -2309,12 +3204,6 @@
       );
       shadow.append(el('style', { text: styleText }));
       refs.card = el('aside', { class: 'surface card', 'aria-label': 'Vim Navigation 練習小抄' });
-      refs.card.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && !uiComposing && !event.isComposing && event.keyCode !== 229) {
-          event.preventDefault();
-          blurPanel(refs.card);
-        }
-      });
       const dragHandle = el(
         'div',
         {
@@ -2325,7 +3214,7 @@
         },
         [
           el('div', { class: 'eyebrow', text: 'YOUR KEYBOARD COMPANION' }),
-          el('div', { class: 'brand' }, ['Vim Navigation', el('small', { text: '01' })]),
+          el('div', { class: 'brand' }, ['Vim Navigation', el('small', { text: '02' })]),
         ]
       );
       dragHandle.addEventListener('pointerdown', (event) => {
@@ -2360,24 +3249,7 @@
       };
       dragHandle.addEventListener('pointerup', finishDrag);
       dragHandle.addEventListener('pointercancel', finishDrag);
-      dragHandle.addEventListener('keydown', (event) => {
-        const offsets = {
-          ArrowLeft: [-1, 0],
-          ArrowRight: [1, 0],
-          ArrowUp: [0, -1],
-          ArrowDown: [0, 1],
-        };
-        if (!offsets[event.key]) return;
-        event.preventDefault();
-        const rect = refs.card.getBoundingClientRect();
-        const [dx, dy] = offsets[event.key];
-        const step = event.shiftKey ? 30 : 10;
-        localPosition = clampPosition({ x: rect.left + dx * step, y: rect.top + dy * step });
-        positionCard();
-        const position = localPosition;
-        localPosition = null;
-        api.saveUI({ position });
-      });
+      refs.dragHandle = dragHandle;
       refs.collapse = button('−', () => api.saveUI({ collapsed: !current().config.ui.collapsed }), {
         class: 'icon',
         'aria-label': '收合小抄',
@@ -2390,7 +3262,20 @@
       refs.prefix = el('div', { class: 'prefix', hidden: '' });
       refs.commands = el('div', { class: 'commands' });
       refs.status = el('div', { class: 'status', role: 'status', 'aria-live': 'polite' });
-      refs.cardBody.append(refs.prefix, refs.commands, refs.status);
+      refs.practiceFlow = el('div', { class: 'practice-flow', 'aria-label': '文字選取練習流程' });
+      refs.hoverStatus = el('div', {
+        class: 'hover-status',
+        role: 'status',
+        'aria-live': 'polite',
+        hidden: '',
+      });
+      refs.cardBody.append(
+        refs.prefix,
+        refs.commands,
+        refs.practiceFlow,
+        refs.hoverStatus,
+        refs.status
+      );
       refs.card.append(refs.cardBody);
       refs.toggle = button('', () => api.toggleEnabled(), { class: 'toggle' });
       refs.site = button('本站', () => api.toggleSite(), { title: '切換本站預設啟用狀態' });
@@ -2416,8 +3301,12 @@
       const activeMode = mode();
       refs.card.dataset.mode = activeMode;
       host.dataset.mode = activeMode;
+      host.dataset.hoverActive = String(Boolean(snapshot.hoverActive));
       refs.badge.textContent = modeNames[activeMode] || activeMode.toUpperCase();
-      refs.description.textContent = modeDescriptions[activeMode] || 'Esc 返回';
+      refs.description.textContent =
+        activeMode === 'normal' && snapshot.hoverActive
+          ? 'Hover 保持中 · Esc 清除'
+          : modeDescriptions[activeMode] || 'Esc 返回';
       const collapsed = Boolean(snapshot.config.ui.collapsed);
       refs.cardBody.hidden = collapsed;
       refs.collapse.textContent = collapsed ? '+' : '−';
@@ -2440,6 +3329,14 @@
           keyCap(snapshot.prefix)
         );
       renderContext();
+      renderPracticeFlow();
+      refs.hoverStatus.hidden = !snapshot.hoverActive;
+      refs.hoverStatus.replaceChildren();
+      if (snapshot.hoverActive)
+        refs.hoverStatus.append(
+          el('strong', { text: `模擬 hover · ${snapshot.hoverLabel || '目前目標'}` }),
+          el('span', { text: 'Esc 清除 · 純 CSS :hover 或需要真實滑鼠事件的元件可能沒有反應。' })
+        );
       if (snapshot.lastCommandTime && snapshot.lastCommandTime !== recentStamp) {
         recentStamp = snapshot.lastCommandTime;
         clearTimeout(recentTimer);
@@ -2452,6 +3349,31 @@
       }
       if (helpOpen) renderHelpRows();
       positionCard();
+    }
+    function renderPracticeFlow() {
+      refs.practiceFlow.hidden =
+        !snapshot.enabled || snapshot.mode !== 'normal' || Boolean(snapshot.prefix);
+      refs.practiceFlow.replaceChildren();
+      if (refs.practiceFlow.hidden) return;
+      const flowKey = (id, commandMode, fallback) => {
+        const command = snapshot.commands.find((item) => item.id === id);
+        const keys =
+          command?.keysByMode?.[commandMode] ||
+          (isApplicable(command || {}, snapshot.mode) ? command?.keys : []);
+        return keys?.length
+          ? keyCap(keys[0])
+          : el('span', { text: fallback, title: '此步驟尚未綁定按鍵' });
+      };
+      refs.practiceFlow.append(
+        el('span', { text: '文字練習' }),
+        flowKey('hintsCaret', 'normal', '選點'),
+        '→',
+        flowKey('enterVisual', 'caret', '選取'),
+        '→',
+        el('span', { text: '移動' }),
+        '→',
+        flowKey('yank', 'visual', '複製')
+      );
     }
     function renderContext() {
       refs.commands.replaceChildren();
@@ -2472,12 +3394,13 @@
       let chosen = commands;
       if (sequence)
         chosen = commands.filter((command) => command.keys.some((key) => key.startsWith(sequence)));
-      if (!sequence && chosen.length > 8) {
+      const rowLimit = activeMode === 'normal' && !sequence ? 7 : 8;
+      if (!sequence && chosen.length > rowLimit) {
         // Prefer a balanced practice set using the registry's original keys;
         // remapping a command keeps it in the same place on the cheat sheet.
         const practiceKeys =
           activeMode === 'normal'
-            ? ['j', 'd', 'f', 'v', 'yb', 'yc', 'i', '?']
+            ? ['j', 'f', 'zv', 'zh', 'yb', 'yc', 'i']
             : ['h', 'j', 'w', 'b', 'v', 'o', 'y', 'Y'];
         const rank = (command) => {
           const defaults = Array.isArray(command.defaultKeys) ? command.defaultKeys : [];
@@ -2486,7 +3409,7 @@
         };
         chosen = [...chosen].sort((a, b) => rank(a) - rank(b));
       }
-      chosen.slice(0, 8).forEach((command) => {
+      chosen.slice(0, rowLimit).forEach((command) => {
         const keys = command.keys.filter((key) => !sequence || key.startsWith(sequence));
         const recent =
           snapshot.lastCommand === command.id &&
@@ -2556,29 +3479,9 @@
         helpQuery = refs.helpSearch.value;
         renderHelpRows();
       });
-      refs.helpSearch.addEventListener('keydown', (event) => {
-        if (uiComposing || event.isComposing || event.keyCode === 229 || event.key !== 'Escape')
-          return;
-        event.preventDefault();
-        refs.helpSearch.blur();
-        if (!helpPinned) closeHelp();
-      });
       refs.helpRows = el('div');
       body.append(refs.helpSearch, refs.helpRows);
       refs.help.append(body);
-      refs.help.addEventListener('keydown', (event) => {
-        if (
-          event.key !== 'Escape' ||
-          uiComposing ||
-          event.isComposing ||
-          event.keyCode === 229 ||
-          event.defaultPrevented
-        )
-          return;
-        event.preventDefault();
-        blurPanel(refs.help);
-        if (!helpPinned) closeHelp();
-      });
       shadow.append(refs.help);
     }
     function renderHelpRows() {
@@ -2691,6 +3594,16 @@
         spellcheck: 'false',
         'aria-label': '提示字母',
       });
+      const detectionOptions = [
+        ['precise', '精準'],
+        ['broad', '廣泛（預設）'],
+        ['aggressive', '積極'],
+      ];
+      const globalDetection = selectOptions(detectionOptions, config.hintDetection || 'broad');
+      const siteDetection = selectOptions(
+        [['', '沿用全域'], ...detectionOptions],
+        config.sites?.[snapshot.origin]?.hintDetection || ''
+      );
       const siteEnabled = el('input', { type: 'checkbox', 'aria-label': '本站預設啟用' });
       siteEnabled.checked = snapshot.siteEnabled !== false;
       common.append(
@@ -2698,6 +3611,8 @@
           labelField('外觀', theme),
           labelField('單步捲動（px）', step),
           labelField('提示字母（不可重複）', chars),
+          labelField('全域提示偵測', globalDetection),
+          labelField('本站提示偵測', siteDetection),
           el('label', { class: 'field' }, [
             el('span', { text: '本站預設' }),
             el('span', {}, [siteEnabled, ' 啟用 Vim Navigation']),
@@ -2713,11 +3628,15 @@
               next.theme = theme.value;
               next.scrollStep = Number(step.value);
               next.hintChars = chars.value;
+              next.hintDetection = globalDetection.value;
               next.sites ||= {};
               next.sites[snapshot.origin] = {
                 ...next.sites[snapshot.origin],
                 enabled: siteEnabled.checked,
               };
+              if (siteDetection.value)
+                next.sites[snapshot.origin].hintDetection = siteDetection.value;
+              else delete next.sites[snapshot.origin].hintDetection;
               save(next, '偏好已儲存。本站預設在重新載入後生效，本頁也可用切換鈕調整。');
             },
             { class: 'primary' }
@@ -2736,7 +3655,7 @@
       common.append(
         el('p', {
           class: 'muted',
-          text: 'Alt+Shift+V 切換本頁；i 暫時放行網站快捷鍵，Esc 返回。瀏覽器保留的快捷鍵可能無法覆寫。',
+          text: '精準較少雜訊；廣泛涵蓋常見自訂控制項；積極會增加提示，也較可能包含無效目標。Alt+Shift+V 切換本頁；i 暫時放行網站快捷鍵，Esc 返回。瀏覽器保留的快捷鍵可能無法覆寫。',
         })
       );
       body.append(common);
@@ -2805,12 +3724,6 @@
       );
       body.append(jsonSection);
       refs.settings.append(body);
-      refs.settings.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && !uiComposing && !event.isComposing && event.keyCode !== 229) {
-          event.preventDefault();
-          closeSettings();
-        }
-      });
       shadow.append(refs.settings);
     }
     function buildBindingsSection(body) {
@@ -2952,9 +3865,20 @@
           ['focus', '聚焦'],
           ['scroll', '捲入視野'],
           ['copy', '複製文字'],
+          ['hover', '模擬 hover'],
         ],
         'click'
       );
+      const hoverNote = el('p', {
+        class: 'muted',
+        id: 'vim-navigation-hover-note',
+        hidden: '',
+        text: '模擬 hover 會送出網頁事件；純 CSS :hover 或需要真實滑鼠事件的元件可能沒有反應。Esc 可清除目前狀態。',
+      });
+      action.setAttribute('aria-describedby', 'vim-navigation-hover-note');
+      action.addEventListener('change', () => {
+        hoverNote.hidden = action.value !== 'hover';
+      });
       const selector = el('input', {
         type: 'text',
         placeholder: '例如 main pre',
@@ -2975,6 +3899,7 @@
           labelField('作用範圍', origin),
         ])
       );
+      section.append(hoverNote);
       section.append(
         el(
           'div',
@@ -3073,22 +3998,9 @@
       refs.findInput.addEventListener('input', (event) => {
         if (!findComposing && !event.isComposing) api.findInput(refs.findInput.value);
       });
-      refs.findInput.addEventListener('keydown', (event) => {
-        if (uiComposing || event.isComposing || findComposing || event.keyCode === 229) return;
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          event.stopPropagation();
-          api.findCancel();
-        }
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          event.stopPropagation();
-          api.findCommit();
-        }
-      });
       refs.find.addEventListener('submit', (event) => {
         event.preventDefault();
-        if (!findComposing) api.findCommit();
+        if (!uiComposing && !findComposing) api.findCommit();
       });
       refs.find.append(
         el('span', { class: 'find-label', 'aria-hidden': 'true', text: '/' }),
@@ -3122,6 +4034,68 @@
       }
       findOpen = Boolean(visible);
     }
+    // Core calls this directly before the protected keyboard event can reach
+    // the website. Native input, button, select and Tab behavior stays uncancelled.
+    function handleKeyDown(event) {
+      if (!host || uiComposing || findComposing || event.isComposing || event.keyCode === 229)
+        return false;
+      const target = event.composedPath?.()[0] || shadow.activeElement;
+      if (!target || target.getRootNode?.() !== shadow) return false;
+      if (findOpen && refs.find.contains(target)) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          if (!event.repeat) api.findCancel();
+          return true;
+        }
+        if (target === refs.findInput && event.key === 'Enter') {
+          event.preventDefault();
+          if (!event.repeat) api.findCommit();
+          return true;
+        }
+      }
+      if (event.key === 'Escape') {
+        if (settingsOpen && refs.settings.contains(target)) {
+          event.preventDefault();
+          closeSettings();
+          return true;
+        }
+        if (helpOpen && refs.help.contains(target)) {
+          event.preventDefault();
+          blurPanel(refs.help);
+          if (!helpPinned) closeHelp();
+          return true;
+        }
+        if (refs.card.contains(target)) {
+          event.preventDefault();
+          blurPanel(refs.card);
+          return true;
+        }
+      }
+      if (target === refs.dragHandle && !event.altKey && !event.ctrlKey && !event.metaKey) {
+        const offsets = {
+          ArrowLeft: [-1, 0],
+          ArrowRight: [1, 0],
+          ArrowUp: [0, -1],
+          ArrowDown: [0, 1],
+        };
+        const offset = offsets[event.key];
+        if (offset) {
+          event.preventDefault();
+          const rect = refs.card.getBoundingClientRect();
+          const step = event.shiftKey ? 30 : 10;
+          localPosition = clampPosition({
+            x: rect.left + offset[0] * step,
+            y: rect.top + offset[1] * step,
+          });
+          positionCard();
+          const position = localPosition;
+          localPosition = null;
+          api.saveUI({ position });
+          return true;
+        }
+      }
+      return false;
+    }
     function closeTopPanel() {
       if (settingsOpen) {
         closeSettings();
@@ -3148,6 +4122,7 @@
       toggleHelp,
       openSettings,
       closeTopPanel,
+      handleKeyDown,
       setFindUI,
       destroy,
     };

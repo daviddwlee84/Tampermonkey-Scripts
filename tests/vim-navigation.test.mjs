@@ -11,7 +11,14 @@ const SCRIPT = await readFile(
   join(ROOT, 'userscripts/vim-navigation/vim-navigation.user.js'),
   'utf8'
 );
-const FIXTURE = await readFile(join(ROOT, 'tests/fixtures/vim-navigation/article.html'), 'utf8');
+const FIXTURES = Object.fromEntries(
+  await Promise.all(
+    ['article', 'interaction'].map(async (name) => [
+      name,
+      await readFile(join(ROOT, `tests/fixtures/vim-navigation/${name}.html`), 'utf8'),
+    ])
+  )
+);
 const ORIGIN = 'https://navigation.test';
 const PAGE_URL = `${ORIGIN}/practice?source=test`;
 const UI = '#vim-navigation-ui';
@@ -23,6 +30,7 @@ function config(overrides = {}) {
     schemaVersion: 1,
     scrollStep: 64,
     hintChars: 'asdfghjkl',
+    hintDetection: 'broad',
     theme: 'system',
     bindings: { normal: {}, caret: {}, visual: {}, line: {} },
     sites: {},
@@ -103,27 +111,41 @@ for (const engine of (process.env.VN_BROWSERS || 'chromium,firefox').split(','))
       assert.deepEqual(captured, [], 'No uncaught page errors');
     });
 
-    async function open({ settings, colorScheme = 'light', width = 1280 } = {}) {
+    async function open({
+      settings,
+      colorScheme = 'light',
+      width = 1280,
+      fixture = 'article',
+      legacy = false,
+    } = {}) {
       const context = await browser.newContext({
         viewport: { width, height: 1000 },
         colorScheme,
         reducedMotion: 'reduce',
       });
       contexts.push(context);
-      const storage = settings ? { vimNavigationConfig: config(settings) } : {};
+      const initial =
+        fixture === 'interaction'
+          ? { ui: { collapsed: true, position: null }, ...settings }
+          : settings;
+      const storage = initial ? { vimNavigationConfig: config(initial) } : {};
+      if (legacy && storage.vimNavigationConfig) delete storage.vimNavigationConfig.hintDetection;
       // 一個 init script 保證 shim 先於 userscript；在 document-start 注入。
       await context.addInitScript({
         content: `(${gmShim.toString()})(${JSON.stringify(storage)});\n${SCRIPT}`,
       });
       await context.route('**/*', (route) =>
-        route.fulfill({ contentType: 'text/html', body: FIXTURE })
+        route.fulfill({ contentType: 'text/html', body: FIXTURES[fixture] })
       );
       const page = await context.newPage();
       page.on('pageerror', (error) => errors.push(error.message));
       await page.goto(PAGE_URL);
       await page.locator(UI).waitFor({ state: 'attached' });
+      if (fixture === 'interaction') await page.waitForFunction(() => window.__layoutReady);
       return page;
     }
+
+    const openInteraction = (options = {}) => open({ fixture: 'interaction', ...options });
 
     async function mode(page, expected) {
       await page.waitForFunction(
@@ -576,6 +598,11 @@ for (const engine of (process.env.VN_BROWSERS || 'chromium,firefox').split(','))
       const invalid = [
         '{broken json',
         JSON.stringify({ ...baseline, schemaVersion: 999 }),
+        JSON.stringify({ ...baseline, hintDetection: 'unknown' }),
+        JSON.stringify({
+          ...baseline,
+          sites: { [ORIGIN]: { enabled: true, hintDetection: 'unknown' } },
+        }),
         JSON.stringify({
           ...baseline,
           bindings: { ...baseline.bindings, normal: { g: 'scrollDown' } },
@@ -633,6 +660,505 @@ for (const engine of (process.env.VN_BROWSERS || 'chromium,firefox').split(','))
       const restored = await page.locator(`${UI} .card`).boundingBox();
       assert.ok(Math.abs(dragged.x - restored.x) < 2);
       assert.ok(Math.abs(dragged.y - restored.y) < 2);
+    });
+
+    it('hints all 17 roving ARIA tree rows and preserves their secondary action', async () => {
+      const page = await openInteraction({
+        settings: { hintDetection: 'broad', ui: { collapsed: false, position: null } },
+      });
+      const beforeDock = await page.locator(`${UI} .card`).boundingBox();
+      const finalRow = await page.locator('#tree-row-16').boundingBox();
+      assert.ok(
+        beforeDock.y < finalRow.y && beforeDock.x + beforeDock.width >= finalRow.x + finalRow.width,
+        'Normal dock covers the last tree rows before Hints mode shrinks it'
+      );
+      await page.keyboard.press('f');
+      await mode(page, 'hints');
+      for (let index = 0; index < 17; index++) {
+        assert.equal(
+          await page.locator(`${OVERLAYS} [data-target-id="tree-row-${index}"]`).count(),
+          1,
+          `Tree row ${index} has exactly one semantic hint`
+        );
+        assert.equal(
+          await page.locator(`${OVERLAYS} [data-target-id="tree-label-${index}"]`).count(),
+          0,
+          'Its label must not be duplicated'
+        );
+        assert.equal(
+          await page.locator(`${OVERLAYS} [data-target-id="tree-wrapper-${index}"]`).count(),
+          0,
+          'A pointer wrapper must not duplicate the semantic tree hint'
+        );
+      }
+      assert.equal(await page.locator(`${OVERLAYS} [data-target-id="tree-secondary"]`).count(), 1);
+      assert.equal(
+        await page.locator(`${OVERLAYS} [data-target-id="tree-chevron"]`).count(),
+        1,
+        'Explicit chevron handler remains independently hinted'
+      );
+      await page.screenshot({ path: join(OUT, `${engine}-aria-tree.png`), caret: 'initial' });
+      await chooseHint(page, 'tree-row-16');
+      assert.deepEqual(
+        await page.evaluate(() => window.__actions),
+        ['tree-16'],
+        'Activates the label region, not an inert wrapper'
+      );
+      await page.keyboard.press('f');
+      await chooseHint(page, 'tree-chevron');
+      assert.deepEqual(await page.evaluate(() => window.__actions), ['tree-16', 'chevron']);
+      await page.keyboard.press('f');
+      await chooseHint(page, 'tree-row-0');
+      assert.deepEqual(await page.evaluate(() => window.__actions), [
+        'tree-16',
+        'chevron',
+        'tree-0',
+      ]);
+      await page.keyboard.press('f');
+      await chooseHint(page, 'tree-secondary');
+      assert.deepEqual(await page.evaluate(() => window.__actions), [
+        'tree-16',
+        'chevron',
+        'tree-0',
+        'secondary',
+      ]);
+    });
+
+    it('applies precise, broad and aggressive detection plus a per-site override', async () => {
+      for (const level of ['precise', 'broad', 'aggressive']) {
+        const page = await openInteraction({ settings: { hintDetection: level } });
+        await page.keyboard.press('f');
+        await mode(page, 'hints');
+        const hinted = (id) => page.locator(`${OVERLAYS} [data-target-id="${id}"]`).count();
+        assert.equal(await hinted('native-link'), 1);
+        assert.equal(await hinted('aria-tab'), 1);
+        assert.equal(await hinted('explicit-click'), level === 'precise' ? 0 : 1);
+        assert.equal(await hinted('cursor-only'), level === 'precise' ? 0 : 1);
+        assert.equal(await hinted('weak-pair'), level === 'aggressive' ? 1 : 0);
+        assert.equal(await hinted('weak-single'), 0, 'A lone negative tabindex is insufficient');
+      }
+      const page = await openInteraction({
+        settings: {
+          hintDetection: 'precise',
+          sites: { [ORIGIN]: { enabled: true, hintDetection: 'aggressive' } },
+        },
+      });
+      await page.keyboard.press('f');
+      await mode(page, 'hints');
+      assert.equal(await page.locator(`${OVERLAYS} [data-target-id="weak-pair"]`).count(), 1);
+    });
+
+    it('finds opacity-zero heading permalinks while rejecting hidden ancestors', async () => {
+      const page = await openInteraction({ settings: { hintDetection: 'precise' } });
+      assert.equal(
+        await page.locator('#heading-anchor').evaluate((el) => getComputedStyle(el).opacity),
+        '0'
+      );
+      await page.keyboard.press('f');
+      await mode(page, 'hints');
+      assert.equal(
+        await page.locator(`${OVERLAYS} [data-target-id="hidden-heading-anchor"]`).count(),
+        0
+      );
+      assert.equal(
+        await page.locator(`${OVERLAYS} [data-target-id="invisible-button"]`).count(),
+        0
+      );
+      await chooseHint(page, 'heading-anchor');
+      assert.deepEqual(await page.evaluate(() => window.__actions), ['heading-anchor']);
+    });
+
+    it('uses an unobstructed later rectangle of a wrapped link', async () => {
+      const page = await openInteraction();
+      const cover = await page.locator('#line-cover').boundingBox();
+      assert.ok(await page.locator('#multi-link').evaluate((el) => el.getClientRects().length > 1));
+      await page.keyboard.press('f');
+      await mode(page, 'hints');
+      const marker = page.locator(`${OVERLAYS} [data-target-id="multi-link"]`);
+      assert.equal(await marker.count(), 1);
+      const position = await marker.boundingBox();
+      assert.ok(position.y >= cover.y + cover.height - 6, 'Label follows an uncovered line');
+      assert.equal(await page.locator(`${OVERLAYS} [data-target-id="covered-button"]`).count(), 0);
+      await chooseHint(page, 'multi-link');
+      assert.deepEqual(await page.evaluate(() => window.__actions), ['multi-link']);
+    });
+
+    it('places zv at the first readable character and chooses fine paragraph targets', async () => {
+      const page = await openInteraction();
+      await page.locator('#zv-leading').scrollIntoViewIfNeeded();
+      await keys(page, ['z', 'v']);
+      await mode(page, 'hints');
+      assert.equal(await page.locator(`${OVERLAYS} [data-target-id="zv-wrapper"]`).count(), 0);
+      assert.equal(await page.locator(`${OVERLAYS} [data-target-id="empty-caret"]`).count(), 0);
+      assert.equal(await page.locator(`${OVERLAYS} [data-target-id="zv-inner"]`).count(), 1);
+      await chooseHint(page, 'zv-leading');
+      await mode(page, 'caret');
+      const caret = await page.evaluate(() => ({
+        collapsed: getSelection().isCollapsed,
+        text: getSelection().focusNode.data.slice(getSelection().focusOffset),
+        paragraph: getSelection().focusNode.parentElement.closest('p')?.id,
+      }));
+      assert.equal(caret.collapsed, true);
+      assert.equal(caret.paragraph, 'zv-leading');
+      assert.ok(caret.text.startsWith('First meaningful text'));
+      await page.keyboard.press('Escape');
+      await page.locator('#zv-scroll').scrollIntoViewIfNeeded();
+      await page.locator('#zv-scroll').evaluate((el) => {
+        el.scrollTop = 80;
+      });
+      await keys(page, ['z', 'v']);
+      await chooseHint(page, 'zv-long');
+      await mode(page, 'caret');
+      assert.equal(
+        await page.evaluate(() => getSelection().focusNode.data.slice(getSelection().focusOffset)),
+        'Paragraph start above the viewport.'
+      );
+      const visibleCaret = await page.evaluate(() => {
+        const selection = getSelection();
+        const range = selection.getRangeAt(0).cloneRange();
+        range.setEnd(selection.focusNode, selection.focusOffset + 1);
+        const rect = range.getBoundingClientRect();
+        const container = document.querySelector('#zv-scroll').getBoundingClientRect();
+        return rect.top >= container.top && rect.bottom <= container.bottom;
+      });
+      assert.equal(
+        visibleCaret,
+        true,
+        'Explicit paragraph start is scrolled into the nested viewport'
+      );
+    });
+
+    it('opens a JavaScript hover menu, then supports f and explicit Caret entry', async () => {
+      const page = await openInteraction();
+      const originalFocus = await page.evaluate(() => document.activeElement.tagName);
+      await keys(page, ['z', 'h']);
+      await chooseHint(page, 'js-hover');
+      await mode(page, 'normal');
+      assert.equal(await page.locator(UI).getAttribute('data-hover-active'), 'true');
+      assert.equal(await page.locator('#js-menu').isVisible(), true);
+      assert.equal(await page.locator(`${UI} .mode-description`).isVisible(), true);
+      assert.match(
+        await page.locator(`${UI} .mode-description`).innerText(),
+        /Hover 保持中.*Esc 清除/
+      );
+      await page.screenshot({ path: join(OUT, `${engine}-hover-menu.png`), caret: 'initial' });
+      const events = await page.evaluate(() => window.__hoverEvents);
+      for (const type of [
+        'pointerover',
+        'pointerenter',
+        'mouseover',
+        'mouseenter',
+        'pointermove',
+        'mousemove',
+      ])
+        assert.ok(
+          events.some((event) => event.type === type),
+          type
+        );
+      assert.ok(events.every((event) => !event.trusted));
+      assert.ok(
+        !events.some((event) => ['click', 'pointerdown', 'mousedown', 'focus'].includes(event.type))
+      );
+      assert.equal(await page.evaluate(() => document.activeElement.tagName), originalFocus);
+      await page.keyboard.press('f');
+      await chooseHint(page, 'hover-menu-action');
+      assert.deepEqual(await page.evaluate(() => window.__actions), ['hover-menu-action']);
+      await keys(page, ['z', 'h']);
+      await chooseHint(page, 'js-hover');
+      await keys(page, ['z', 'v']);
+      await chooseHint(page, 'hover-text');
+      await mode(page, 'caret');
+      assert.equal(
+        await page.evaluate(() => getSelection().focusNode.data.slice(getSelection().focusOffset)),
+        'Hover menu readable paragraph.'
+      );
+      await page.keyboard.press('Escape');
+      await mode(page, 'normal');
+      assert.equal(
+        await page.locator('#js-menu').isVisible(),
+        true,
+        'First Escape exits Caret while retaining hover'
+      );
+      await page.keyboard.press('Escape');
+      assert.equal(await page.locator('#js-menu').isVisible(), false);
+      assert.equal(await page.locator(UI).getAttribute('data-hover-active'), 'false');
+      await page.evaluate(() => {
+        window.__removeHoverText = true;
+      });
+      await keys(page, ['z', 'h']);
+      await chooseHint(page, 'js-hover');
+      await keys(page, ['z', 'v']);
+      await chooseHint(page, 'hover-text');
+      await keys(page, ['v', '4', 'l', 'y']);
+      await waitClipboard(page, 'Hover');
+      await mode(page, 'normal');
+      await page.waitForFunction(() => !document.getElementById('hover-text'));
+      assert.match(await page.locator(`${UI} .status`).innerText(), /已複製/);
+      assert.doesNotMatch(await page.locator(`${UI} .status`).innerText(), /已變更/);
+    });
+
+    it('does not turn synthetic hover into CSS hover, click or focus', async () => {
+      const page = await openInteraction();
+      const originalFocus = await page.evaluate(() => document.activeElement.tagName);
+      await keys(page, ['z', 'h']);
+      await chooseHint(page, 'css-hover');
+      assert.equal(await page.locator('#css-hover').evaluate((el) => el.matches(':hover')), false);
+      assert.equal(await page.locator('#css-menu').isVisible(), false);
+      assert.deepEqual(await page.evaluate(() => window.__actions), []);
+      assert.equal(await page.evaluate(() => document.activeElement.tagName), originalFocus);
+      assert.match(await page.locator(`${UI} .hover-status`).innerText(), /hover/i);
+      await page.keyboard.press('Escape');
+      assert.equal(await page.locator(UI).getAttribute('data-hover-active'), 'false');
+    });
+
+    it('supports declarative custom hover actions', async () => {
+      const page = await openInteraction({
+        settings: {
+          bindings: { normal: { zx: 'custom:menu' }, caret: {}, visual: {}, line: {} },
+          customActions: [
+            {
+              id: 'custom:menu',
+              label: 'Hover the menu',
+              action: 'hover',
+              selector: '#js-hover',
+              origin: ORIGIN,
+            },
+          ],
+        },
+      });
+      await keys(page, ['z', 'x']);
+      assert.equal(await page.locator('#js-menu').isVisible(), true);
+      assert.equal(await page.locator(UI).getAttribute('data-hover-active'), 'true');
+      assert.deepEqual(await page.evaluate(() => window.__actions), []);
+    });
+
+    it('owns actual find/help/settings typing and tail keyup against hostile page handlers', async () => {
+      const page = await openInteraction();
+      await page.evaluate(() => {
+        window.__hostileKeys = true;
+      });
+      await page.keyboard.press('/');
+      const find = page.getByRole('searchbox', { name: '搜尋此頁文字' });
+      await page.keyboard.type('tree /?');
+      assert.equal(await find.inputValue(), 'tree /?');
+      await page.keyboard.press('ControlOrMeta+A');
+      await page.keyboard.type('replacement');
+      assert.equal(await find.inputValue(), 'replacement');
+      await page.keyboard.down('Escape');
+      await mode(page, 'normal');
+      await page.keyboard.up('Escape');
+      assert.deepEqual(
+        await page.evaluate(() =>
+          window.__siteKeys.filter((event) => event.type.startsWith('key'))
+        ),
+        []
+      );
+      await page.keyboard.press('?');
+      const help = page.getByRole('searchbox', { name: '搜尋指令' });
+      await help.focus();
+      await page.evaluate(() => {
+        window.__siteKeys = [];
+      });
+      await page.keyboard.type('scrollDown /?');
+      assert.equal(await help.inputValue(), 'scrollDown /?');
+      await page.keyboard.down('Escape');
+      await page.keyboard.up('Escape');
+      assert.deepEqual(
+        await page.evaluate(() =>
+          window.__siteKeys.filter((event) => event.type.startsWith('key'))
+        ),
+        []
+      );
+      await page.getByRole('button', { name: '設定', exact: true }).click();
+      const json = page.getByRole('textbox', { name: '設定 JSON' });
+      await json.focus();
+      await page.keyboard.press('ControlOrMeta+A');
+      await page.keyboard.type('{"test":"/?zh"}');
+      assert.equal(await json.inputValue(), '{"test":"/?zh"}');
+      await page.keyboard.down('Escape');
+      await page.keyboard.up('Escape');
+      assert.deepEqual(
+        await page.evaluate(() =>
+          window.__siteKeys.filter((event) => event.type.startsWith('key'))
+        ),
+        []
+      );
+      await page.keyboard.press('q');
+      assert.ok(
+        await page.evaluate(() => window.__siteKeys.some((event) => event.key === 'q')),
+        'Unbound page shortcut is still delivered outside owned UI'
+      );
+      await page.keyboard.press('Alt+Shift+V');
+      await mode(page, 'paused');
+      await page.evaluate(() => {
+        window.__siteKeys = [];
+      });
+      await page.keyboard.press('j');
+      assert.ok(
+        await page.evaluate(() => window.__siteKeys.some((event) => event.key === 'j')),
+        'Paused page owns normal navigation keys'
+      );
+      await page.getByRole('button', { name: '設定', exact: true }).click();
+      await page.evaluate(() => {
+        window.__siteKeys = [];
+      });
+      await page.getByRole('textbox', { name: '設定 JSON' }).focus();
+      await page.keyboard.press('ControlOrMeta+A');
+      await page.keyboard.type('{"paused":true}');
+      assert.equal(
+        await page.getByRole('textbox', { name: '設定 JSON' }).inputValue(),
+        '{"paused":true}'
+      );
+      await page.keyboard.press('Escape');
+      await mode(page, 'paused');
+      assert.deepEqual(
+        await page.evaluate(() =>
+          window.__siteKeys.filter((event) => event.type.startsWith('key'))
+        ),
+        []
+      );
+    });
+
+    it('does not activate a restored website button during a held UI Enter key cycle', async () => {
+      const page = await openInteraction();
+      await page.locator('#css-hover').focus();
+      await page.keyboard.press('/');
+      await page.keyboard.type('Native');
+      await page.keyboard.down('Enter');
+      await mode(page, 'normal');
+      assert.equal(await page.evaluate(() => document.activeElement.id), 'css-hover');
+      await page.keyboard.down('Enter');
+      await page.keyboard.up('Enter');
+      assert.deepEqual(
+        await page.evaluate(() => window.__actions),
+        [],
+        'A held UI key must not trigger the restored page control'
+      );
+      await page.keyboard.press('Enter');
+      assert.deepEqual(
+        await page.evaluate(() => window.__actions),
+        ['css-click'],
+        'A fresh website key cycle retains its native action'
+      );
+    });
+
+    it('keeps IME editing uncancelled while shielding its keyboard events', async () => {
+      const page = await openInteraction();
+      await page.evaluate(() => {
+        window.__hostileKeys = true;
+      });
+      await page.keyboard.press('/');
+      const state = await page
+        .getByRole('searchbox', { name: '搜尋此頁文字' })
+        .evaluate((input) => {
+          const prevented = [];
+          for (const event of [
+            new CompositionEvent('compositionstart', { bubbles: true, composed: true }),
+            new CompositionEvent('compositionupdate', {
+              bubbles: true,
+              composed: true,
+              data: '中文',
+            }),
+            new KeyboardEvent('keydown', {
+              key: 'Escape',
+              code: 'Escape',
+              bubbles: true,
+              composed: true,
+              cancelable: true,
+              isComposing: true,
+            }),
+            new InputEvent('beforeinput', {
+              inputType: 'insertCompositionText',
+              data: '中文',
+              isComposing: true,
+              bubbles: true,
+              composed: true,
+              cancelable: true,
+            }),
+          ]) {
+            input.dispatchEvent(event);
+            prevented.push(event.defaultPrevented);
+          }
+          input.value = '中文';
+          input.dispatchEvent(
+            new InputEvent('input', {
+              inputType: 'insertCompositionText',
+              data: '中文',
+              isComposing: true,
+              bubbles: true,
+              composed: true,
+            })
+          );
+          input.dispatchEvent(
+            new CompositionEvent('compositionend', { bubbles: true, composed: true, data: '中文' })
+          );
+          return { prevented, value: input.value };
+        });
+      assert.ok(state.prevented.every((value) => value === false));
+      assert.equal(state.value, '中文');
+      await mode(page, 'find');
+      assert.deepEqual(
+        await page.evaluate(() =>
+          window.__siteKeys.filter((event) => event.type.startsWith('key'))
+        ),
+        []
+      );
+      await page.keyboard.press('Escape');
+      await mode(page, 'normal');
+    });
+
+    it('preserves legacy settings and custom zh prefixes when adding the hover command', async () => {
+      for (const binding of ['zh', 'zha']) {
+        const page = await openInteraction({
+          legacy: true,
+          settings: {
+            bindings: { normal: { [binding]: 'copyUrl' }, caret: {}, visual: {}, line: {} },
+            scrollStep: 96,
+            theme: 'dark',
+          },
+        });
+        await keys(page, [...binding]);
+        await waitClipboard(page, PAGE_URL);
+        await page.keyboard.press('f');
+        await mode(page, 'hints');
+        assert.equal(
+          await page.locator(`${OVERLAYS} [data-target-id="explicit-click"]`).count(),
+          1,
+          'Old missing detection field defaults to broad'
+        );
+        await page.keyboard.press('Escape');
+        await page.getByRole('button', { name: '設定', exact: true }).click();
+        const saved = JSON.parse(
+          await page.getByRole('textbox', { name: '設定 JSON' }).inputValue()
+        );
+        assert.equal(saved.scrollStep, 96);
+        assert.equal(saved.theme, 'dark');
+        assert.equal(saved.bindings.normal[binding], 'copyUrl');
+        assert.equal(
+          await page.getByRole('combobox', { name: '全域提示偵測' }).inputValue(),
+          'broad'
+        );
+      }
+    });
+
+    it('saves per-site detection and restores inheritance through settings', async () => {
+      const page = await openInteraction();
+      await page.getByRole('button', { name: '設定', exact: true }).click();
+      await page.getByRole('combobox', { name: '全域提示偵測' }).selectOption('precise');
+      await page.getByRole('combobox', { name: '本站提示偵測' }).selectOption('aggressive');
+      await page.getByRole('button', { name: '儲存偏好', exact: true }).click();
+      await page.reload();
+      await mode(page, 'normal');
+      await page.keyboard.press('f');
+      assert.equal(await page.locator(`${OVERLAYS} [data-target-id="weak-pair"]`).count(), 1);
+      await page.keyboard.press('Escape');
+      await page.getByRole('button', { name: '設定', exact: true }).click();
+      await page.getByRole('combobox', { name: '本站提示偵測' }).selectOption('');
+      await page.getByRole('button', { name: '儲存偏好', exact: true }).click();
+      await page.getByRole('button', { name: '關閉設定', exact: true }).click();
+      await page.keyboard.press('f');
+      assert.equal(await page.locator(`${OVERLAYS} [data-target-id="weak-pair"]`).count(), 0);
+      assert.equal(await page.locator(`${OVERLAYS} [data-target-id="explicit-click"]`).count(), 0);
     });
 
     it('renders light/dark cheatsheets and keeps the dock inside a narrow viewport', async () => {
