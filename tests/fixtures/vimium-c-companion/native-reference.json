@@ -1,0 +1,499 @@
+{
+  "version": "2.12.2",
+  "commit": "9e780336ee36ef947e76258e2018cceb69de7e4f",
+  "artifact": "Official installed Vimium C 2.12.2 package; read-only extraction",
+  "keyMappingsSha256": "37ba26759c4377c178652a2ac06dab22cee31d1aa5e2dce8f7b27831ae887963",
+  "commandIds": [
+    "LinkHints.activate",
+    "LinkHints.activateCopyImage",
+    "LinkHints.activateCopyLinkText",
+    "LinkHints.activateCopyLinkUrl",
+    "LinkHints.activateDownloadImage",
+    "LinkHints.activateDownloadLink",
+    "LinkHints.activateEdit",
+    "LinkHints.activateFocus",
+    "LinkHints.activateHover",
+    "LinkHints.activateLeave",
+    "LinkHints.activateMode",
+    "LinkHints.activateModeToCopyImage",
+    "LinkHints.activateModeToCopyLinkText",
+    "LinkHints.activateModeToCopyLinkUrl",
+    "LinkHints.activateModeToDownloadImage",
+    "LinkHints.activateModeToDownloadLink",
+    "LinkHints.activateModeToEdit",
+    "LinkHints.activateModeToFocus",
+    "LinkHints.activateModeToHover",
+    "LinkHints.activateModeToLeave",
+    "LinkHints.activateModeToOpenImage",
+    "LinkHints.activateModeToOpenIncognito",
+    "LinkHints.activateModeToOpenInNewForegroundTab",
+    "LinkHints.activateModeToOpenInNewTab",
+    "LinkHints.activateModeToOpenUrl",
+    "LinkHints.activateModeToOpenVomnibar",
+    "LinkHints.activateModeToSearchLinkText",
+    "LinkHints.activateModeToSelect",
+    "LinkHints.activateModeToUnhover",
+    "LinkHints.activateModeWithQueue",
+    "LinkHints.activateOpenImage",
+    "LinkHints.activateOpenIncognito",
+    "LinkHints.activateOpenInNewForegroundTab",
+    "LinkHints.activateOpenInNewTab",
+    "LinkHints.activateOpenUrl",
+    "LinkHints.activateOpenVomnibar",
+    "LinkHints.activateSearchLinkText",
+    "LinkHints.activateSelect",
+    "LinkHints.activateUnhover",
+    "LinkHints.activateWithQueue",
+    "LinkHints.click",
+    "LinkHints.unhoverLast",
+    "Marks.activate",
+    "Marks.activateCreate",
+    "Marks.activateCreateMode",
+    "Marks.activateGoto",
+    "Marks.activateGotoMode",
+    "Marks.clearGlobal",
+    "Marks.clearLocal",
+    "Vomnibar.activate",
+    "Vomnibar.activateBookmarks",
+    "Vomnibar.activateBookmarksInNewTab",
+    "Vomnibar.activateEditUrl",
+    "Vomnibar.activateEditUrlInNewTab",
+    "Vomnibar.activateHistory",
+    "Vomnibar.activateHistoryInNewTab",
+    "Vomnibar.activateInNewTab",
+    "Vomnibar.activateTabs",
+    "Vomnibar.activateTabSelection",
+    "Vomnibar.activateUrl",
+    "Vomnibar.activateUrlInNewTab",
+    "addBookmark",
+    "autoCopy",
+    "autoOpen",
+    "blank",
+    "captureTab",
+    "clearContentSetting",
+    "clearContentSettings",
+    "clearCS",
+    "clearFindHistory",
+    "closeDownloadBar",
+    "closeOtherTabs",
+    "closeSomeOtherTabs",
+    "closeTabsOnLeft",
+    "closeTabsOnRight",
+    "confirm",
+    "copyCurrentTitle",
+    "copyCurrentUrl",
+    "copyWindowInfo",
+    "createTab",
+    "debugBackground",
+    "discardTab",
+    "dispatchEvent",
+    "duplicateTab",
+    "editText",
+    "enableContentSettingTemp",
+    "enableCSTemp",
+    "enterFindMode",
+    "enterInsertMode",
+    "enterVisualLineMode",
+    "enterVisualMode",
+    "findSelected",
+    "findSelectedBackwards",
+    "firstTab",
+    "focusInput",
+    "focusOrLaunch",
+    "goBack",
+    "goForward",
+    "goNext",
+    "goPrevious",
+    "goToRoot",
+    "goUp",
+    "joinTabs",
+    "lastTab",
+    "mainFrame",
+    "moveTabLeft",
+    "moveTabRight",
+    "moveTabToIncognito",
+    "moveTabToNewWindow",
+    "moveTabToNextWindow",
+    "newTab",
+    "nextFrame",
+    "nextTab",
+    "openBookmark",
+    "openCopiedUrlInCurrentTab",
+    "openCopiedUrlInNewTab",
+    "openUrl",
+    "parentFrame",
+    "passNextKey",
+    "performAnotherFind",
+    "performBackwardsFind",
+    "performFind",
+    "previousTab",
+    "quickNext",
+    "reload",
+    "reloadGivenTab",
+    "reloadTab",
+    "removeRightTab",
+    "removeTab",
+    "reopenTab",
+    "reset",
+    "restoreGivenTab",
+    "restoreTab",
+    "runKey",
+    "scrollDown",
+    "scrollFullPageDown",
+    "scrollFullPageUp",
+    "scrollLeft",
+    "scrollPageDown",
+    "scrollPageUp",
+    "scrollPxDown",
+    "scrollPxLeft",
+    "scrollPxRight",
+    "scrollPxUp",
+    "scrollRight",
+    "scrollSelect",
+    "scrollTo",
+    "scrollToBottom",
+    "scrollToLeft",
+    "scrollToRight",
+    "scrollToTop",
+    "scrollUp",
+    "searchAs",
+    "searchInAnother",
+    "sendToExtension",
+    "showHelp",
+    "showHud",
+    "showHUD",
+    "showTip",
+    "simBackspace",
+    "simulateBackspace",
+    "sortTabs",
+    "switchFocus",
+    "toggleContentSetting",
+    "toggleCS",
+    "toggleLinkHintCharacters",
+    "toggleMuteTab",
+    "togglePinTab",
+    "toggleReaderMode",
+    "toggleStyle",
+    "toggleSwitchTemp",
+    "toggleUrl",
+    "toggleViewSource",
+    "toggleVomnibarStyle",
+    "toggleWindow",
+    "visitPreviousTab",
+    "wait",
+    "zoom",
+    "zoomIn",
+    "zoomOut",
+    "zoomReset"
+  ],
+  "defaultBindings": [
+    {
+      "id": "showHelp",
+      "key": "?"
+    },
+    {
+      "id": "previousTab",
+      "key": "<a-c>"
+    },
+    {
+      "id": "previousTab",
+      "key": "gT"
+    },
+    {
+      "id": "previousTab",
+      "key": "J"
+    },
+    {
+      "id": "nextTab",
+      "key": "<a-s-c>"
+    },
+    {
+      "id": "nextTab",
+      "key": "gt"
+    },
+    {
+      "id": "nextTab",
+      "key": "K"
+    },
+    {
+      "id": "nextTab",
+      "key": "<a-v>"
+    },
+    {
+      "id": "scrollPageDown",
+      "key": "d"
+    },
+    {
+      "id": "scrollDown",
+      "key": "<c-e>"
+    },
+    {
+      "id": "scrollDown",
+      "key": "j"
+    },
+    {
+      "id": "LinkHints.activate",
+      "key": "f"
+    },
+    {
+      "id": "simBackspace",
+      "key": "<f1>"
+    },
+    {
+      "id": "switchFocus",
+      "key": "<s-f1>"
+    },
+    {
+      "id": "switchFocus",
+      "key": "<f2>"
+    },
+    {
+      "id": "enterVisualMode",
+      "key": "<f8>"
+    },
+    {
+      "id": "enterVisualMode",
+      "key": "v"
+    },
+    {
+      "id": "scrollToBottom",
+      "key": "G"
+    },
+    {
+      "id": "nextFrame",
+      "key": "gf"
+    },
+    {
+      "id": "scrollToTop",
+      "key": "gg"
+    },
+    {
+      "id": "focusInput",
+      "key": "gi"
+    },
+    {
+      "id": "toggleVomnibarStyle",
+      "key": "gn"
+    },
+    {
+      "id": "toggleViewSource",
+      "key": "gs"
+    },
+    {
+      "id": "goUp",
+      "key": "gu"
+    },
+    {
+      "id": "mainFrame",
+      "key": "gF"
+    },
+    {
+      "id": "goToRoot",
+      "key": "gU"
+    },
+    {
+      "id": "firstTab",
+      "key": "g0"
+    },
+    {
+      "id": "lastTab",
+      "key": "g$"
+    },
+    {
+      "id": "scrollLeft",
+      "key": "h"
+    },
+    {
+      "id": "goBack",
+      "key": "H"
+    },
+    {
+      "id": "enterInsertMode",
+      "key": "i"
+    },
+    {
+      "id": "scrollUp",
+      "key": "k"
+    },
+    {
+      "id": "scrollUp",
+      "key": "<c-y>"
+    },
+    {
+      "id": "scrollRight",
+      "key": "l"
+    },
+    {
+      "id": "goForward",
+      "key": "L"
+    },
+    {
+      "id": "toggleMuteTab",
+      "key": "<a-m>"
+    },
+    {
+      "id": "performBackwardsFind",
+      "key": "N"
+    },
+    {
+      "id": "performFind",
+      "key": "n"
+    },
+    {
+      "id": "performAnotherFind",
+      "key": "<a-n>"
+    },
+    {
+      "id": "Vomnibar.activate",
+      "key": "o"
+    },
+    {
+      "id": "togglePinTab",
+      "key": "<a-p>"
+    },
+    {
+      "id": "reload",
+      "key": "r"
+    },
+    {
+      "id": "reloadGivenTab",
+      "key": "R"
+    },
+    {
+      "id": "reloadTab",
+      "key": "<a-r>"
+    },
+    {
+      "id": "reopenTab",
+      "key": "<a-s-r>"
+    },
+    {
+      "id": "createTab",
+      "key": "t"
+    },
+    {
+      "id": "createTab",
+      "key": "<a-t>"
+    },
+    {
+      "id": "scrollPageUp",
+      "key": "u"
+    },
+    {
+      "id": "enterVisualLineMode",
+      "key": "V"
+    },
+    {
+      "id": "moveTabToNextWindow",
+      "key": "W"
+    },
+    {
+      "id": "removeTab",
+      "key": "x"
+    },
+    {
+      "id": "restoreTab",
+      "key": "X"
+    },
+    {
+      "id": "duplicateTab",
+      "key": "yt"
+    },
+    {
+      "id": "copyCurrentUrl",
+      "key": "yy"
+    },
+    {
+      "id": "scrollToLeft",
+      "key": "zH"
+    },
+    {
+      "id": "scrollToRight",
+      "key": "zL"
+    },
+    {
+      "id": "enterFindMode",
+      "key": "/"
+    },
+    {
+      "id": "Marks.activate",
+      "key": "`"
+    },
+    {
+      "id": "visitPreviousTab",
+      "key": "^"
+    },
+    {
+      "id": "goPrevious",
+      "key": "[["
+    },
+    {
+      "id": "goNext",
+      "key": "]]"
+    },
+    {
+      "id": "moveTabLeft",
+      "key": "<<"
+    },
+    {
+      "id": "moveTabRight",
+      "key": ">>"
+    },
+    {
+      "id": "Vomnibar.activateBookmarks",
+      "key": "b"
+    },
+    {
+      "id": "Vomnibar.activateUrl",
+      "key": "ge"
+    },
+    {
+      "id": "Vomnibar.activateUrlInNewTab",
+      "key": "gE"
+    },
+    {
+      "id": "Marks.activateCreate",
+      "key": "m"
+    },
+    {
+      "id": "openCopiedUrlInCurrentTab",
+      "key": "p"
+    },
+    {
+      "id": "LinkHints.activateCopyLinkUrl",
+      "key": "yf"
+    },
+    {
+      "id": "Vomnibar.activateBookmarksInNewTab",
+      "key": "B"
+    },
+    {
+      "id": "LinkHints.activateOpenInNewTab",
+      "key": "F"
+    },
+    {
+      "id": "Vomnibar.activateInNewTab",
+      "key": "O"
+    },
+    {
+      "id": "openCopiedUrlInNewTab",
+      "key": "P"
+    },
+    {
+      "id": "Vomnibar.activateTabs",
+      "key": "T"
+    },
+    {
+      "id": "LinkHints.activateWithQueue",
+      "key": "<a-f>"
+    },
+    {
+      "id": "LinkHints.activateSelect",
+      "key": "yv"
+    },
+    {
+      "id": "LinkHints.activateCopyImage",
+      "key": "yi"
+    }
+  ]
+}

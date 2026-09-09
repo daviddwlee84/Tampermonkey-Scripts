@@ -102,3 +102,18 @@ npm run preview -- <slug> [url] [--headed] [--menu "<caption>"] [--click "<selec
   raw URL 直接就是可安裝的腳本。升級的時機與代價寫在 `docs/07-dev-workflow.md`。
 - 不要給 `scripts/*.mjs` 加外部相依套件。
 - 不要在沒有明確要求的情況下改 `@match` 範圍。
+
+<!-- project-knowledge-harness:agent-guidance -->
+
+## 長期待辦與已知陷阱
+
+- `TODO.md` 是唯一長期待辦索引。使用者明確延後的功能放在 P1／P2／P3／P?，加上 S／M／L／XL 規模；目前正在實作的功能不放入 backlog。
+- 優先使用已安裝的 `project-knowledge-harness` skill：首次建立用 `scripts/init.sh`，新增項目用 `scripts/add-todo.sh`，整理 `backlog/inbox.md` 用 `scripts/sweep-inbox.sh`。這些工具屬於 skill，不在本 repo 的 `scripts/`。
+- P?、L／XL、多方案比較或暫停的調查，另建 `backlog/<slug>.md`，在 TODO 項目結尾連到研究文件。保留來源、已知限制與接續工作的第一步。
+- 完成 TODO 項目時，用 skill 的 `scripts/promote-todo.sh` 移到 Done，相關研究標記 `Status: shipped` 並保留。
+- 手動調整 TODO 後，用 skill 的 `scripts/todo-kanban.sh --validate-only TODO.md` 驗證格式。
+- 花超過約 15 分鐘釐清且容易重現的非顯然問題，以「症狀」命名記入 `pitfalls/`；保留錯誤原文、原因、解法、預防方式。已有文件的問題只交叉連結。
+- 跨機器反覆發生、會靜默破壞資料或容易誤改的陷阱，才提升為此檔案中的明確規則。
+- `TODO.md`、`backlog/`、`pitfalls/` 是 repo 維護資料；本 repo 直接分發各 `.user.js`，不需要新增打包排除設定。
+
+<!-- project-knowledge-harness:agent-guidance --> (end)

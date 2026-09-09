@@ -38,11 +38,14 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox
       - run: npm run test:vim-navigation
+      - run: npm run test:vimium-c-companion
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: vim-navigation-screenshots
-          path: .preview/vim-navigation-tests/*.png
+          path: |
+            .preview/vim-navigation-tests/*.png
+            .preview/vimium-c-companion-tests/*.png
           if-no-files-found: ignore
           include-hidden-files: true

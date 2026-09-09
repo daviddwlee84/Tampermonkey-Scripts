@@ -21,6 +21,7 @@
 | [Page Reader & Markdown](userscripts/page-reader-markdown/) | 從目前網頁擷取乾淨正文，支援專注閱讀、Markdown 與含附件 ZIP 匯出 | `https://*/*`<br>`http://*/*` | 0.1.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/page-reader-markdown/page-reader-markdown.user.js) |
 | [Page Title Tag](userscripts/page-title-tag/) | 在分頁標題前面加上網站標籤（如 [GPT]），一堆分頁時好找 | `https://chatgpt.com/*`<br>`https://claude.ai/*`<br>`https://gemini.google.com/*` | 1.0.1 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/page-title-tag/page-title-tag.user.js) |
 | [Vim Navigation](userscripts/vim-navigation/) | Vim 式頁內導航、搜尋、文字選取與區塊複製，附可客製的常駐情境小抄 | `https://*/*`<br>`http://*/*` | 0.2.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/vim-navigation/vim-navigation.user.js) |
+| [Vimium C Companion](userscripts/vimium-c-companion/) | Vimium C 個人鍵位小抄、設定匯入與操作流程，陪你練習原生鍵盤導覽 | `https://*/*`<br>`http://*/*` | 0.1.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/vimium-c-companion/vimium-c-companion.user.js) |
 | [YouTube Gemini Summary](userscripts/youtube-gemini-summary/) | 在 YouTube 影片卡片與觀看頁一鍵開啟 Gemini，送出繁中摘要提示 | `https://www.youtube.com/*`<br>`https://gemini.google.com/app*` | 0.1.2 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/youtube-gemini-summary/youtube-gemini-summary.user.js) |
 
 <!-- END SCRIPT INDEX -->
@@ -141,4 +142,12 @@ npm run format                # 格式化 JS 與 docs（README.md 被排除，�
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](./LICENSE)。各腳本內含第三方資料的授權，以該腳本的 `@license` 與內嵌授權聲明為準。
+
+<!-- project-knowledge-harness:readme-roadmap -->
+
+## 後續計畫與經驗記錄
+
+長期待辦見 [TODO.md](TODO.md)，需要研究的項目連到 [backlog/](backlog/)；曾經踩過的問題以症狀索引於 [pitfalls/](pitfalls/)。
+
+<!-- project-knowledge-harness:readme-roadmap --> (end)

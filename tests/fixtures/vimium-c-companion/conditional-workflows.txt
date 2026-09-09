@@ -1,0 +1,13 @@
+# 註解保留於匯入原文
+map z scrollDown
+#if {"sys":"mac"}
+map j scrollUp
+#else
+unmap j
+#endif
+env docs host="https://example.com/*"
+map zz runKey keys="j+f" expect={"docs":"gg"}
+run zx j+f
+map zy Future.command option="保留 原文"
+shortcut userCustomized1 command=scrollDown
+unknownDirective keep all=this

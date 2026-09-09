@@ -20,7 +20,8 @@
     "verify": "npm run check && npm run index:check",
     "preview": "node scripts/preview.mjs",
     "test:page-reader": "node --test tests/page-reader-markdown.test.mjs",
-    "test:vim-navigation": "node --test tests/vim-navigation.test.mjs"
+    "test:vim-navigation": "node --test tests/vim-navigation.test.mjs",
+    "test:vimium-c-companion": "node --test tests/vimium-c-companion-reference.test.mjs tests/vimium-c-companion.test.mjs"
   },
   "devDependencies": {
     "prettier": "^3.4.2",

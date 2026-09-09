@@ -1,0 +1,19 @@
+{
+  "name": "Vimium C",
+  "@time": "2026-09-09T00:00:00.000Z",
+  "time": 1788912000000,
+  "environment": { "extension": "2.12.3", "platform": "mac", "chrome": 140 },
+  "keyMappings": [
+    "unmap j",
+    "map z scrollDown $count=2",
+    "map! <c-j> scrollDown",
+    "map <c-k:i> scrollUp",
+    ""
+  ],
+  "exclusionRules": [
+    { "pattern": ":https://example.com/app", "passKeys": "j k " },
+    { "pattern": "^https://mail\\.example\\.com/", "passKeys": "" }
+  ],
+  "exclusionOnlyFirstMatch": false,
+  "exclusionListenHash": true
+}

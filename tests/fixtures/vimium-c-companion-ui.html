@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <title>Companion practice · 原生快捷鍵練習頁</title>
+    <style>
+      body {
+        margin: 0;
+        background: #f3f5f2;
+        color: #26392c;
+        font:
+          17px/1.8 system-ui,
+          sans-serif;
+      }
+      header {
+        background: white;
+        border-bottom: 1px solid #d8e1d6;
+        padding: 18px 36px;
+        font-size: 13px;
+        letter-spacing: 0.12em;
+      }
+      main {
+        width: 700px;
+        max-width: calc(100% - 64px);
+        margin: 36px auto;
+        background: white;
+        padding: 32px;
+        border: 1px solid #d9e2d8;
+        border-radius: 18px;
+        box-sizing: border-box;
+      }
+      h1 {
+        margin: 0 0 16px;
+        line-height: 1.4;
+        font-size: 32px;
+      }
+      h2 {
+        margin-top: 32px;
+        font-size: 23px;
+      }
+      p {
+        margin: 16px 0;
+      }
+      kbd {
+        background: #edf2e9;
+        border: 1px solid #c4d2bd;
+        padding: 1px 6px;
+        border-radius: 4px;
+      }
+      input,
+      button {
+        font: inherit;
+        padding: 6px 10px;
+        border: 1px solid #9dae96;
+        border-radius: 6px;
+      }
+      button {
+        background: #eaf1e4;
+      }
+      .muted {
+        color: #75866f;
+      }
+      .spacer {
+        height: 1900px;
+        margin-top: 35px;
+        border-left: 2px solid #e1e9dc;
+      }
+    </style>
+  </head>
+  <body>
+    <header>FIELD NOTES / VIMIUM C PRACTICE</header>
+    <main>
+      <p class="muted">快捷鍵交給瀏覽器擴充套件，小抄陪你熟悉操作。</p>
+      <h1>讓鍵盤導覽成為日常</h1>
+      <p id="reading-text">
+        這是固定的本機測試頁。Companion 只顯示操作參考，不會替你捲動、點擊或管理分頁。
+      </p>
+      <p>
+        在頁面試著按
+        <kbd>f</kbd>、<kbd>j</kbd>、<kbd>?</kbd>。在小抄搜尋欄輸入文字時，網站的快捷鍵不應搶走輸入。
+      </p>
+      <button id="site-button" type="button">網站原生按鈕</button>
+      <input id="site-input" aria-label="網站文字欄" placeholder="保留網站原生輸入" />
+      <h2>閱讀與選取</h2>
+      <p>
+        用一份持續可見的指令清單練習，再按自己的使用頻率收藏常用項目。匯入個人設定後，小抄應清楚顯示目前的鍵位來源。
+      </p>
+      <div class="spacer" aria-hidden="true"></div>
+      <p id="page-end">練習頁尾端</p>
+    </main>
+    <script>
+      window.__siteKeys = [];
+      window.__pageActions = [];
+      window.__trapSearch = false;
+      window.__searchSteals = 0;
+      document
+        .querySelector('#site-button')
+        .addEventListener('click', () => window.__pageActions.push('button'));
+      for (const type of ['keydown', 'keypress', 'keyup']) {
+        document.addEventListener(
+          type,
+          (event) => {
+            if (window.__trapSearch && type === 'keydown' && event.key.toLowerCase() === 's') {
+              window.__searchSteals++;
+              event.preventDefault();
+            }
+            window.__siteKeys.push({
+              type,
+              key: event.key,
+              prevented: event.defaultPrevented,
+              target: event.target.id,
+            });
+          },
+          true
+        );
+      }
+    </script>
+  </body>
+</html>
