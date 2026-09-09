@@ -59,4 +59,4 @@ writeFileSync(join(dir, `${slug}.user.js`), script);
 writeFileSync(join(dir, 'README.md'), readme);
 
 console.log(`Created userscripts/${slug}/`);
-console.log('Next: 實作腳本 → npm run check → npm run index');
+console.log('Next: 實作腳本 → 加入 scripts/catalog.json 分類 → npm run check → npm run index');

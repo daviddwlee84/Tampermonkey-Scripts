@@ -3,7 +3,7 @@
 # requires-python = ">=3.10"
 # dependencies = ["pymobiledevice3==11.10.2"]
 # ///
-"""Copy repo userscripts, unchanged and flat, to a folder or an iPad over USB.
+"""Copy repo userscripts to a folder, an iPad over USB, or a Violentmonkey ZIP.
 
 USB uses the app's supported Documents file sharing (House Arrest / AFC).
 It cannot access a directory selected from a different iOS app or iCloud.
@@ -11,9 +11,12 @@ It cannot access a directory selected from a different iOS app or iCloud.
 
 import argparse
 import asyncio
+import json
 import re
 import sys
+import tempfile
 import uuid
+import zipfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -42,6 +45,82 @@ def collect_scripts(root, only=()):
     if not selected:
         raise ValueError("No userscripts found.")
     return selected
+
+
+def select_zip_scripts(root, scripts, categories=(), include_all=False, only=()):
+    """驗證共用分類；ZIP 預設排除教學與實驗腳本，明選則以使用者為準。"""
+    groups = json.loads((root / "scripts/catalog.json").read_text(encoding="utf-8"))
+    remaining = {name.removesuffix(".user.js") for name, _ in scripts}
+    ids = set()
+    for group in groups:
+        category = group.get("id", "")
+        if (not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", category) or category in ids
+                or not group.get("title") or not group.get("description")
+                or type(group.get("default")) is not bool
+                or not isinstance(group.get("scripts"), list)):
+            raise ValueError(f"Invalid catalog category: {category}")
+        ids.add(category)
+        for slug in group["scripts"]:
+            if slug not in remaining:
+                raise ValueError(f"Unknown or duplicate catalog script: {slug}")
+            remaining.remove(slug)
+    if remaining:
+        raise ValueError(f"Add scripts to scripts/catalog.json: {', '.join(sorted(remaining))}")
+    unknown = set(categories) - ids
+    if unknown:
+        raise ValueError(f"Unknown category: {', '.join(sorted(unknown))}; choose {', '.join(sorted(ids))}")
+    if include_all:
+        return scripts
+    selected = set(only) if only else {
+        slug for group in groups
+        if (group["id"] in categories if categories else group["default"])
+        for slug in group["scripts"]
+    }
+    unknown = selected - {name.removesuffix(".user.js") for name, _ in scripts}
+    if unknown:
+        raise ValueError(f"Unknown script(s): {', '.join(sorted(unknown))}")
+    result = [(name, content) for name, content in scripts if name.removesuffix(".user.js") in selected]
+    if not result:
+        raise ValueError("No userscripts selected.")
+    return result
+
+
+def pack_zip(scripts, destination, dry_run=False):
+    """只放原始腳本，不附加 manager 設定、GM values 或改寫 metadata。"""
+    destination = Path(destination).expanduser().absolute()
+    if destination.suffix.lower() != ".zip":
+        raise ValueError("ZIP destination must end in .zip")
+    if destination.is_symlink():
+        raise ValueError(f"Refusing symlink destination: {destination}")
+    # macOS 的 /tmp、/var 本身是連結；允許解析父目錄，但不跟隨輸出檔連結。
+    destination = destination.parent.resolve() / destination.name
+    for name, content in scripts:
+        print(f"{name} ({len(content):,} bytes)")
+    if dry_run:
+        print(f"Would pack {len(scripts)} script(s) to {destination}; no files written.")
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    # 先完成並讀回 ZIP，再替換上次產物；失敗時保留舊包。
+    with tempfile.NamedTemporaryFile(dir=destination.parent, suffix=".tmp", delete=False) as handle:
+        temporary = Path(handle.name)
+    try:
+        with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for name, content in scripts:
+                info = zipfile.ZipInfo(name, date_time=(2020, 1, 1, 0, 0, 0))
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.external_attr = 0o100644 << 16
+                archive.writestr(info, content)
+        with zipfile.ZipFile(temporary) as archive:
+            if archive.namelist() != [name for name, _ in scripts] or any(
+                archive.read(name) != content for name, content in scripts
+            ):
+                raise OSError("ZIP verification failed; previous archive was not changed.")
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+    print(f"Packed {len(scripts)} script(s): {destination}")
+    print("Violentmonkey → Dashboard → Settings → Import from zip → choose this ZIP.")
+    print("Repeat in each browser profile. Source bytes and @require unchanged; no settings or GM values included.")
 
 
 class FolderStore:
@@ -208,25 +287,34 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--folder", help="Local/iCloud destination, instead of USB")
+    mode.add_argument("--zip", metavar="FILE", help="Build a Violentmonkey import ZIP; defaults to practical categories")
     mode.add_argument("--plan", action="store_true", help="List sources without accessing any destination")
     mode.add_argument("--list-devices", action="store_true", help="List USB device IDs without writing")
     parser.add_argument("--udid", help="Select one USB iPad (required when multiple devices are attached)")
     parser.add_argument("--remote-folder", default=REMOTE_FOLDER, help="Subfolder inside Userscripts Documents")
-    parser.add_argument("--only", action="append", default=[], metavar="SLUG", help="Sync only this script; repeatable")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--only", action="append", default=[], metavar="SLUG", help="Select only this script; repeatable")
+    selection.add_argument("--category", action="append", default=[], metavar="ID", help="ZIP: select a catalog category; repeatable")
+    selection.add_argument("--all", action="store_true", help="ZIP: include examples and experimental scripts too")
     parser.add_argument("--dry-run", action="store_true", help="Compare with destination without writing")
     args = parser.parse_args(argv)
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", args.remote_folder):
         parser.error("--remote-folder must be a single folder name, starting with a letter or digit")
-    if args.udid and (args.folder or args.plan or args.list_devices):
+    if args.udid and (args.folder or args.zip or args.plan or args.list_devices):
         parser.error("--udid is only valid for USB sync")
+    if (args.category or args.all) and not args.zip:
+        parser.error("--category / --all require --zip; iPad/folder sync already defaults to all scripts")
     return args
 
 
 def main():
     args = parse_args()
     try:
-        scripts = [] if args.list_devices else collect_scripts(REPO_ROOT, args.only)
-        if args.plan:
+        scripts = [] if args.list_devices else collect_scripts(REPO_ROOT, () if args.zip else args.only)
+        if args.zip:
+            scripts = select_zip_scripts(REPO_ROOT, scripts, args.category, args.all, args.only)
+            pack_zip(scripts, args.zip, args.dry_run)
+        elif args.plan:
             for name, content in scripts:
                 print(f"{name} ({len(content):,} bytes)")
             print(f"{len(scripts)} script(s); _template excluded; source bytes and @require unchanged.")
@@ -240,7 +328,7 @@ def main():
         return 130
     except Exception as error:
         print(f"Sync failed ({type(error).__name__}): {error}", file=sys.stderr)
-        if not args.folder and not args.plan:
+        if not args.folder and not args.zip and not args.plan:
             print("Check cable, unlock/trust in Finder, and install/open Userscripts on the iPad.", file=sys.stderr)
         return 1
     return 0

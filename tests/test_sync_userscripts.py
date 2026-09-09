@@ -1,13 +1,18 @@
-"""File safety and USB routing tests. No device or pymobiledevice3 required."""
+"""File safety, ZIP selection/import contents and USB routing; no device dependencies."""
 
 import asyncio
 import contextlib
 import importlib.util
 import io
+import json
+import subprocess
+import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location(
     "sync_userscripts", Path(__file__).resolve().parents[1] / "scripts/sync-userscripts.py"
@@ -202,6 +207,109 @@ class DeviceStoreTests(unittest.TestCase):
         with self.assertRaises(ConnectionError):
             asyncio.run(syncer.sync([("a.user.js", b"new")], store))
         self.assertFalse(service.operations)
+
+
+class ZipTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.sources = syncer.collect_scripts(syncer.REPO_ROOT)
+
+    def pack(self, scripts, target, dry_run=False):
+        with contextlib.redirect_stdout(io.StringIO()):
+            syncer.pack_zip(scripts, target, dry_run)
+
+    def test_catalog_defaults_and_explicit_selection(self):
+        select = lambda **kwargs: syncer.select_zip_scripts(syncer.REPO_ROOT, self.sources, **kwargs)
+        defaults = {name for name, _ in select()}
+        self.assertIn("page-reader-markdown.user.js", defaults)
+        self.assertTrue(defaults.isdisjoint({"hello-userscript.user.js", "page-title-tag.user.js", "m365-copilot-export-markdown.user.js"}))
+        self.assertEqual(select(include_all=True), self.sources)
+        self.assertEqual({name for name, _ in select(categories=["examples"])}, {"hello-userscript.user.js", "page-title-tag.user.js"})
+        both = {name for name, _ in select(categories=["examples", "experimental", "examples"])}
+        self.assertEqual(both, {"hello-userscript.user.js", "page-title-tag.user.js", "m365-copilot-export-markdown.user.js"})
+        self.assertEqual([name for name, _ in select(only=["page-title-tag"])], ["page-title-tag.user.js"])
+        for kwargs in ({"categories": ["typo"]}, {"only": ["typo"]}):
+            with self.assertRaisesRegex(ValueError, "Unknown"):
+                select(**kwargs)
+
+    def test_catalog_must_cover_each_script_exactly_once(self):
+        (self.root / "scripts").mkdir()
+        catalog = self.root / "scripts/catalog.json"
+        valid = [{"id": "tools", "title": "工具", "description": "工具", "default": True, "scripts": ["a"]}]
+        for slugs, error in [([], "Add scripts"), (["a", "a"], "duplicate"), (["unknown"], "Unknown")]:
+            valid[0]["scripts"] = slugs
+            catalog.write_text(json.dumps(valid))
+            with self.assertRaisesRegex(ValueError, error):
+                syncer.select_zip_scripts(self.root, [("a.user.js", b"source")])
+
+    def test_zip_preserves_all_source_bytes_and_only_selected_files(self):
+        target = self.root / "folder with spaces" / "bundle.zip"
+        self.pack(self.sources, target)
+        with zipfile.ZipFile(target) as archive:
+            self.assertEqual(archive.namelist(), [name for name, _ in self.sources])
+            self.assertTrue(all("/" not in name and name.endswith(".user.js") for name in archive.namelist()))
+            for name, content in self.sources:
+                self.assertEqual(archive.read(name), content)
+        first_bytes = target.read_bytes()
+        self.pack(self.sources, target)
+        self.assertEqual(target.read_bytes(), first_bytes)
+        # 重選後不把舊 ZIP 裡的其他 entries 帶回。
+        self.pack(self.sources[:1], target)
+        with zipfile.ZipFile(target) as archive:
+            self.assertEqual(archive.namelist(), [self.sources[0][0]])
+
+    def test_dry_run_never_creates_or_replaces_zip(self):
+        target = self.root / "absent" / "bundle.zip"
+        self.pack(self.sources, target, True)
+        self.assertFalse(target.parent.exists())
+        target = self.root / "bundle.zip"
+        target.write_bytes(b"previous archive")
+        self.pack(self.sources, target, True)
+        self.assertEqual(target.read_bytes(), b"previous archive")
+        self.assertEqual(list(self.root.iterdir()), [target])
+
+    def test_zip_failure_preserves_previous_artifact(self):
+        target = self.root / "bundle.zip"
+        target.write_bytes(b"previous archive")
+        with patch.object(zipfile.ZipFile, "writestr", side_effect=OSError("disk full")):
+            with self.assertRaisesRegex(OSError, "disk full"):
+                self.pack(self.sources, target)
+        self.assertEqual(target.read_bytes(), b"previous archive")
+        self.assertEqual(list(self.root.iterdir()), [target])
+
+    def test_zip_rejects_symlink_and_non_zip_output(self):
+        original = self.root / "original.zip"
+        original.write_bytes(b"keep")
+        alias = self.root / "alias.zip"
+        alias.symlink_to(original)
+        with self.assertRaisesRegex(ValueError, "symlink"):
+            self.pack(self.sources, alias)
+        with self.assertRaisesRegex(ValueError, "end in .zip"):
+            self.pack(self.sources, self.root / "source.user.js")
+        self.assertEqual(original.read_bytes(), b"keep")
+
+    def test_cli_rejects_conflicting_selection_and_usb_options(self):
+        for options in (["--all"], ["--category", "examples"],
+                        ["--zip", "x.zip", "--all", "--only", "page-title-tag"],
+                        ["--zip", "x.zip", "--udid", "device"],
+                        ["--zip", "x.zip", "--folder", "folder"]):
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                syncer.parse_args(options)
+
+    def test_zip_cli_needs_no_usb_dependency_and_preserves_old_zip_on_bad_selection(self):
+        target = self.root / "My Bundle.zip"
+        command = [sys.executable, "-S", str(syncer.REPO_ROOT / "scripts/sync-userscripts.py"), "--zip", str(target)]
+        result = subprocess.run([*command, "--category", "examples"], text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with zipfile.ZipFile(target) as archive:
+            self.assertEqual(set(archive.namelist()), {"hello-userscript.user.js", "page-title-tag.user.js"})
+        before = target.read_bytes()
+        result = subprocess.run([*command, "--only", "typo"], text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("iPad", result.stderr)
+        self.assertEqual(target.read_bytes(), before)
 
 
 if __name__ == "__main__":

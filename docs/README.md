@@ -22,6 +22,7 @@
 | 13 | [Playwright vs. userscript](./13-playwright-vs-userscript.md)          | 什麼時候該用哪個，以及 `npm run preview` 測試 harness |
 | 14 | [iOS Userscripts 評估](./14-ios-userscripts.md) | 安裝／同步、API 差異、逐支腳本相容性與實機驗收 |
 | 15 | [同步到 iPad](./15-sync-to-ipad.md) | 用 just 經 USB 或 iCloud 平鋪同步腳本、預覽差異與保留備份 |
+| 16 | [桌面批量安裝](./16-desktop-install.md) | Arc／Chrome／Edge／Zen／Firefox 安裝引導、分類 ZIP 與重複匯入 |
 
 ## 只想快速上手
 

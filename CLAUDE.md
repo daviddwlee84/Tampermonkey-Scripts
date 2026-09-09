@@ -44,6 +44,11 @@ npm run new -- <slug> "<Name>" "<@match>" ["<description>"]
 4. 動到 `README.md` 的腳本清單表格時，**只透過 `npm run index`**，
    絕對不要手改 `<!-- BEGIN SCRIPT INDEX -->` / `<!-- END SCRIPT INDEX -->` 之間的內容
 
+腳本分類統一維護在 `scripts/catalog.json`；每支非範本腳本必須且只能出現在一個分類。
+新增腳本後先加入分類，再跑 `npm run index`。`default: true` 的分類會納入 `just vm-pack`
+預設桌面 ZIP；教學與實驗分類預設排除，`--all`／`--category`／`--only` 可明選。
+iPad／資料夾同步維持原有的全部非範本腳本選擇。修改傳輸或打包工具時跑 `just test-sync`。
+
 `npm run verify` = `check` + `index:check`，等同 CI 跑的內容。
 
 ## 測試腳本

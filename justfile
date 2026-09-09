@@ -8,6 +8,18 @@ default:
 check:
     npm run verify
 
+# 開啟 Violentmonkey 官方安裝頁；macOS 可指定 arc/chrome/edge/zen/firefox
+vm-install *args:
+    @python3 scripts/open-violentmonkey.py "$@"
+
+# 預覽桌面 ZIP 清單；預設排除教學／實驗，可加 --all、--category ID、--only SLUG
+vm-plan *args:
+    @python3 scripts/sync-userscripts.py --zip dist/violentmonkey-scripts.zip --dry-run "$@"
+
+# 產生 ZIP，供各瀏覽器的 Violentmonkey 一次匯入；篩選參數同 vm-plan
+vm-pack *args:
+    @python3 scripts/sync-userscripts.py --zip dist/violentmonkey-scripts.zip "$@"
+
 # 只列出準備同步的腳本，不連接裝置、不寫檔
 sync-plan *args:
     @python3 scripts/sync-userscripts.py --plan "$@"
@@ -24,6 +36,6 @@ sync-ipad *args:
 sync-folder directory *args:
     @python3 scripts/sync-userscripts.py --folder "$@"
 
-# 同步工具測試（不需要 iPad 或第三方 Python 套件）
+# 傳輸／ZIP 工具測試（不需要 iPad 或第三方 Python 套件）
 test-sync:
     python3 -m unittest discover -s tests -p 'test_sync_userscripts.py'

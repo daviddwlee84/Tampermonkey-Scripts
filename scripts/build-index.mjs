@@ -4,6 +4,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO_ROOT, listUserscripts, first, rawUrlFor } from './lib/meta.mjs';
+import { loadCatalog } from './lib/catalog.mjs';
 
 const BEGIN = '<!-- BEGIN SCRIPT INDEX -->';
 const END = '<!-- END SCRIPT INDEX -->';
@@ -32,7 +33,18 @@ function renderTable(scripts) {
 }
 
 const scripts = listUserscripts().filter((s) => !s.missing && s.meta);
-const table = renderTable(scripts);
+const groups = loadCatalog(scripts);
+const bySlug = new Map(scripts.map((script) => [script.slug, script]));
+const table = groups
+  .filter((group) => group.scripts.length)
+  .map((group) =>
+    [
+      `### ${group.title}`,
+      `${group.description} 分類代號：\`${group.id}\`。`,
+      renderTable(group.scripts.map((slug) => bySlug.get(slug))),
+    ].join('\n\n')
+  )
+  .join('\n\n');
 
 const readme = readFileSync(README, 'utf8');
 const start = readme.indexOf(BEGIN);

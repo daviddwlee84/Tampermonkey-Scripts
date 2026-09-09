@@ -98,8 +98,9 @@ Dashboard → 該腳本 → **Check for userscript updates**。
 
 ## 新機器 bootstrap：第一次怎麼把腳本裝進去
 
-只用 GitHub 的話，第一次要手動裝一輪；更新設定正確時，之後可由 manager 自動檢查。所以不是
-「每次都重新匯入」，而是**每個 browser profile bootstrap 一次**。
+第一次可逐支安裝 GitHub raw URL，或執行 **`just vm-pack`**，在 Violentmonkey 的
+Settings → Import from zip 一次匯入；完整分類與瀏覽器引導見 [16 · 桌面批量安裝](./16-desktop-install.md)。
+更新設定正確時，之後可由 manager 自動檢查；一般分發只需**每個 browser profile bootstrap 一次**。
 
 ### 方法 A：Install from URL（最可靠，建議用這個）
 
@@ -139,7 +140,9 @@ README 那張自動產生的表格裡，Install 連結就是這種網址。
 以及是否包含預期的 values。[Violentmonkey metadata](https://violentmonkey.github.io/api/metadata-block/#downloadurl)
 把下載 URL 定義為更新來源；不是只以「是否從檔案匯入」決定。
 
-建議以 URL 管理一般程式碼安裝，以有明確內容的 JSON／ZIP 管理備份；本地開發仍可用檔案匯入。
+本 repo 的 `just vm-pack` 產生只有原始 `.user.js` 的 ZIP，適合批量安裝目前工作區版本，
+不包含 manager 設定或 GM values，不能當作設定備份。單支腳本仍可由 URL 安裝；需要備份時，
+使用 manager 的匯出功能並核對選項。
 
 ### 確認更新設定有開
 

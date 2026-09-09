@@ -2,7 +2,7 @@
 
 在 Mac 執行 **`just sync-ipad`**，就會把目前工作區的正式 `.user.js` 平鋪複製到 USB iPad 的 Userscripts App。包含尚未 commit 的腳本內容，不需要先 push GitHub。
 
-同步工具只搬檔案，不會適配 GM API。能在資料夾看見腳本和能在 Safari 正常執行是不同的驗收項目，請搭配 [14 · Userscripts 相容性評估](./14-ios-userscripts.md)。第 14 章是 2026-09-08 的 8 支腳本快照；同步命令會自動收集目前倉庫的全部正式腳本（2026-09-09 為 10 支）。
+同步工具只搬檔案，不會適配 GM API。能在資料夾看見腳本和能在 Safari 正常執行是不同的驗收項目，請搭配 [14 · Userscripts 相容性評估](./14-ios-userscripts.md)。第 14 章是 2026-09-08 的 8 支腳本快照；同步命令會自動收集目前倉庫的全部非範本腳本，實際數量以 `just sync-plan` 為準。iPad／資料夾同步包含教學與實驗腳本，與 [桌面 ZIP](./16-desktop-install.md) 的預設選擇不同。
 
 ## 第一次設定
 
@@ -93,3 +93,7 @@ just sync-ipad --dry-run  # 同步後應全部顯示 unchanged
 | 同步完成卻沒看到腳本 | 確認 Userscripts 選的是工具列出的子資料夾，而非 Documents 根目錄或另一個 iCloud 目錄；開彈窗再刷新 |
 | 看得到但執行失敗 | 檢查網站權限、match 與 GM API 相容性；檔案傳輸成功不代表腳本已適配 |
 | 不想使用 just | `python3 scripts/sync-userscripts.py --help`；USB 用 `uv run --script scripts/sync-userscripts.py` |
+
+## 下一步
+
+[16 · 桌面批量安裝](./16-desktop-install.md)

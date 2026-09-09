@@ -3,6 +3,9 @@
 在分頁標題前面加上短標籤（`[GPT]`、`[Claude]`、`[Gemini]`），
 開一排 AI 分頁時比 favicon 好認。
 
+歸在「入門與教學範例」：適合學習最小頁面修改與標題監看，預設桌面 ZIP 不包含它。
+需要時可單獨 Install，或執行 `just vm-pack --category examples`。
+
 - **生效網站**：`https://chatgpt.com/*`、`https://claude.ai/*`、`https://gemini.google.com/*`
 - **安裝**：[點這裡安裝](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/page-title-tag/page-title-tag.user.js)
 - **原始碼**：[`page-title-tag.user.js`](./page-title-tag.user.js)

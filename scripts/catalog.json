@@ -1,0 +1,42 @@
+[
+  {
+    "id": "ai-export",
+    "title": "AI 對話匯出",
+    "description": "把 AI 對話帶到 Markdown、筆記或 coding agent。",
+    "default": true,
+    "scripts": [
+      "chatgpt-export-markdown",
+      "claude-export-markdown",
+      "copilot-export-markdown",
+      "gemini-export-markdown"
+    ]
+  },
+  {
+    "id": "page-tools",
+    "title": "閱讀與媒體工具",
+    "description": "網頁正文、圖片影片與 YouTube 摘要。",
+    "default": true,
+    "scripts": ["media-helper", "page-reader-markdown", "youtube-gemini-summary"]
+  },
+  {
+    "id": "keyboard",
+    "title": "鍵盤導航",
+    "description": "Vim 式頁內操作，以及搭配原生 Vimium C 的小抄與練習。",
+    "default": true,
+    "scripts": ["vim-navigation", "vimium-c-companion"]
+  },
+  {
+    "id": "experimental",
+    "title": "實驗性腳本",
+    "description": "仍在驗證與調整，請先閱讀個別限制；不納入預設桌面安裝包。",
+    "default": false,
+    "scripts": ["m365-copilot-export-markdown"]
+  },
+  {
+    "id": "examples",
+    "title": "入門與教學範例",
+    "description": "用來理解 metadata、GM API 與頁面修改的最小範例；不納入預設桌面安裝包。",
+    "default": false,
+    "scripts": ["hello-userscript", "page-title-tag"]
+  }
+]

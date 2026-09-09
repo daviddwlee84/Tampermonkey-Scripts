@@ -4,8 +4,8 @@
 
 | 瀏覽器            | 建議                                        |
 | ----------------- | ------------------------------------------- |
-| Chrome / Edge / Brave | [Tampermonkey](https://www.tampermonkey.net/) 或 [Violentmonkey](https://violentmonkey.github.io/) |
-| Firefox           | Violentmonkey 或 Tampermonkey               |
+| Arc / Chrome / Edge / Brave | [Tampermonkey](https://www.tampermonkey.net/) 或 [Violentmonkey 官方安裝頁](https://violentmonkey.github.io/get-it/) |
+| Zen / Firefox     | [Violentmonkey（Mozilla Add-ons）](https://addons.mozilla.org/firefox/addon/violentmonkey/) 或 Tampermonkey |
 | Safari            | [Userscripts（App Store）](https://apps.apple.com/us/app/userscripts/id1463298887)，先看 [iOS 評估](./14-ios-userscripts.md) |
 
 差別見 [09 Manager 比較](./09-managers-comparison.md)。本教學兩者通用，
@@ -15,11 +15,16 @@ metadata 與 GM API 在 Tampermonkey / Violentmonkey 上大致相容。
 沒有明顯 API 障礙，但本倉庫的 Hello Userscript 與多數正式腳本需要適配。
 iOS 的安裝與外部編輯方式也不同，請依 [14 的步驟](./14-ios-userscripts.md#iphoneipad-安裝與同步)操作。
 
-### Chrome 需要打開 Developer mode
+在 repo 也可用 `just vm-install arc` 開啟商店頁（可換成 `chrome`、`edge`、`zen`、`firefox`）。
+已經有 manager、只想批量裝本 repo 的工具，直接看 [16 · 桌面批量安裝](./16-desktop-install.md)。
 
-Chrome 的 Manifest V3 之後，userscript manager 需要你在
-`chrome://extensions` 開啟 **Developer mode**（開發人員模式）才能執行腳本。
-沒開的話會看到「腳本裝了但完全沒反應」——這是最常見的第一個坑。
+### Chrome 需要允許執行 userscripts
+
+Chrome 138+ 在 `chrome://extensions` → manager 的 **Details** 裡開啟
+**Allow User Scripts**（允許使用者指令碼）；Chrome 138 之前使用全域 **Developer mode**。
+Arc／Edge 的選項名稱與導入時點可能不同，請以實際擴充功能頁面為準。
+沒開的話可能看到「腳本裝了但完全沒反應」。
+[Chrome 官方說明](https://developer.chrome.com/docs/extensions/reference/api/userScripts#user-scripts-toggle)
 
 ## 2. 建立腳本
 
