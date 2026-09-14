@@ -9,7 +9,7 @@
 
 ## 它做了什麼
 
-右下角一顆 **⇩ Export MD**，點開有四個動作：
+右下角一顆 **⇩ Export MD**，保留四個快速匯出動作：
 
 | 動作 | 輸出 |
 | --- | --- |
@@ -17,6 +17,9 @@
 | Copy Agent Handoff | 同上，但前面多一段給 agent 的指示（把已定案的決策當既有前提、不要重開已解決的問題） |
 | Download .md | 同 transcript，存成 `chatgpt-<標題>-<時間>.md` |
 | Download .json | 原始對話 JSON，之後要重新 render / 建索引用 |
+
+另有 **瀏覽／選取…**，開啟獨立的對話樹瀏覽模式。一般快速匯出始終使用目前網頁的
+完整所選路徑；瀏覽模式的勾選、匯入檔案與顯示設定不會影響它，也不會切換網站本身的分支。
 
 外加三個開關（預設關，會記住）：**含 thinking / reasoning**、**含工具呼叫與搜尋結果**、
 **含 Deep Research 計畫／狀態**。Deep Research 的最終報告不必開任何選項就會匯出；
@@ -89,8 +92,8 @@ code fence、表格、citation 都可能失真。
 - 靠 `__reactRouterContext` 這種 app internals，ChatGPT 改版就可能失效
   （見 [`docs/06`](../../docs/06-sandbox-and-unsafewindow.md)，那裡把這列為最脆弱的一層）。
   選它是因為更穩的那層（DOM）根本拿不到完整資料。壞掉的徵兆是按鈕跳「抓不到對話資料」。
-- 只在 share 頁做過端到端驗證（`npm run preview`）。登入中的 `/c/` 走的是第 1/3 條路，
-  沒有登入 session 的 harness 驗不到，得實機確認。
+- 真實 ChatGPT 網頁目前只驗證公開 share 頁；登入中的 `/c/` 以 fixture 與隔離的
+  Violentmonkey 安裝驗證，尚未使用真實登入 session 測試。
 - 尚未完成的 Deep Research 還沒有 `report_message`；預設不會替它虛構回答。開啟
   **含 Deep Research 計畫／狀態**時，仍可匯出目前的 plan 與執行狀態。
 - 圖片只輸出 `![image](<asset_pointer>)` 佔位，不會下載檔案。
@@ -101,24 +104,62 @@ code fence、表格、citation 都可能失真。
 
 ## 分支保存
 
-Markdown 與 Agent Handoff 維持目前選中分支的線性閱讀順序。
-需要保存對話樹時，使用 **Download .json**：其中的 `mapping`、節點 `parent`／`children`
-與 `current_node` 可供後續樹狀瀏覽、多選訊息或路徑再匯出，不必從 Markdown 猜回節點關係。
-目前尚未提供分支選取 UI。
+**Download .json** 仍保存原始回應：`mapping`、節點 `parent`／`children` 與 `current_node`
+皆保留。瀏覽模式另提供 **儲存完整對話＋選取**，產生 `.chat-archive.json`，
+包含完整已取得的樹、可讀 Markdown、原始回應及選取狀態；未勾選內容也在完整存檔中。
+重新匯入會還原勾選，包含刻意清空的選取。
 
 JSON 只能保存來源實際回傳的節點；分享快照不一定包含所有編輯／重新生成的分支。
-這個限制也適用於未來的樹狀呈現，無法還原來源沒有提供的版本。
+無法還原來源沒有提供的版本。缺少上游的節點會保留並標示前文缺失。
+
+## 瀏覽／選取模式
+
+- 初次開啟預選目前網頁的 path。點訊息標題只閱讀；checkbox 只切換那一則；
+  **只選這則**清除其他勾選，不會自動補入上游前文。
+- **加入整條 path**選入目前閱讀路徑的可見訊息；樹上每列的 **＋path** 可加入根節點到該列的路徑。
+  可連續加入不同分支，共同訊息只選一次。
+- 閱讀區以 Shift 點 checkbox 可選取同一路徑的連續範圍。Deep Research 以整份報告為單位，
+  收合正文不會截短匯出的報告。
+- 收合分支、切換閱讀路徑或顯示工具／思考，不會取消已選內容。底部列出其中隱藏的選取數；
+  **匯出預覽**會顯示實際輸出的所有所選正文。
+- 多條分支共用前文只出現一次，分支標題說明接續哪一則訊息；省略位置有中性標記，
+  不會帶出未勾選正文，也不會把互斥回答按時間混成同一段。
+- 開啟登入對話時會先嘗試新的 backend 回應，再退回既有解析來源。
+  **重新讀取網頁**保留仍存在的勾選，新訊息不會自動加入；切換網址會關閉舊對話面板並取消舊請求。
+- 樹支援方向鍵、Home／End、Space 勾選及 Enter 閱讀；Esc 關閉頁內模式並還原焦點。
+  手機以分支／閱讀／預覽切換；長樹與長報告按需呈現。
+
+此模式不會自動寫入瀏覽器資料庫。要跨重整或離線保留狀態，請明確儲存完整存檔。
+遇到損壞的研究資料，可繼續匯出其他未受影響的選取；若勾選了錯誤 block，Markdown 會明確報錯，
+完整存檔仍可保存供除錯。
+
+## 離線檢視器
+
+```bash
+npm run build:chat-explorer
+open dist/conversation-explorer.html
+```
+
+此 HTML 內嵌共用程式、Markdown renderer、sanitizer、樣式及第三方授權文字，
+可直接以 `file://` 開啟，不需架服務或下載 CDN 資源。匯入本腳本的原始 JSON 或新存檔即可使用。
+檔案在本機處理；外部圖片顯示成連結，不自動載入。剪貼簿權限不足時提供手動複製與下載。
+
+格式與建置細節見 [離線檢視器文件](../../playgrounds/chat-explorer/README.md)。
+第三方套件固定為 Marked 18.0.13、DOMPurify 3.4.15；建置會核對已提交 vendor 檔案的 SHA-256。
 
 ## 測試
 
 ```bash
 npm run test:chatgpt-export
+npm run test:chat-explorer
 ```
 
 測試直接執行實際 userscript 與共用 renderer，涵蓋共用 plan 的多份報告、重複快照、
 缺少 ID、研究狀態、分支篩選，以及 widget 損壞時的 JSON 保存。
 Chromium／Firefox fixture 另外檢查 router state 與 network capture 來源的四個匯出動作，
 讀回下載檔案核對內容。GM shim 測試不代表真實 manager sandbox 或系統剪貼簿已通過驗證。
+新模式另測試模式隔離、樹狀存檔往返、多 path 與範圍選取、離線零外部請求、窄螢幕、
+鍵盤及 5,000 節點的按需渲染。實際驗證範圍見 [VALIDATION.md](./VALIDATION.md)。
 
 真實分享頁的 smoke test：
 

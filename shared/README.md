@@ -43,6 +43,18 @@
 因為 `scripts/check-meta.mjs` 只掃腳本本體來交叉比對 `@grant`，
 GM 呼叫留在腳本裡，`npm run check` 才驗得到少宣告的 grant。
 
+ChatGPT 頁內選取模式與離線檢視器共用：
+
+| 模組 | 用途 |
+| --- | --- |
+| `chatgpt-adapter.js` | 純 ChatGPT 訊息與 Deep Research 解析；一般快速匯出亦使用此層 |
+| `conversation-archive.js` | Archive v1、來源樹、可選 block、path 與部分 Markdown 匯出 |
+| `conversation-explorer.js` | 獨立選取狀態與 Shadow DOM UI；由呼叫端提供剪貼簿及重新讀取能力 |
+| `vendor/` | 固定版本 Marked／DOMPurify、授權與校驗資料；供頁內與單檔離線建置共用 |
+
+上述模組不呼叫 GM API；瀏覽器操作由 userscript 的呼叫端橋接。
+格式與建置說明見 [對話樹瀏覽器](../playgrounds/chat-explorer/README.md)。
+
 ## ⚠️ 先考慮直接複製
 
 `@require` 有兩個實際代價：

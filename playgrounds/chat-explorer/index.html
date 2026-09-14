@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>對話樹瀏覽器</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        min-height: 100%;
+        background: #182320;
+      }
+      body {
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="../../shared/chat-export.js"></script>
+    <script src="../../shared/chatgpt-adapter.js"></script>
+    <script src="../../shared/conversation-archive.js"></script>
+    <script src="../../shared/vendor/marked-18.0.13.umd.js"></script>
+    <script src="../../shared/vendor/dompurify-3.4.15.min.js"></script>
+    <script src="../../shared/conversation-explorer.js"></script>
+    <script>
+      createConversationExplorer({ embedded: true }).open();
+    </script>
+  </body>
+</html>

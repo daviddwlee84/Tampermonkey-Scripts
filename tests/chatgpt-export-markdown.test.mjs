@@ -5,11 +5,12 @@ import vm from 'node:vm';
 import { chromium, firefox } from 'playwright';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
-const [SCRIPT, SHARED, UI, FIXTURE] = await Promise.all([
+const [SCRIPT, SHARED, UI, FIXTURE, ADAPTER] = await Promise.all([
   read('userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js'),
   read('shared/chat-export.js'),
   read('shared/export-ui.js'),
   read('tests/fixtures/chatgpt-export/multiple-research.json'),
+  read('shared/chatgpt-adapter.js'),
 ]);
 const OUT = new URL('../.preview/chatgpt-export-tests/', import.meta.url);
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -76,7 +77,7 @@ function harness(data, settings = {}) {
     },
   });
   context.window = context;
-  vm.runInContext(SHARED, context);
+  vm.runInContext(SHARED + '\n' + ADAPTER, context);
   context.downloadText = (filename, text, mime) => result.downloads.push({ filename, text, mime });
   vm.runInContext(SCRIPT, context);
   result.run = async (label = 'Copy Markdown') => {
@@ -295,7 +296,7 @@ for (const [engineName, engine] of [
         return route.abort();
       });
       await page.addInitScript({
-        content: `(${gmShim})(${JSON.stringify({ data, transport })});\n${SHARED}\n${UI}\n${SCRIPT}`,
+        content: `(${gmShim})(${JSON.stringify({ data, transport })});\n${SHARED}\n${UI}\n${ADAPTER}\n${SCRIPT}`,
       });
       await page.goto(
         `https://chatgpt.com/${transport === 'router' ? 'share/fixture' : 'c/fixture-conversation'}`

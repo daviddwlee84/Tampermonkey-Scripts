@@ -2,6 +2,7 @@ node_modules/
 dist/
 .specstory/
 playgrounds/dino/vendor/
+shared/vendor/
 userscripts/dino-ai-lab/history/
 
 # README.md 裡有一段由 `npm run index` 產生的表格。讓 prettier 去對齊它，
