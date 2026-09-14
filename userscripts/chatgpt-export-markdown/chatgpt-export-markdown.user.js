@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      1.3.0
+// @version      1.3.1
 // @description  把整段 ChatGPT 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用
 // @author       Da-Wei Lee
 // @license      MIT
@@ -40,7 +40,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.3.0';
+  const VERSION = '1.3.1';
   const NS = 'cgpt-export-md';
   const EXPORTER = `chatgpt-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[chatgpt-export-markdown]';
@@ -406,18 +406,40 @@
     return copy;
   }
 
+  function researchInstanceKey(host, index) {
+    const sdk = host.metadata?.chatgpt_sdk || {};
+    const sessionId =
+      sdk.widget_session_id || sdk.tool_response_metadata?.['openai/widgetSessionId'];
+    if (sessionId) return `session:${sessionId}`;
+    if (sdk.invocation_uuid) return `invocation:${sdk.invocation_uuid}`;
+    return host.id ? `host:${host.id}` : `index:${index}`;
+  }
+
   /** 插回 app 內嵌訊息；同一份 report 出現多個 snapshot 時採最新的 completed state。 */
   function expandDeepResearchMessages(messages, opts) {
     const topLevelIds = new Set(messages.map((message) => message.id).filter(Boolean));
     const best = new Map();
+    const instancesWithReports = new Set();
 
     messages.forEach((host, index) => {
       const info = deepResearchInfo(host);
       if (!info) return;
-      const key = info.state?.plan?.plan_id || info.report?.id || host.id || `research-${index}`;
-      const candidate = { ...info, host, hostIndex: index };
+      const instanceKey = researchInstanceKey(host, index);
+      // plan_id 可能被不同研究沿用，不能拿它判定兩份報告是同一份。
+      const key = info.report?.id
+        ? `report-id:${info.report.id}`
+        : `${info.report ? 'report-instance' : 'state'}:${instanceKey}`;
+      if (info.report) instancesWithReports.add(instanceKey);
+      const previous = best.get(key);
+      const candidate = {
+        ...info,
+        host,
+        instanceKey,
+        // 更新內容不能把較早的回覆移到後來的追問之後。
+        hostIndex: previous?.hostIndex ?? index,
+      };
       const score = (info.state?.status === 'completed' ? 1e15 : 0) + candidateTimestamp(candidate);
-      if (!best.has(key) || score >= best.get(key).score) best.set(key, { ...candidate, score });
+      if (!previous || score >= previous.score) best.set(key, { ...candidate, score });
     });
 
     const stateForTopLevel = new Map();
@@ -427,10 +449,14 @@
         stateForTopLevel.set(candidate.report.id, candidate.state);
         continue;
       }
-      if (!candidate.report && !opts.includeResearchDetails) continue;
+      if (
+        !candidate.report &&
+        (!opts.includeResearchDetails || instancesWithReports.has(candidate.instanceKey))
+      )
+        continue;
 
       const message = candidate.report || {
-        id: `deep-research-state-${candidate.state?.plan?.plan_id || candidate.host.id}`,
+        id: `deep-research-state-${candidate.instanceKey}`,
         author: { role: 'assistant', metadata: {} },
         create_time: candidate.host.update_time || candidate.host.create_time,
         content: { content_type: 'text', parts: [] },
@@ -615,7 +641,11 @@
       const { data, source } = await resolveConversation(target);
       const url = target.shareId ? `${location.origin}/share/${target.shareId}` : location.href;
 
-      const doc = normalize(data, { url }, settings);
+      // 原始 JSON 是除錯／重建分支用的資料，不應受 widget 或 Markdown 解析失敗影響。
+      const doc =
+        mode === 'json'
+          ? { source: 'chatgpt', title: data.title || 'ChatGPT conversation' }
+          : normalize(data, { url }, settings);
       const text =
         mode === 'json'
           ? JSON.stringify(data, null, 2)

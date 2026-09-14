@@ -19,6 +19,7 @@
     "format:check": "prettier --check .",
     "verify": "npm run check && npm run index:check",
     "preview": "node scripts/preview.mjs",
+    "test:chatgpt-export": "node --test tests/chatgpt-export-markdown.test.mjs",
     "test:page-reader": "node --test tests/page-reader-markdown.test.mjs",
     "test:media-helper": "node --test tests/media-helper.test.mjs",
     "test:vim-navigation": "node --test tests/vim-navigation.test.mjs",

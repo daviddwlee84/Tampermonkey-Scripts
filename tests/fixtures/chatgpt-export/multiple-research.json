@@ -1,0 +1,298 @@
+{
+  "title": "Multiple Deep Research regression",
+  "conversation_id": "fixture-conversation",
+  "create_time": 1789341524,
+  "current_node": "tool-2",
+  "mapping": {
+    "root": {
+      "id": "root",
+      "message": null,
+      "parent": null,
+      "children": ["system"]
+    },
+    "system": {
+      "id": "system",
+      "message": {
+        "id": "system",
+        "author": {
+          "role": "system"
+        },
+        "create_time": 1789341525,
+        "content": {
+          "content_type": "text",
+          "parts": ["Hidden system content"]
+        },
+        "metadata": {},
+        "recipient": "all"
+      },
+      "parent": "root",
+      "children": ["user-1"]
+    },
+    "user-1": {
+      "id": "user-1",
+      "message": {
+        "id": "user-1",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1789341526,
+        "content": {
+          "content_type": "text",
+          "parts": ["Initial research question"]
+        },
+        "metadata": {},
+        "recipient": "all"
+      },
+      "parent": "system",
+      "children": ["tool-1"]
+    },
+    "tool-1": {
+      "id": "tool-1",
+      "message": {
+        "id": "tool-1",
+        "author": {
+          "role": "tool",
+          "name": "api_tool.call_tool"
+        },
+        "create_time": 1789341616,
+        "content": {
+          "content_type": "text",
+          "parts": ["Research 1 started"]
+        },
+        "metadata": {
+          "chatgpt_sdk": {
+            "resource_name": "Deep Research App_start",
+            "widget_session_id": "session-1",
+            "invocation_uuid": "invocation-1",
+            "widget_state": "{\"status\": \"completed\", \"plan\": {\"plan_id\": \"reused-plan-id\", \"title\": \"Research 1\", \"steps\": [{\"text\": \"Read sources\", \"status\": \"completed\"}]}, \"last_updated_at\": 1789341627, \"report_message\": {\"id\": \"report-1\", \"author\": {\"role\": \"assistant\"}, \"create_time\": 1789341626, \"content\": {\"content_type\": \"text\", \"parts\": [\"# First report\\n\\nFirst report evidence citeturn0search1\\n\\n| GPU | W |\\n| --- | --- |\\n| 3090 | 320 |\\n\\n```js\\nconst reward = 42;\\n```\"]}, \"metadata\": {\"content_references\": [{\"matched_text\": \"citeturn0search1\", \"start_idx\": 38, \"end_idx\": 57, \"alt\": \"[Source](https://example.com/first-report)\"}, {\"matched_text\": \" \", \"alt\": \"\", \"type\": \"sources_footnote\"}]}, \"recipient\": \"all\", \"status\": \"finished_successfully\", \"channel\": \"final\"}}",
+            "tool_response_metadata": {
+              "openai/widgetSessionId": "session-1",
+              "venus_widget_state": "{\"status\": \"waiting_for_user_response_on_plan\", \"plan\": {\"plan_id\": \"reused-plan-id\", \"title\": \"Research 1\", \"steps\": [{\"text\": \"Read sources\", \"status\": \"completed\"}]}}"
+            }
+          }
+        },
+        "recipient": "all"
+      },
+      "parent": "user-1",
+      "children": ["user-2", "alternate-user"]
+    },
+    "user-2": {
+      "id": "user-2",
+      "message": {
+        "id": "user-2",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1789341676,
+        "content": {
+          "content_type": "text",
+          "parts": ["Follow-up question"]
+        },
+        "metadata": {},
+        "recipient": "all"
+      },
+      "parent": "tool-1",
+      "children": ["tool-2"]
+    },
+    "tool-2": {
+      "id": "tool-2",
+      "message": {
+        "id": "tool-2",
+        "author": {
+          "role": "tool",
+          "name": "api_tool.call_tool"
+        },
+        "create_time": 1789341716,
+        "content": {
+          "content_type": "text",
+          "parts": ["Research 2 started"]
+        },
+        "metadata": {
+          "chatgpt_sdk": {
+            "resource_name": "Deep Research App_start",
+            "widget_session_id": "session-2",
+            "invocation_uuid": "invocation-2",
+            "widget_state": "{\"status\": \"completed\", \"plan\": {\"plan_id\": \"reused-plan-id\", \"title\": \"Research 2\", \"steps\": [{\"text\": \"Read sources\", \"status\": \"completed\"}]}, \"last_updated_at\": 1789341727, \"report_message\": {\"id\": \"report-2\", \"author\": {\"role\": \"assistant\"}, \"create_time\": 1789341726, \"content\": {\"content_type\": \"text\", \"parts\": [\"# Second report\\n\\nSecond report findings\"]}, \"metadata\": {}, \"recipient\": \"all\", \"status\": \"finished_successfully\", \"channel\": \"final\"}}",
+            "tool_response_metadata": {
+              "openai/widgetSessionId": "session-2",
+              "venus_widget_state": "{\"status\": \"waiting_for_user_response_on_plan\", \"plan\": {\"plan_id\": \"reused-plan-id\", \"title\": \"Research 2\", \"steps\": [{\"text\": \"Read sources\", \"status\": \"completed\"}]}}"
+            }
+          }
+        },
+        "recipient": "all"
+      },
+      "parent": "user-2",
+      "children": []
+    },
+    "alternate-user": {
+      "id": "alternate-user",
+      "message": {
+        "id": "alternate-user",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1789341677,
+        "content": {
+          "content_type": "text",
+          "parts": ["UNSELECTED BRANCH"]
+        },
+        "metadata": {},
+        "recipient": "all"
+      },
+      "parent": "tool-1",
+      "children": ["tool-3"]
+    },
+    "tool-3": {
+      "id": "tool-3",
+      "message": {
+        "id": "tool-3",
+        "author": {
+          "role": "tool",
+          "name": "api_tool.call_tool"
+        },
+        "create_time": 1789341816,
+        "content": {
+          "content_type": "text",
+          "parts": ["Research 3 started"]
+        },
+        "metadata": {
+          "chatgpt_sdk": {
+            "resource_name": "Deep Research App_start",
+            "widget_session_id": "session-3",
+            "invocation_uuid": "invocation-3",
+            "widget_state": "{\"status\": \"completed\", \"plan\": {\"plan_id\": \"reused-plan-id\", \"title\": \"Research 3\", \"steps\": [{\"text\": \"Read sources\", \"status\": \"completed\"}]}, \"last_updated_at\": 1789341827, \"report_message\": {\"id\": \"report-3\", \"author\": {\"role\": \"assistant\"}, \"create_time\": 1789341826, \"content\": {\"content_type\": \"text\", \"parts\": [\"# Unselected report\\n\\nUNSELECTED REPORT\"]}, \"metadata\": {}, \"recipient\": \"all\", \"status\": \"finished_successfully\", \"channel\": \"final\"}}",
+            "tool_response_metadata": {
+              "openai/widgetSessionId": "session-3",
+              "venus_widget_state": "{\"status\": \"waiting_for_user_response_on_plan\", \"plan\": {\"plan_id\": \"reused-plan-id\", \"title\": \"Research 3\", \"steps\": [{\"text\": \"Read sources\", \"status\": \"completed\"}]}}"
+            }
+          }
+        },
+        "recipient": "all"
+      },
+      "parent": "alternate-user",
+      "children": []
+    }
+  },
+  "linear_conversation": [
+    {
+      "id": "root",
+      "message": null,
+      "parent": null,
+      "children": ["system"]
+    },
+    {
+      "id": "system",
+      "message": {
+        "id": "system",
+        "author": {
+          "role": "system"
+        },
+        "create_time": 1789341525,
+        "content": {
+          "content_type": "text",
+          "parts": ["Hidden system content"]
+        },
+        "metadata": {},
+        "recipient": "all"
+      },
+      "parent": "root",
+      "children": ["user-1"]
+    },
+    {
+      "id": "user-1",
+      "message": {
+        "id": "user-1",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1789341526,
+        "content": {
+          "content_type": "text",
+          "parts": ["Initial research question"]
+        },
+        "metadata": {},
+        "recipient": "all"
+      },
+      "parent": "system",
+      "children": ["tool-1"]
+    },
+    {
+      "id": "tool-1",
+      "message": {
+        "id": "tool-1",
+        "author": {
+          "role": "tool",
+          "name": "api_tool.call_tool"
+        },
+        "create_time": 1789341616,
+        "content": {
+          "content_type": "text",
+          "parts": ["Research 1 started"]
+        },
+        "metadata": {
+          "chatgpt_sdk": {
+            "resource_name": "Deep Research App_start",
+            "widget_session_id": "session-1",
+            "invocation_uuid": "invocation-1",
+            "widget_state": "{\"status\": \"completed\", \"plan\": {\"plan_id\": \"reused-plan-id\", \"title\": \"Research 1\", \"steps\": [{\"text\": \"Read sources\", \"status\": \"completed\"}]}, \"last_updated_at\": 1789341627, \"report_message\": {\"id\": \"report-1\", \"author\": {\"role\": \"assistant\"}, \"create_time\": 1789341626, \"content\": {\"content_type\": \"text\", \"parts\": [\"# First report\\n\\nFirst report evidence citeturn0search1\\n\\n| GPU | W |\\n| --- | --- |\\n| 3090 | 320 |\\n\\n```js\\nconst reward = 42;\\n```\"]}, \"metadata\": {\"content_references\": [{\"matched_text\": \"citeturn0search1\", \"start_idx\": 38, \"end_idx\": 57, \"alt\": \"[Source](https://example.com/first-report)\"}, {\"matched_text\": \" \", \"alt\": \"\", \"type\": \"sources_footnote\"}]}, \"recipient\": \"all\", \"status\": \"finished_successfully\", \"channel\": \"final\"}}",
+            "tool_response_metadata": {
+              "openai/widgetSessionId": "session-1",
+              "venus_widget_state": "{\"status\": \"waiting_for_user_response_on_plan\", \"plan\": {\"plan_id\": \"reused-plan-id\", \"title\": \"Research 1\", \"steps\": [{\"text\": \"Read sources\", \"status\": \"completed\"}]}}"
+            }
+          }
+        },
+        "recipient": "all"
+      },
+      "parent": "user-1",
+      "children": ["user-2", "alternate-user"]
+    },
+    {
+      "id": "user-2",
+      "message": {
+        "id": "user-2",
+        "author": {
+          "role": "user"
+        },
+        "create_time": 1789341676,
+        "content": {
+          "content_type": "text",
+          "parts": ["Follow-up question"]
+        },
+        "metadata": {},
+        "recipient": "all"
+      },
+      "parent": "tool-1",
+      "children": ["tool-2"]
+    },
+    {
+      "id": "tool-2",
+      "message": {
+        "id": "tool-2",
+        "author": {
+          "role": "tool",
+          "name": "api_tool.call_tool"
+        },
+        "create_time": 1789341716,
+        "content": {
+          "content_type": "text",
+          "parts": ["Research 2 started"]
+        },
+        "metadata": {
+          "chatgpt_sdk": {
+            "resource_name": "Deep Research App_start",
+            "widget_session_id": "session-2",
+            "invocation_uuid": "invocation-2",
+            "widget_state": "{\"status\": \"completed\", \"plan\": {\"plan_id\": \"reused-plan-id\", \"title\": \"Research 2\", \"steps\": [{\"text\": \"Read sources\", \"status\": \"completed\"}]}, \"last_updated_at\": 1789341727, \"report_message\": {\"id\": \"report-2\", \"author\": {\"role\": \"assistant\"}, \"create_time\": 1789341726, \"content\": {\"content_type\": \"text\", \"parts\": [\"# Second report\\n\\nSecond report findings\"]}, \"metadata\": {}, \"recipient\": \"all\", \"status\": \"finished_successfully\", \"channel\": \"final\"}}",
+            "tool_response_metadata": {
+              "openai/widgetSessionId": "session-2",
+              "venus_widget_state": "{\"status\": \"waiting_for_user_response_on_plan\", \"plan\": {\"plan_id\": \"reused-plan-id\", \"title\": \"Research 2\", \"steps\": [{\"text\": \"Read sources\", \"status\": \"completed\"}]}}"
+            }
+          }
+        },
+        "recipient": "all"
+      },
+      "parent": "user-2",
+      "children": []
+    }
+  ]
+}

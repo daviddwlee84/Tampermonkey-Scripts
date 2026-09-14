@@ -76,6 +76,11 @@ code fence、表格、citation 都可能失真。
 - **Deep Research**：最終報告其實藏在工具訊息的
   `metadata.chatgpt_sdk.widget_state.report_message`，不在一般 conversation thread 裡。
   腳本會把它還原成 Assistant 訊息，再走同一套 raw Markdown 與 citation pipeline。
+  同一段對話內的多次研究會分別保留；`plan_id` 可能重複，去重改以 report ID 為主，
+  缺少 report ID 時才使用 widget session、invocation 或訊息本身的識別。
+  同一報告的重複快照採最新 completed 內容，保留首次出現的位置；已完成研究不再另插舊的 pending 狀態。
+- **原始 JSON**：直接保存取得的對話資料，不經 Markdown 或 widget 解析，
+  所以即使 Deep Research 格式有誤，仍能下載原始資料供除錯或重新匯出。
 - **未知的 content_type**（canvas 之類的新東西）會以 JSON code block
   原樣留著，不會靜默消失。
 
@@ -92,8 +97,30 @@ code fence、表格、citation 都可能失真。
 - 從 v1.2.0 起，render 與浮動 UI 搬到 [`shared/`](../../shared/) 用 `@require` 引入
   （跟 claude / copilot 兩支共用），所以安裝時多一個 raw.githubusercontent.com 的網路相依。
 - 從 v1.3.0 起，支援 Deep Research app widget 裡的完整最終報告。
+- 從 v1.3.1 起，修正多次研究共用 `plan_id` 時只剩最後一份報告的問題。
+
+## 分支保存
+
+Markdown 與 Agent Handoff 維持目前選中分支的線性閱讀順序。
+需要保存對話樹時，使用 **Download .json**：其中的 `mapping`、節點 `parent`／`children`
+與 `current_node` 可供後續樹狀瀏覽、多選訊息或路徑再匯出，不必從 Markdown 猜回節點關係。
+目前尚未提供分支選取 UI。
+
+JSON 只能保存來源實際回傳的節點；分享快照不一定包含所有編輯／重新生成的分支。
+這個限制也適用於未來的樹狀呈現，無法還原來源沒有提供的版本。
 
 ## 測試
+
+```bash
+npm run test:chatgpt-export
+```
+
+測試直接執行實際 userscript 與共用 renderer，涵蓋共用 plan 的多份報告、重複快照、
+缺少 ID、研究狀態、分支篩選，以及 widget 損壞時的 JSON 保存。
+Chromium／Firefox fixture 另外檢查 router state 與 network capture 來源的四個匯出動作，
+讀回下載檔案核對內容。GM shim 測試不代表真實 manager sandbox 或系統剪貼簿已通過驗證。
+
+真實分享頁的 smoke test：
 
 ```bash
 npm run preview -- chatgpt-export-markdown \
@@ -109,3 +136,14 @@ npm run preview -- chatgpt-export-markdown \
   "https://chatgpt.com/share/6a8fb589-9e78-83ec-af2e-ac24d3aeefec" \
   --menu "Copy Markdown" --wait 30000
 ```
+
+多次研究共用 plan 的回歸樣本：
+
+```bash
+npm run preview -- chatgpt-export-markdown \
+  "https://chatgpt.com/share/6aa7981a-5b34-83ee-b1cc-1b0b3fc0b91b" \
+  --menu "Copy Markdown" --wait 30000
+```
+
+預設輸出應有 4 個區塊：初次提問 →〈PRL（Peararl / Pearl）挖礦恢復與獲利性深度研究〉
+→ TL;DR 追問 →〈執行摘要〉。兩份報告與第一份報告的引用都應保留。
