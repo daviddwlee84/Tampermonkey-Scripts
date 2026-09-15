@@ -1,13 +1,21 @@
 // ==UserScript==
 // @name         arXiv AI Assistant
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.3.0
-// @description  arXiv／papers.cool 論文資訊、引用與關聯探索，以及 Kimi／Gemini 繁中摘要
+// @version      0.4.0
+// @description  arXiv／papers.cool 論文資訊與引用探索、Google Scholar 跳轉，以及 Kimi／Gemini 繁中摘要
 // @author       Da-Wei Lee
 // @license      MIT
 // @match        https://arxiv.org/abs/*
 // @match        https://papers.cool/arxiv/*
 // @match        https://gemini.google.com/app*
+// @match        https://scholar.google.com/scholar*
+// @match        https://scholar.google.com/citations*
+// @match        https://scholar.google.com.tw/scholar*
+// @match        https://scholar.google.com.tw/citations*
+// @match        https://scholar.google.com.hk/scholar*
+// @match        https://scholar.google.com.hk/citations*
+// @match        https://scholar.google.co.uk/scholar*
+// @match        https://scholar.google.co.uk/citations*
 // @noframes
 // @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9ImhzbCgyNDIgNjIlIDQ2JSkiLz48dGV4dCB4PSIzMiIgeT0iMzMiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJIZWx2ZXRpY2EsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNyIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9ImNlbnRyYWwiPkFBPC90ZXh0Pjwvc3ZnPg==
 // @run-at       document-idle
@@ -26,7 +34,7 @@
 // ==/UserScript==
 
 /**
- * 同一支腳本負責 arXiv 入口、papers.cool FAQ 與 Gemini 跨站交接。
+ * 同一支腳本負責 arXiv／Scholar 入口、papers.cool FAQ 與 Gemini 跨站交接。
  * Gemini composer 操作沿用 youtube-gemini-summary 的模式，使用獨立 namespace。
  * Kimi 採網站的 prefill deep link，無須在 Kimi 注入或呼叫模型 API。
  */
@@ -46,6 +54,13 @@
   const REQUEST_ID_RE = /^[A-Za-z0-9-]{12,80}$/;
   const PENDING_TTL_MS = 120_000;
   const GEMINI_URL = 'https://gemini.google.com/app';
+  const GOOGLE_SCHOLAR_HOSTS = new Set([
+    'scholar.google.com',
+    'scholar.google.com.tw',
+    'scholar.google.com.hk',
+    'scholar.google.co.uk',
+  ]);
+  const SCHOLAR_TOOLS_CLASS = `${NS}-scholar`;
   const PAPER_ID_RE = /^(?:\d{4}\.\d{4,5}|[a-zA-Z][a-zA-Z0-9.-]*\/\d{7})(?:v[1-9]\d*)?$/;
   const log = (...args) => console.log(`[${NS}]`, ...args);
   let noticeTimer = null;
@@ -229,6 +244,14 @@
       #${RETURN_LINK_ID}:hover { background: #ede1fa; color: #3d1b5b; }
       #${RETURN_LINK_ID}:focus-visible { outline: 2px solid #8655b2; outline-offset: 2px; }
       #${RETURN_LINK_ID} .${NS}-badge { padding: 1px 5px; border-radius: 4px; background: #e9dff4; color: #624182; font-size: 10px; font-weight: 400; }
+      .${SCHOLAR_TOOLS_CLASS} { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; box-sizing: border-box; max-width: 100%; margin: 8px 0 2px; font: 12px/1.5 system-ui, sans-serif; text-align: left; }
+      .${SCHOLAR_TOOLS_CLASS} > a { display: inline-flex; align-items: center; box-sizing: border-box; min-height: 28px; max-width: 100%; padding: 3px 8px; margin: 0; border: 1px solid #cbb4e1; border-radius: 6px; background: #f7f2fd; color: #562980; font: 600 12px/1.5 system-ui, sans-serif; text-decoration: none; overflow-wrap: anywhere; }
+      .${SCHOLAR_TOOLS_CLASS} > a:hover { background: #ede1fa; color: #3d1b5b; text-decoration: none; }
+      .${SCHOLAR_TOOLS_CLASS} > a:focus-visible { outline: 2px solid #8655b2; outline-offset: 2px; }
+      .${SCHOLAR_TOOLS_CLASS} > .${NS}-badge { color: #725d84; font: 10px/1.5 system-ui, sans-serif; }
+      #gs_aa_fv_wrap:has(> .${SCHOLAR_TOOLS_CLASS}) { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+      #gs_aa_fv_wrap > .${SCHOLAR_TOOLS_CLASS} { margin: 0; }
+      #gs_aa_ftr:has(.${SCHOLAR_TOOLS_CLASS}) { height: auto; min-height: 41px; flex-wrap: wrap; }
       #${NOTICE_ID} { position: fixed; z-index: 2147483647; right: 20px; bottom: 20px; width: min(420px, calc(100vw - 40px)); max-height: calc(100vh - 40px); overflow: auto; padding: 16px; border: 1px solid #cbb4e1; border-radius: 10px; background: #fcfaff; color: #332440; box-shadow: 0 8px 30px #0002; }
       #${NOTICE_ID}.${NS}-notice-error { border-color: #b74b59; }
       #${NOTICE_ID} strong, #${NOTICE_ID} p { display: block; margin: 0 0 8px; }
@@ -262,6 +285,172 @@
       }
     });
     return link;
+  }
+
+  function isGoogleScholarPage() {
+    return (
+      GOOGLE_SCHOLAR_HOSTS.has(location.hostname) &&
+      /^\/(?:scholar|citations)\/?$/.test(location.pathname)
+    );
+  }
+
+  function scholarArxivId(href) {
+    try {
+      let url = new URL(href, location.href);
+      // Scholar sometimes wraps an external URL for click tracking. Unwrap only
+      // its known redirect endpoint, never a search query or arbitrary ?url=.
+      if (GOOGLE_SCHOLAR_HOSTS.has(url.hostname) && url.pathname === '/scholar_url') {
+        url = new URL(url.searchParams.get('url'));
+      }
+      if (
+        !['http:', 'https:'].includes(url.protocol) ||
+        url.username ||
+        url.password ||
+        url.port ||
+        !['arxiv.org', 'www.arxiv.org', 'export.arxiv.org'].includes(url.hostname)
+      )
+        return null;
+      const path = url.pathname.replace(/\.pdf\/?$/i, '');
+      return (
+        paperIdFromPath(path, '/abs/') ||
+        paperIdFromPath(path, '/pdf/') ||
+        paperIdFromPath(path, '/html/')
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  function scholarPaperIn(root, selector) {
+    const ids = [...root.querySelectorAll(selector)]
+      .filter((link) => !link.closest(`.${SCHOLAR_TOOLS_CLASS}`))
+      .map((link) => scholarArxivId(link.getAttribute('href')))
+      .filter(Boolean);
+    if (new Set(ids.map(basePaperId)).size !== 1) return null;
+    // Prefer an explicit version, then the title/PDF order supplied by the DOM.
+    return ids.find((id) => /v\d+$/.test(id)) || ids[0];
+  }
+
+  async function initGoogleScholar() {
+    const owned = `.${SCHOLAR_TOOLS_CLASS}`;
+    const mounted = new Map();
+    let scheduled = null;
+    let routeTimer = null;
+    let lastPath = location.pathname;
+
+    function reconcile() {
+      scheduled = null;
+      const desired = new Map();
+      const collect = (root, container, selector) => {
+        if (!root || !container) return;
+        const resolve = () => root.isConnected && scholarPaperIn(root, selector);
+        const id = resolve();
+        if (id) desired.set(container, { id, resolve });
+      };
+      if (isGoogleScholarPage()) {
+        document.querySelectorAll('.gs_r.gs_or').forEach((row) => {
+          collect(row, row.querySelector('.gs_ri'), '.gs_rt a[href], .gs_or_ggsm a[href]');
+        });
+        // The native Quick Read code clones the selected paper's .gs_aa_fv
+        // into this footer. Its generated answer can cite OTHER papers, so do
+        // not inspect the answer body or infer identity from the search box.
+        const footer = document.getElementById('gs_aa_fv_wrap');
+        collect(footer, footer, 'a.gs_aa_fv[href]');
+        const citationTitle = document.getElementById('gsc_oci_title');
+        collect(citationTitle, citationTitle?.parentElement, '#gsc_oci_title a[href]');
+      }
+      for (const [container, state] of mounted) {
+        if (desired.get(container)?.id !== state.id || state.element.parentElement !== container) {
+          state.element.remove();
+          mounted.delete(container);
+        }
+      }
+      // Cached/cloned HTML has no live listeners, including toolbars whose
+      // paper link has since disappeared. Never leave such copies actionable.
+      document.querySelectorAll(owned).forEach((element) => {
+        if (mounted.get(element.parentElement)?.element !== element) element.remove();
+      });
+      for (const [container, { id, resolve }] of desired) {
+        if (mounted.has(container)) {
+          mounted.get(container).resolve = resolve;
+          continue;
+        }
+        const element = document.createElement('div');
+        element.className = SCHOLAR_TOOLS_CLASS;
+        element.dataset.paperId = id;
+        element.setAttribute('role', 'group');
+        element.setAttribute('aria-label', `arXiv ${id} 論文跳轉`);
+        element.append(
+          makeLink('↗ arXiv', `https://arxiv.org/abs/${id}`, `在 arXiv 開啟 ${id}`),
+          makeLink('papers.cool', papersUrlFor(id), `開啟 ${id} 並展開 Kimi FAQ`)
+        );
+        const badge = document.createElement('span');
+        badge.className = `${NS}-badge`;
+        badge.textContent = 'Userscript';
+        element.append(badge);
+        const guard = (event) => {
+          if (!isGoogleScholarPage() || mounted.get(container)?.resolve() !== id) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            schedule();
+          }
+        };
+        element.addEventListener('click', guard, true);
+        element.addEventListener('auxclick', guard, true);
+        if (container.querySelector(':scope > #gsc_oci_title')) {
+          container.querySelector(':scope > #gsc_oci_title').after(element);
+        } else container.append(element);
+        mounted.set(container, { id, element, resolve });
+      }
+    }
+
+    function schedule() {
+      // Fixed delay rather than trailing debounce: streamed Quick Read content
+      // cannot postpone an update forever.
+      if (scheduled === null) scheduled = setTimeout(reconcile, 100);
+    }
+    const observer = new MutationObserver((records) => {
+      if (
+        records.some((record) => {
+          if (record.target.closest?.(owned)) return false;
+          if (record.type === 'attributes') return record.target.tagName === 'A';
+          if ([...record.removedNodes].some((node) => node === mounted.get(record.target)?.element))
+            return true;
+          return [...record.addedNodes, ...record.removedNodes].some(
+            (node) => node.nodeType === 1 && !node.matches(owned)
+          );
+        })
+      )
+        schedule();
+    });
+    function start() {
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['href'],
+      });
+      if (routeTimer === null)
+        routeTimer = setInterval(() => {
+          if (!document.hidden && location.pathname !== lastPath) {
+            lastPath = location.pathname;
+            schedule();
+          }
+        }, 1000);
+      reconcile();
+    }
+    window.addEventListener('popstate', schedule);
+    window.addEventListener('hashchange', schedule);
+    window.addEventListener('pagehide', () => {
+      observer.disconnect();
+      clearTimeout(scheduled);
+      clearInterval(routeTimer);
+      scheduled = routeTimer = null;
+    });
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) start();
+    });
+    start();
   }
 
   // Research lookups use work-level IDs; navigation and AI prompts retain the version.
@@ -1331,6 +1520,7 @@
   const shouldRun =
     (host === 'arxiv.org' && paperIdFromPath(location.pathname, '/abs/')) ||
     (host === 'papers.cool' && paperIdFromPath(location.pathname, '/arxiv/')) ||
+    isGoogleScholarPage() ||
     (host === 'gemini.google.com' && requestIdFromFragment());
   const runningAttribute = `data-${NS}-running`;
   if (
@@ -1346,7 +1536,9 @@
       ? initArxiv
       : host === 'papers.cool'
         ? initPapersCool
-        : consumePendingOnGemini;
+        : isGoogleScholarPage()
+          ? initGoogleScholar
+          : consumePendingOnGemini;
   run().catch((error) => {
     log('initialization failed:', error);
     showStatus('AI 論文助手無法自動完成，請重新整理頁面後再試。', { error: true });

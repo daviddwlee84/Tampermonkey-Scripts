@@ -12,7 +12,9 @@
 
 兩個網站都有 **論文資訊卡**，顯示首次提交、最新修訂、引用查詢與文獻探索入口。版本 **0.3.0** 新增這些功能。
 
-- **生效網站**：`https://arxiv.org/abs/*`、`https://papers.cool/arxiv/*`、`https://gemini.google.com/app*`
+版本 **0.4.0** 新增 **Google Scholar → arXiv／papers.cool** 按鈕，涵蓋搜尋結果、論文詳情與「重點速覽」側欄中可辨識的 arXiv 論文。
+
+- **生效網站**：`https://arxiv.org/abs/*`、`https://papers.cool/arxiv/*`、`https://gemini.google.com/app*`，以及 Google Scholar 的 `/scholar`、`/citations` 頁面（支援 `scholar.google.com`、`.com.tw`、`.com.hk`、`.co.uk`）
 - **安裝**：[點這裡安裝](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/arxiv-ai-assistant/arxiv-ai-assistant.user.js)（需先裝好 Tampermonkey / Violentmonkey；連結於發佈到 main 後可用）
 - **原始碼**：[`arxiv-ai-assistant.user.js`](./arxiv-ai-assistant.user.js)
 
@@ -25,6 +27,7 @@
 5. 在 papers.cool 點「↗ arXiv」可回到對應版本的原始論文頁。
 6. 查看資訊卡中的首次提交與最新修訂日期；目前閱讀舊版本時，會提供最新版本入口。
 7. 按「查詢引用」取得被引用數與已收錄的參考文獻數；展開「上游／下游」查看相關論文清單。也可直接開啟 Google Scholar、Semantic Scholar 或 Connected Papers。
+8. 在 Google Scholar 的結果旁，或展開「重點速覽」後的 PDF 連結旁，點「↗ arXiv」或「papers.cool」前往對應論文。
 
 聊天提示包含題名、頁面摘要、arXiv 頁面、指定版本 PDF 與 papers.cool FAQ 連結，要求以繁體中文整理研究問題、方法、主要結果與限制。提示也要求 AI 說明是否讀得到全文／FAQ，並區分論文內容與推測。
 
@@ -36,6 +39,23 @@ https://arxiv.org/abs/2609.12303v1
 ```
 
 papers.cool 頁內使用不帶版本的論文 ID；腳本據此尋找對應的 Kimi 按鈕。只有帶上述標記才會自動展開，並且會在啟動前清除標記。直接輸入網址或開啟普通書籤不會自動展開，但仍會顯示「↗ arXiv」按鈕。分類／搜尋列表頁不加入返回按鈕。
+
+## Google Scholar 跳轉
+
+淡紫色按鈕附有 **Userscript** 標示，皆開啟新分頁；`papers.cool` 入口會延續自動展開 Kimi FAQ 的行為。
+
+| 位置 | 論文辨識來源 |
+| --- | --- |
+| 搜尋結果（含引用／相關文章列表） | 該筆結果的標題與右側 PDF 連結 |
+| 「重點速覽」側欄 | 底部原生 PDF 按鈕指向的論文 |
+| Scholar 論文詳情 | 該篇論文標題的外部連結 |
+
+- 支援 arXiv `/abs/`、`/pdf/`、`/html/`，包含舊式 ID、版本號、`.pdf` 副檔名，以及 Scholar 的 `/scholar_url?url=…` 轉址。
+- 依實際論文連結辨識，保留其中的版本。搜尋框題名、摘要中提及的其他論文與 AI 回覆中的引用，都不作為這篇論文的 ID。例如搜尋 `2609.12303` 時，若某筆結果連到 `2602.01007`，按鈕就會開啟 `2602.01007`。
+- 沒有 arXiv 連結，或標題／PDF 指向不同 arXiv 論文時，不顯示按鈕。尚未從期刊 DOI 或題名推測其 arXiv 版本。
+- 搜尋結果延遲載入、側欄換篇與頁面恢復時會更新按鈕；操作時再次核對 ID，避免點到前一篇的連結。
+- Scholar 頁面只新增導覽入口，不自動查詢引用 API。原生「被引用」、「相關文章」與「重點速覽」操作保留；重點速覽的登入資格、生成與內容由 Google 處理。
+- 已核對公開頁面的側欄結構，並測試 PDF 連結切換；登入後的完整重點速覽流程尚未實測，詳見 [驗證紀錄](./VALIDATION.md)。
 
 ## 論文資訊與引用探索
 
@@ -82,6 +102,8 @@ papers.cool 頁內使用不帶版本的論文 ID；腳本據此尋找對應的 K
 
 跨站權限限於 `arxiv.org`、`api.semanticscholar.org`、`api.openalex.org`。查詢會把 arXiv ID 傳給 Semantic Scholar，備援搜尋會把論文題名傳給 OpenAlex。更新至 0.3.0 時，manager 可能提示確認新增的跨站權限。
 
+0.4.0 新增上述 Google Scholar 網站的執行範圍，未新增 GM grant 或跨站資料來源；manager 可能提示網站權限變更。
+
 - 可單獨安裝，不依賴其他腳本，也不需要模型 API key。
 - Kimi 使用網站的 HTTPS `/_prefill_chat?prefill_prompt=…&send_immediately=true`；提示包含在 URL query 中，登入與送出由 Kimi 處理。腳本不會在 Kimi 頁面注入，也無法確認它是否成功送出。
 - Gemini URL fragment 只帶 request ID，論文背景存於腳本自己的 GM storage。未消費的資料會在下次使用時清理；超過兩分鐘的請求不會自動送出。
@@ -100,6 +122,6 @@ npm run preview -- arxiv-ai-assistant https://arxiv.org/abs/2609.12303v1
 npm run verify
 ```
 
-測試使用 Playwright 的隔離頁面與 GM API 模擬，涵蓋版本／特殊字元、按鈕去重、FAQ 標記、Gemini 指定分頁、草稿保護、過期及單次送出，以及日期、快取、引用方向、OpenAlex ID 核對、限流／逾時與過期頁面回應。不連線至 AI 或文獻 API。首次使用需安裝 repo dependencies 與對應的 Playwright Chromium／Firefox。
+測試使用 Playwright 的隔離頁面與 GM API 模擬，涵蓋版本／特殊字元、按鈕去重、FAQ 標記、Gemini 指定分頁、草稿保護、過期及單次送出，以及日期、快取、引用方向、OpenAlex ID 核對、限流／逾時與過期頁面回應。Scholar 測試另涵蓋連結核對、側欄換篇、動態插入、快取 DOM 還原、區域網域、頁面恢復與窄版排列。不連線至 AI 或文獻 API。首次使用需安裝 repo dependencies 與對應的 Playwright Chromium／Firefox。
 
-0.3.0 已通過 Chromium 的 21 項隔離測試，以及 Tampermonkey 5.5.0 安裝當次的真實 API／跨站快取檢查；詳細範圍與環境限制見 [驗證紀錄](./VALIDATION.md)。Violentmonkey、Firefox 及登入後的 Kimi／Gemini 送出尚未實測；`preview` 與隔離測試不能替代實際 manager 測試。
+0.4.0 已通過 Chromium 的 28 項隔離測試。真實 manager 的檢查範圍與環境限制見 [驗證紀錄](./VALIDATION.md)。Violentmonkey、Firefox 及登入後的 Kimi／Gemini 送出尚未實測；`preview` 與隔離測試不能替代實際 manager 測試。

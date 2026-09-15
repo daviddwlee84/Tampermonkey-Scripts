@@ -58,6 +58,38 @@ const geminiHTML = `<div class="messages"></div><fieldset class="input-area-cont
     if (!window.__keepInput) editor.textContent = '';
   };</script>`;
 
+// Result and empty Quick Read shell selectors were checked against Scholar's
+// public HTML/inline JS on 2026-09-15. Drawer content below models an account-only
+// response; it does not claim a logged-in Quick Read generation test.
+function scholarRow({ key = 'result', title = 'https://arxiv.org/abs/2602.01007', pdf = '' } = {}) {
+  return `<div id="${key}" class="gs_r gs_or gs_scl">
+    <div class="gs_ggs gs_fl"><div class="gs_or_ggsm">
+      ${pdf ? `<a href="${escape(pdf)}">[PDF] arxiv.org</a>` : ''}
+    </div></div><div class="gs_ri"><h3 class="gs_rt"><a href="${escape(title)}">Paper ${key}</a></h3>
+    <div class="gs_rs">Snippet citing <a href="https://arxiv.org/abs/9999.00001">another paper</a></div>
+    <div class="gs_fl"><a href="/scholar?cites=123">被引用 7 次</a>
+      <button type="button" onclick="window.__quickReadClicks++">重點速覽</button></div>
+    </div></div>`;
+}
+const scholarHTML = `<input id="gs_hdr_tsi" value="Breaking the Token Ceiling 2609.12303">
+  <div id="gs_res_ccl_mid">${scholarRow()}</div>
+  <div id="gs_md_aa-d" role="dialog" style="display:none">
+    <h2>重點速覽</h2><div id="gs_md_aa-d-bdy"></div>
+    <div class="gs_md_ftr"><div id="gs_aa_ftr"><div id="gs_aa_fv_wrap"></div>
+    <div class="gs_aa_disclaimer">AI 回覆可能有誤。</div></div></div></div>
+  <script>window.__quickReadClicks = 0;</script>`;
+const scholarTools = `.${NS}-scholar`;
+
+async function scholarFixture(
+  t,
+  html = scholarHTML,
+  url = 'https://scholar.google.com/scholar?q=2609.12303'
+) {
+  const page = await fixture(t, { html, url });
+  await inject(page);
+  return page;
+}
+
 let browser;
 before(async () => {
   browser = await (process.env.US_BROWSER === 'firefox' ? firefox : chromium).launch({
@@ -749,4 +781,242 @@ test('in-flight lookup ignores duplicate clicks and never applies counts after n
   await page.clock.runFor(100);
   assert.equal(await page.evaluate(() => window.__requests.length), 1);
   assert.equal(await page.locator(`#${NS}-metrics`).innerText(), '');
+});
+
+test('Scholar result links use the result paper, leave native tools intact, and make no background requests', async (t) => {
+  const page = await scholarFixture(t);
+  await inject(page);
+  assert.equal(await page.locator(scholarTools).count(), 1);
+  assert.equal(
+    await page.locator(`${scholarTools} a`).first().getAttribute('href'),
+    'https://arxiv.org/abs/2602.01007'
+  );
+  await page.locator(scholarTools).getByRole('link', { name: 'papers.cool', exact: true }).click();
+  assert.deepEqual(await page.evaluate(() => window.__opened), [
+    { url: `https://papers.cool/arxiv/2602.01007#${NS}=faq`, options: { active: true } },
+  ]);
+  assert.equal(
+    await page.getByRole('link', { name: '被引用 7 次' }).getAttribute('href'),
+    '/scholar?cites=123'
+  );
+  assert.equal(await page.evaluate(() => window.__quickReadClicks), 0);
+  await page.getByRole('button', { name: '重點速覽' }).click();
+  assert.equal(await page.evaluate(() => window.__quickReadClicks), 1);
+  assert.deepEqual(await page.evaluate(() => window.__requests), []);
+  assert.equal(await page.locator(`#${NS}-research`).count(), 0);
+});
+
+test('Scholar resolves direct and wrapped PDF links, keeps versions and legacy IDs, and rejects ambiguous or untrusted links', async (t) => {
+  const rows = [
+    {
+      key: 'version',
+      title: 'https://arxiv.org/abs/2602.01007',
+      pdf: 'https://arxiv.org/pdf/2602.01007v2.pdf?download=1',
+    },
+    {
+      key: 'legacy',
+      title: 'https://publisher.example/paper',
+      pdf: '/scholar_url?url=https%3A%2F%2Fexport.arxiv.org%2Fpdf%2Fhep-th%2F9901001v3.pdf&hl=zh-TW',
+    },
+    { key: 'encoded', title: 'http://www.arxiv.org/html/math.GT%2F0309136v1#abstract' },
+    {
+      key: 'nonarxiv',
+      title: 'https://proceedings.neurips.cc/paper',
+      pdf: 'https://proceedings.neurips.cc/paper.pdf',
+    },
+    {
+      key: 'ambiguous',
+      title: 'https://arxiv.org/abs/2602.01007',
+      pdf: 'https://arxiv.org/pdf/2609.12303',
+    },
+    {
+      key: 'spoof',
+      title: 'https://arxiv.org.example/abs/2602.01007',
+      pdf: 'https://arxiv.org@evil.example/pdf/2602.01007',
+    },
+    { key: 'query', title: '/scholar?q=https://arxiv.org/abs/2602.01007' },
+    {
+      key: 'wrapper',
+      title: 'https://evil.example/scholar_url?url=https://arxiv.org/pdf/2602.01007',
+    },
+    { key: 'malformed', title: 'javascript:alert(1)', pdf: 'https://arxiv.org/abs/%E0%A4' },
+    { key: 'port', title: 'https://arxiv.org:8443/abs/2602.01007' },
+  ];
+  const page = await scholarFixture(t, rows.map(scholarRow).join(''));
+  assert.deepEqual(
+    await page
+      .locator(scholarTools)
+      .evaluateAll((nodes) => nodes.map((node) => node.dataset.paperId)),
+    ['2602.01007v2', 'hep-th/9901001v3', 'math.GT/0309136v1']
+  );
+  assert.deepEqual(
+    await page
+      .locator(`${scholarTools} a:first-child`)
+      .evaluateAll((nodes) => nodes.map((node) => node.href)),
+    [
+      'https://arxiv.org/abs/2602.01007v2',
+      'https://arxiv.org/abs/hep-th/9901001v3',
+      'https://arxiv.org/abs/math.GT/0309136v1',
+    ]
+  );
+});
+
+test('Quick Read follows only its native footer PDF, blocks stale clicks, and removes helpers for non-arXiv papers', async (t) => {
+  const page = await scholarFixture(t);
+  await page.evaluate(() => {
+    document.getElementById('gs_md_aa-d').style.display = 'block';
+    document.getElementById('gs_md_aa-d-bdy').innerHTML =
+      '<p>Answer about another paper <a href="https://arxiv.org/pdf/2609.12303">[PDF] arxiv.org</a></p>';
+    document.getElementById('gs_aa_fv_wrap').innerHTML =
+      '<a class="gs_aa_fv" href="https://arxiv.org/pdf/2602.01007v1">[PDF] arxiv.org</a>';
+  });
+  await page.clock.runFor(200);
+  const drawer = page.locator(`#gs_aa_fv_wrap ${scholarTools}`);
+  assert.equal(await drawer.getAttribute('data-paper-id'), '2602.01007v1');
+  // Click before the observer's scheduled pass: do not navigate to the previous paper.
+  await page.evaluate((ns) => {
+    document.querySelector('#gs_aa_fv_wrap > a').href = 'https://arxiv.org/pdf/2602.01008v2';
+    document.querySelector(`#gs_aa_fv_wrap .${ns}-scholar a`).click();
+  }, NS);
+  assert.equal(await page.evaluate(() => window.__opened.length), 0);
+  await page.clock.runFor(200);
+  assert.equal(await drawer.getAttribute('data-paper-id'), '2602.01008v2');
+  await drawer.getByRole('link', { name: '↗ arXiv' }).click();
+  assert.equal(
+    await page.evaluate(() => window.__opened[0].url),
+    'https://arxiv.org/abs/2602.01008v2'
+  );
+  await page.evaluate(() => {
+    document.querySelector('#gs_aa_fv_wrap > a').href = 'https://aclanthology.org/paper.pdf';
+  });
+  await page.clock.runFor(200);
+  assert.equal(await drawer.count(), 0);
+  assert.equal(await page.locator('#gs_md_aa-d-bdy a').count(), 1);
+});
+
+test('Scholar reconciles inserted/replaced rows and cached clones without duplicate UI or observer feedback', async (t) => {
+  const page = await scholarFixture(t);
+  await page.evaluate(
+    ({ row, ns }) => {
+      window.__mutationCount = 0;
+      new MutationObserver((records) => {
+        window.__mutationCount += records.length;
+      }).observe(document.body, { subtree: true, childList: true, attributes: true });
+      const original = document.getElementById('result');
+      const clone = original.cloneNode(true);
+      clone.id = 'cached';
+      clone.querySelector('.gs_rt a').href = 'https://arxiv.org/abs/2602.01008';
+      original.after(clone);
+      document.getElementById('gs_res_ccl_mid').insertAdjacentHTML('beforeend', row);
+      original.querySelector(`.${ns}-scholar`).remove();
+    },
+    { row: scholarRow({ key: 'new', title: 'https://arxiv.org/abs/2602.01009' }), ns: NS }
+  );
+  await page.clock.runFor(200);
+  assert.deepEqual(
+    await page
+      .locator(scholarTools)
+      .evaluateAll((nodes) => nodes.map((node) => node.dataset.paperId)),
+    ['2602.01007', '2602.01008', '2602.01009']
+  );
+  await page.locator(`#cached ${scholarTools} a`).first().click();
+  assert.equal(
+    await page.evaluate(() => window.__opened[0].url),
+    'https://arxiv.org/abs/2602.01008'
+  );
+  const mutations = await page.evaluate(() => window.__mutationCount);
+  await page.clock.runFor(5000);
+  assert.equal(await page.evaluate(() => window.__mutationCount), mutations);
+  await page.locator(`#new ${scholarTools}`).evaluate((node) => node.remove());
+  await page.clock.runFor(200);
+  assert.equal(await page.locator(`#new ${scholarTools}`).count(), 1);
+  await page.evaluate(() => {
+    document.getElementById('gs_res_ccl_mid').innerHTML = '';
+  });
+  await page.clock.runFor(200);
+  assert.equal(await page.locator(scholarTools).count(), 0);
+});
+
+test('Scholar citation details support regional hosts and survive title replacement with the same paper ID', async (t) => {
+  for (const host of [
+    'scholar.google.com',
+    'scholar.google.com.tw',
+    'scholar.google.com.hk',
+    'scholar.google.co.uk',
+  ]) {
+    const page = await scholarFixture(
+      t,
+      '<div id="gsc_oci"><div id="gsc_oci_title"><a href="https://arxiv.org/abs/2602.01007v2">Actual paper</a></div><div id="gsc_oci_table">Metadata</div></div>',
+      `https://${host}/citations?view_op=view_citation&citation_for_view=example`
+    );
+    assert.equal(await page.locator(scholarTools).count(), 1);
+    await page.evaluate(() => {
+      const title = document.getElementById('gsc_oci_title');
+      title.replaceWith(title.cloneNode(true));
+    });
+    await page.clock.runFor(200);
+    await page.locator(`${scholarTools} a`).first().click();
+    assert.equal(
+      await page.evaluate(() => window.__opened[0].url),
+      'https://arxiv.org/abs/2602.01007v2'
+    );
+    assert.equal(await page.locator('#gsc_oci_title + div').getAttribute('class'), `${NS}-scholar`);
+  }
+});
+
+test('Scholar guards unsupported paths, notices URL-only navigation, and resumes after BFCache restoration', async (t) => {
+  const page = await scholarFixture(t);
+  await page.evaluate((ns) => {
+    history.pushState({}, '', '/scholar_settings');
+    document.querySelector(`.${ns}-scholar a`).click();
+  }, NS);
+  assert.equal(await page.evaluate(() => window.__opened.length), 0);
+  await page.clock.runFor(1200);
+  assert.equal(await page.locator(scholarTools).count(), 0);
+  await page.evaluate(() => history.pushState({}, '', '/scholar?q=new'));
+  await page.clock.runFor(1200);
+  assert.equal(await page.locator(scholarTools).count(), 1);
+  await page.evaluate(() => {
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    document.querySelector('.gs_rt a').href = 'https://arxiv.org/abs/2602.01008';
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+  });
+  await page.clock.runFor(200);
+  assert.equal(await page.locator(scholarTools).getAttribute('data-paper-id'), '2602.01008');
+  for (const url of [
+    'https://scholar.google.com/scholar_settings',
+    'https://scholar.google.com.evil.example/scholar',
+  ]) {
+    const inactive = await scholarFixture(t, scholarHTML, url);
+    assert.equal(await inactive.locator(scholarTools).count(), 0);
+  }
+});
+
+test('Scholar narrow result and Quick Read footer keep helper links inside the viewport', async (t) => {
+  const page = await scholarFixture(t);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.addStyleTag({
+    content:
+      '#gs_res_ccl_mid { width: 200px } #gs_aa_ftr { padding: 8px 12px; height: 41px; display: flex; gap: 12px; align-items: center; justify-content: space-between; } #gs_aa_fv_wrap .gs_aa_fv { display: inline-block; white-space: nowrap; padding: 8px 12px; max-width: 184px; }',
+  });
+  await page.evaluate(() => {
+    document.getElementById('gs_md_aa-d').style.display = 'block';
+    document.getElementById('gs_aa_fv_wrap').innerHTML =
+      '<a class="gs_aa_fv" href="https://arxiv.org/pdf/2602.01007">[PDF] arxiv.org</a>';
+  });
+  await page.clock.runFor(200);
+  const boxes = await page.locator(scholarTools).evaluateAll((groups) =>
+    groups.map((group) => ({
+      group: group.getBoundingClientRect().toJSON(),
+      links: [...group.querySelectorAll('a')].map((link) => link.getBoundingClientRect().toJSON()),
+    }))
+  );
+  assert.equal(boxes.length, 2);
+  for (const { group, links } of boxes)
+    assert.ok(
+      links.every(
+        (link) => link.left >= group.left && link.right <= group.right && link.right <= 375
+      )
+    );
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 });
