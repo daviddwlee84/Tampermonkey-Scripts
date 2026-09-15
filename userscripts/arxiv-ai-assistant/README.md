@@ -8,6 +8,8 @@
 | **Kimi 摘要** | 新分頁開啟 Kimi，帶入論文背景並自動送出繁中摘要請求 |
 | **Gemini 摘要** | 新分頁開啟 Gemini，帶入同樣背景並自動送出 |
 
+在 **papers.cool 單篇論文頁**，標題列還會加入淡紫色的 **「↗ arXiv」** 按鈕與 Userscript 標示，方便回到 arXiv 摘要頁。按鈕會開啟新分頁，保留目前網址的版本號，例如 `2609.12303v1`；直接開啟 papers.cool 也會出現。
+
 - **生效網站**：`https://arxiv.org/abs/*`、`https://papers.cool/arxiv/*`、`https://gemini.google.com/app*`
 - **安裝**：[點這裡安裝](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/arxiv-ai-assistant/arxiv-ai-assistant.user.js)（需先裝好 Tampermonkey / Violentmonkey；連結於發佈到 main 後可用）
 - **原始碼**：[`arxiv-ai-assistant.user.js`](./arxiv-ai-assistant.user.js)
@@ -18,6 +20,7 @@
 2. 開啟 arXiv 論文摘要頁，例如 <https://arxiv.org/abs/2609.12303v1>。
 3. 在 Access Paper 下方選擇入口；三個按鈕都會開啟新分頁。
 4. papers.cool 顯示 FAQ 後，可手動點網站原有的 Kimi 續聊連結。Kimi／Gemini 的摘要完成後，可直接繼續追問。
+5. 在 papers.cool 點「↗ arXiv」可回到對應版本的原始論文頁。
 
 聊天提示包含題名、頁面摘要、arXiv 頁面、指定版本 PDF 與 papers.cool FAQ 連結，要求以繁體中文整理研究問題、方法、主要結果與限制。提示也要求 AI 說明是否讀得到全文／FAQ，並區分論文內容與推測。
 
@@ -28,7 +31,7 @@ https://arxiv.org/abs/2609.12303v1
   → https://papers.cool/arxiv/2609.12303v1#arxiv-ai-assistant=faq
 ```
 
-papers.cool 頁內使用不帶版本的論文 ID；腳本據此尋找對應的 Kimi 按鈕。只有帶上述標記才會自動展開，並且會在啟動前清除標記。直接輸入網址或開啟普通書籤不會自動展開。
+papers.cool 頁內使用不帶版本的論文 ID；腳本據此尋找對應的 Kimi 按鈕。只有帶上述標記才會自動展開，並且會在啟動前清除標記。直接輸入網址或開啟普通書籤不會自動展開，但仍會顯示「↗ arXiv」按鈕。分類／搜尋列表頁不加入返回按鈕。
 
 ## Gemini 交接與失敗處理
 

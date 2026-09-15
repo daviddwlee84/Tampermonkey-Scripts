@@ -31,7 +31,9 @@ const arxivHTML = `<meta name="citation_title" content="${escape(TITLE)}">
   <ul><li><a href="/pdf/${ID}">View PDF</a></li><li><a href="#translation">Bilingual Version</a></li></ul>
   <div class="abs-license">view license</div></div></div>`;
 const coolHTML = `<div id="2609.12303" class="panel paper">
+  <h2 class="title"><a href="https://arxiv.org/abs/2609.12303">#1</a>
   <a id="kimi-2609.12303" class="title-kimi" onclick="window.__faqClicks++; this.dataset.clickable='false'">[Kimi]</a>
+  </h2>
   <div id="kimi-container-2609.12303" style="display:none">FAQ</div></div>
   <div id="9999.00001" class="paper"><a id="kimi-9999.00001" onclick="throw new Error('wrong paper')">[Kimi]</a></div>
   <script>window.__faqClicks = 0;</script>`;
@@ -216,6 +218,7 @@ test('FAQ consumes only its marker and clicks the matching unversioned button on
   await inject(page);
   await inject(page);
   assert.equal(await page.evaluate(() => window.__faqClicks), 1);
+  assert.equal(await page.getByRole('link', { name: '↗ arXiv', exact: true }).count(), 1);
   assert.equal(new URL(page.url()).hash, '#keep=yes');
   assert.equal(new URL(page.url()).search, '?show=1');
   await page.reload();
@@ -223,11 +226,24 @@ test('FAQ consumes only its marker and clicks the matching unversioned button on
   assert.equal(await page.evaluate(() => window.__faqClicks), 0);
 });
 
-test('ordinary paper pages, listing pages, and already open/loading FAQ are untouched', async (t) => {
-  for (const path of [`/arxiv/${ID}`, `/arxiv/cs.CL#${NS}=faq`]) {
+test('return links preserve the paper version without triggering FAQ on ordinary pages or lists', async (t) => {
+  for (const path of [`/arxiv/${ID}`, '/arxiv/2609.12303', `/arxiv/cs.CL#${NS}=faq`]) {
     const page = await fixture(t, { url: `https://papers.cool${path}`, html: coolHTML });
     await inject(page);
+    await inject(page);
     assert.equal(await page.evaluate(() => window.__faqClicks), 0);
+    const link = page.getByRole('link', { name: '↗ arXiv', exact: true });
+    if (path.includes('cs.CL')) {
+      assert.equal(await link.count(), 0);
+    } else {
+      assert.equal(await link.count(), 1);
+      const href = `https://arxiv.org/abs/${path.split('/').at(-1)}`;
+      assert.equal(await link.getAttribute('href'), href);
+      await link.click();
+      assert.deepEqual(await page.evaluate(() => window.__opened), [
+        { url: href, options: { active: true } },
+      ]);
+    }
   }
   for (const state of ['visible', 'loading']) {
     const page = await fixture(t, {

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         arXiv AI Assistant
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.1.0
-// @description  在 arXiv 加入 papers.cool、Kimi 與 Gemini 入口，自動展開 FAQ 或送出繁中論文摘要請求
+// @version      0.2.0
+// @description  在 arXiv 與 papers.cool 間快速跳轉，自動展開 FAQ 或用 Kimi／Gemini 取得繁中論文摘要
 // @author       Da-Wei Lee
 // @license      MIT
 // @match        https://arxiv.org/abs/*
@@ -31,6 +31,7 @@
 
   const NS = 'arxiv-ai-assistant';
   const PANEL_ID = `${NS}-panel`;
+  const RETURN_LINK_ID = `${NS}-arxiv-return`;
   const NOTICE_ID = `${NS}-notice`;
   const PENDING_KEY = `${NS}.pending.v1`;
   const REQUEST_FRAGMENT_PARAM = NS;
@@ -203,6 +204,10 @@
       #${PANEL_ID} a:hover, #${PANEL_ID} button:hover, #${NOTICE_ID} button:hover { background: #ede1fa; color: #3d1b5b; }
       #${PANEL_ID} :focus-visible, #${NOTICE_ID} :focus-visible { outline: 2px solid #8655b2; outline-offset: 2px; }
       #${PANEL_ID} button:disabled { opacity: .6; cursor: wait; }
+      #${RETURN_LINK_ID} { display: inline-flex; align-items: center; gap: 7px; margin-left: 8px; padding: 5px 9px; border: 1px solid #cbb4e1; border-radius: 6px; background: #f7f2fd; color: #562980; font: 600 13px/1.5 system-ui, sans-serif; text-decoration: none; vertical-align: middle; white-space: nowrap; }
+      #${RETURN_LINK_ID}:hover { background: #ede1fa; color: #3d1b5b; }
+      #${RETURN_LINK_ID}:focus-visible { outline: 2px solid #8655b2; outline-offset: 2px; }
+      #${RETURN_LINK_ID} .${NS}-badge { padding: 1px 5px; border-radius: 4px; background: #e9dff4; color: #624182; font-size: 10px; font-weight: 400; }
       #${NOTICE_ID} { position: fixed; z-index: 2147483647; right: 20px; bottom: 20px; width: min(420px, calc(100vw - 40px)); max-height: calc(100vh - 40px); overflow: auto; padding: 16px; border: 1px solid #cbb4e1; border-radius: 10px; background: #fcfaff; color: #332440; box-shadow: 0 8px 30px #0002; }
       #${NOTICE_ID}.${NS}-notice-error { border-color: #b74b59; }
       #${NOTICE_ID} strong, #${NOTICE_ID} p { display: block; margin: 0 0 8px; }
@@ -274,8 +279,30 @@
 
   async function initPapersCool() {
     const id = paperIdFromPath(location.pathname, '/arxiv/');
-    if (!id || new URLSearchParams(location.hash.slice(1)).get(REQUEST_FRAGMENT_PARAM) !== 'faq')
-      return;
+    if (!id) return;
+    await Promise.all([addArxivReturnLink(id), expandPapersCoolFaq(id)]);
+  }
+
+  async function addArxivReturnLink(id) {
+    const baseId = id.replace(/v\d+$/, '');
+    const heading = await waitFor(() => {
+      const paper = document.getElementById(baseId);
+      return paper?.classList.contains('paper') ? paper.querySelector('h2.title') : null;
+    }, 20_000);
+    if (!heading || document.getElementById(RETURN_LINK_ID)) return;
+    const link = makeLink('↗ arXiv', `https://arxiv.org/abs/${id}`, `在 arXiv 開啟 ${id}`);
+    link.id = RETURN_LINK_ID;
+    link.className = 'notranslate';
+    const badge = document.createElement('span');
+    badge.className = `${NS}-badge`;
+    badge.textContent = 'Userscript';
+    badge.setAttribute('aria-hidden', 'true');
+    link.append(badge);
+    heading.append(link);
+  }
+
+  async function expandPapersCoolFaq(id) {
+    if (new URLSearchParams(location.hash.slice(1)).get(REQUEST_FRAGMENT_PARAM) !== 'faq') return;
     // 先消耗標記，再等待網站；重新整理不會重複觸發 native POST / star。
     if (!clearRequestFragment()) {
       showStatus('無法啟動自動展開，請手動點擊這篇論文的 Kimi。', { error: true });
@@ -806,9 +833,7 @@
   const host = location.hostname;
   const shouldRun =
     (host === 'arxiv.org' && paperIdFromPath(location.pathname, '/abs/')) ||
-    (host === 'papers.cool' &&
-      paperIdFromPath(location.pathname, '/arxiv/') &&
-      new URLSearchParams(location.hash.slice(1)).get(REQUEST_FRAGMENT_PARAM) === 'faq') ||
+    (host === 'papers.cool' && paperIdFromPath(location.pathname, '/arxiv/')) ||
     (host === 'gemini.google.com' && requestIdFromFragment());
   const runningAttribute = `data-${NS}-running`;
   if (
