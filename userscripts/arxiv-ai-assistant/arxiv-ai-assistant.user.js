@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         arXiv AI Assistant
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.2.0
-// @description  在 arXiv 與 papers.cool 間快速跳轉，自動展開 FAQ 或用 Kimi／Gemini 取得繁中論文摘要
+// @version      0.3.0
+// @description  arXiv／papers.cool 論文資訊、引用與關聯探索，以及 Kimi／Gemini 繁中摘要
 // @author       Da-Wei Lee
 // @license      MIT
 // @match        https://arxiv.org/abs/*
@@ -17,6 +17,10 @@
 // @grant        GM_deleteValue
 // @grant        GM_openInTab
 // @grant        GM_setClipboard
+// @grant        GM_xmlhttpRequest
+// @connect      arxiv.org
+// @connect      api.semanticscholar.org
+// @connect      api.openalex.org
 // @updateURL    https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/arxiv-ai-assistant/arxiv-ai-assistant.user.js
 // @downloadURL  https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/arxiv-ai-assistant/arxiv-ai-assistant.user.js
 // ==/UserScript==
@@ -34,6 +38,10 @@
   const RETURN_LINK_ID = `${NS}-arxiv-return`;
   const NOTICE_ID = `${NS}-notice`;
   const PENDING_KEY = `${NS}.pending.v1`;
+  const RESEARCH_CACHE_KEY = `${NS}.research.v1`;
+  const SCHOLAR_BACKOFF_KEY = `${NS}.scholar-backoff`;
+  const DAY_MS = 86_400_000;
+  const RESEARCH_ID = `${NS}-research`;
   const REQUEST_FRAGMENT_PARAM = NS;
   const REQUEST_ID_RE = /^[A-Za-z0-9-]{12,80}$/;
   const PENDING_TTL_MS = 120_000;
@@ -204,6 +212,19 @@
       #${PANEL_ID} a:hover, #${PANEL_ID} button:hover, #${NOTICE_ID} button:hover { background: #ede1fa; color: #3d1b5b; }
       #${PANEL_ID} :focus-visible, #${NOTICE_ID} :focus-visible { outline: 2px solid #8655b2; outline-offset: 2px; }
       #${PANEL_ID} button:disabled { opacity: .6; cursor: wait; }
+      #${RESEARCH_ID} { margin-top: 12px; padding-top: 10px; border-top: 1px solid #d8c6ed; overflow-wrap: anywhere; }
+      #${PANEL_ID} > #${RESEARCH_ID}:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+      #${RESEARCH_ID} > strong { display: block; margin-bottom: 6px; }
+      #${RESEARCH_ID} #${NS}-dates { display: grid; gap: 4px; margin: 6px 0 10px; }
+      #${RESEARCH_ID} p { margin: 7px 0; font: inherit; color: inherit; }
+      #${RESEARCH_ID} .${NS}-muted, #${RESEARCH_ID} [role="status"] { color: #6b597a; font-size: 11px; }
+      #${RESEARCH_ID} .${NS}-actions { margin-top: 10px; }
+      #${RESEARCH_ID} details { padding: 7px 0; border-top: 1px solid #e4d9ee; }
+      #${RESEARCH_ID} summary { cursor: pointer; font-weight: 600; }
+      #${RESEARCH_ID} .${NS}-relations { max-height: 300px; overflow: auto; padding: 0 3px; }
+      #${RESEARCH_ID} ol { margin: 8px 0; padding-left: 20px; list-style: decimal; }
+      #${RESEARCH_ID} li { display: list-item; margin: 7px 0; padding: 0; }
+      #${RESEARCH_ID} li a { display: inline; min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; font-weight: 400; text-decoration: underline; }
       #${RETURN_LINK_ID} { display: inline-flex; align-items: center; gap: 7px; margin-left: 8px; padding: 5px 9px; border: 1px solid #cbb4e1; border-radius: 6px; background: #f7f2fd; color: #562980; font: 600 13px/1.5 system-ui, sans-serif; text-decoration: none; vertical-align: middle; white-space: nowrap; }
       #${RETURN_LINK_ID}:hover { background: #ede1fa; color: #3d1b5b; }
       #${RETURN_LINK_ID}:focus-visible { outline: 2px solid #8655b2; outline-offset: 2px; }
@@ -243,6 +264,472 @@
     return link;
   }
 
+  // Research lookups use work-level IDs; navigation and AI prompts retain the version.
+  function basePaperId(id) {
+    return id.replace(/v\d+$/, '');
+  }
+
+  function researchCache(id, kind, value) {
+    try {
+      const stored = GM_getValue(RESEARCH_CACHE_KEY, {});
+      const cache = stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+      const key = `${basePaperId(id)}:${kind}`;
+      if (value === undefined) {
+        const entry = cache[key];
+        const age = Date.now() - entry?.at;
+        return age >= 0 && age < DAY_MS ? entry.value : null;
+      }
+      cache[key] = { at: Date.now(), value };
+      // Bound storage even when browsing many papers. Cache failures never block the UI.
+      GM_setValue(
+        RESEARCH_CACHE_KEY,
+        Object.fromEntries(
+          Object.entries(cache)
+            .sort((a, b) => b[1]?.at - a[1]?.at)
+            .slice(0, 60)
+        )
+      );
+    } catch (error) {
+      log('research cache unavailable:', error);
+    }
+    return null;
+  }
+
+  function requestResearch(url, type = 'json') {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method: 'GET',
+        url,
+        anonymous: true,
+        timeout: 15_000,
+        onload(response) {
+          if (response.status !== 200) {
+            reject(
+              Object.assign(new Error(`HTTP ${response.status}`), { status: response.status })
+            );
+            return;
+          }
+          try {
+            if (response.finalUrl && new URL(response.finalUrl).origin !== new URL(url).origin)
+              throw new Error('查詢被轉往其他網站');
+            resolve(type === 'json' ? JSON.parse(response.responseText) : response.responseText);
+          } catch (error) {
+            reject(error);
+          }
+        },
+        onerror: () => reject(new Error('無法連線或尚未允許跨站查詢')),
+        ontimeout: () => reject(new Error('查詢逾時')),
+        onabort: () => reject(new Error('查詢已取消')),
+      });
+    });
+  }
+
+  function readDates(doc) {
+    const history = doc.querySelector('.submission-history')?.textContent || '';
+    const versions = [];
+    const pattern =
+      /\[v(\d+)\]\s*(?:[A-Za-z]{3},?\s*)?(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\s+(?:UTC|GMT)/g;
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    for (const match of history.matchAll(pattern)) {
+      const [, version, day, month, year, hours, minutes, seconds] = match;
+      const monthIndex = months.indexOf(month);
+      const at = Date.UTC(+year, monthIndex, +day, +hours, +minutes, +seconds);
+      const date = new Date(at);
+      if (
+        monthIndex < 0 ||
+        date.getUTCDate() !== +day ||
+        +hours > 23 ||
+        +minutes > 59 ||
+        +seconds > 59
+      )
+        continue;
+      versions.push({ version: +version, at });
+    }
+    versions.sort((a, b) => a.version - b.version);
+    const first = versions.find((item) => item.version === 1);
+    const latest = versions.at(-1);
+    const metaDate = doc.querySelector('meta[name="citation_date"]')?.content?.replaceAll('/', '-');
+    const fallback = /^\d{4}-\d{2}-\d{2}$/.test(metaDate || '')
+      ? Date.parse(`${metaDate}T00:00:00Z`)
+      : NaN;
+    return {
+      submittedAt: first?.at ?? (Number.isFinite(fallback) ? fallback : null),
+      latestAt: latest?.at ?? null,
+      latestVersion: latest?.version ?? null,
+    };
+  }
+
+  function dateDescription(at) {
+    if (!Number.isFinite(at)) return '未取得';
+    const days = Math.floor((Date.now() - at) / DAY_MS);
+    const age =
+      days < 0
+        ? '日期尚未到'
+        : days === 0
+          ? '今天'
+          : days < 365
+            ? `${days} 天前`
+            : `${(days / 365.25).toFixed(1)} 年前`;
+    return `${new Date(at).toISOString().slice(0, 10)}（${age}）`;
+  }
+
+  function renderDates(container, dates, id) {
+    container.replaceChildren();
+    const first = document.createElement('div');
+    first.textContent = `首次提交：${dateDescription(dates.submittedAt)}`;
+    const updated = document.createElement('div');
+    updated.textContent = `最新修訂：${dateDescription(dates.latestAt)}${dates.latestVersion ? ` · v${dates.latestVersion}` : ''}`;
+    container.append(first, updated);
+    const selectedVersion = id.match(/v(\d+)$/)?.[1];
+    if (selectedVersion && dates.latestVersion && +selectedVersion !== dates.latestVersion) {
+      container.append(
+        makeLink(
+          `目前 v${selectedVersion} → 最新 v${dates.latestVersion}`,
+          `https://arxiv.org/abs/${basePaperId(id)}v${dates.latestVersion}`,
+          '目前閱讀的是舊版本；在新分頁開啟最新版本'
+        )
+      );
+    }
+  }
+
+  function openAlexUrl(params) {
+    return `https://api.openalex.org/works?${new URLSearchParams(params)}`;
+  }
+
+  function matchesArxivLocation(work, id) {
+    return (work.locations || []).some((item) => {
+      if (item.id === `pmh:oai:arXiv.org:${id}`) return true;
+      return [item.landing_page_url, item.pdf_url].some((href) => {
+        if (!href) return false;
+        try {
+          const url = new URL(href);
+          if (url.hostname === 'doi.org')
+            return (
+              decodeURIComponent(url.pathname).toLowerCase() ===
+              `/10.48550/arxiv.${id}`.toLowerCase()
+            );
+          if (!['arxiv.org', 'www.arxiv.org', 'export.arxiv.org'].includes(url.hostname))
+            return false;
+          const path = url.pathname.replace(/\.pdf$/, '');
+          const found = paperIdFromPath(path, '/abs/') || paperIdFromPath(path, '/pdf/');
+          return found && basePaperId(found) === id;
+        } catch {
+          return false;
+        }
+      });
+    });
+  }
+
+  function countLabel(value) {
+    return Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString('en-US') : '未提供';
+  }
+
+  function validMetrics(value) {
+    return (
+      value &&
+      Number.isFinite(value.checkedAt) &&
+      ((value.provider === 'Semantic Scholar' && /^[a-f0-9]{40}$/.test(value.id)) ||
+        (value.provider === 'OpenAlex' && /^W\d+$/.test(value.id)))
+    );
+  }
+
+  function metricsUrl(value) {
+    return value.provider === 'OpenAlex'
+      ? `https://openalex.org/${value.id}`
+      : `https://www.semanticscholar.org/paper/${value.id}`;
+  }
+
+  async function lookupMetrics(paper) {
+    const id = basePaperId(paper.id);
+    let scholarError;
+    try {
+      let backoff = 0;
+      try {
+        backoff = GM_getValue(SCHOLAR_BACKOFF_KEY, 0);
+      } catch {
+        /* optional throttle */
+      }
+      if (backoff > Date.now()) throw Object.assign(new Error('暫時限流'), { status: 429 });
+      const work = await requestResearch(
+        `https://api.semanticscholar.org/graph/v1/paper/ARXIV:${encodeURIComponent(id)}?fields=externalIds,citationCount,referenceCount`
+      );
+      if (
+        !work.externalIds?.ArXiv ||
+        basePaperId(work.externalIds.ArXiv) !== id ||
+        !/^[a-f0-9]{40}$/.test(work.paperId)
+      )
+        throw new Error('Semantic Scholar 未回傳相符的 arXiv ID');
+      return {
+        provider: 'Semantic Scholar',
+        id: work.paperId,
+        citations: work.citationCount,
+        references: work.referenceCount,
+        checkedAt: Date.now(),
+      };
+    } catch (error) {
+      scholarError = error;
+      if (error.status === 429) {
+        try {
+          GM_setValue(SCHOLAR_BACKOFF_KEY, Date.now() + 60_000);
+        } catch {
+          /* optional throttle */
+        }
+      }
+    }
+    // Title search is candidate discovery only. Require an exact arXiv location;
+    // same titles and arXiv DOI redirects alone can identify the wrong work.
+    try {
+      const data = await requestResearch(
+        openAlexUrl({
+          search: paper.title,
+          per_page: 10,
+          select: 'id,title,locations,cited_by_count,referenced_works',
+        })
+      );
+      if (!Array.isArray(data.results)) throw new Error('OpenAlex 回應格式不符');
+      const matches = data.results.filter((work) => matchesArxivLocation(work, id));
+      if (matches.length !== 1) {
+        const prefix = scholarError.status === 429 ? 'Semantic Scholar 暫時限流；' : '';
+        throw new Error(
+          `${prefix}OpenAlex ${matches.length > 1 ? '有多筆符合紀錄，需人工確認' : '未找到可核對 arXiv ID 的紀錄'}。請使用外部工具確認。`
+        );
+      }
+      const work = matches[0];
+      const metrics = {
+        provider: 'OpenAlex',
+        id: work.id?.match(/^https:\/\/openalex\.org\/(W\d+)$/)?.[1],
+        citations: work.cited_by_count,
+        references: Array.isArray(work.referenced_works) ? work.referenced_works.length : null,
+        checkedAt: Date.now(),
+      };
+      if (!validMetrics(metrics)) throw new Error('OpenAlex 回傳的論文 ID 無效');
+      return metrics;
+    } catch (error) {
+      if (error.status === 429)
+        throw new Error('引用資料庫暫時限流，請稍後重試，或使用下方外部工具。');
+      if (error.status === 401 || error.status === 403)
+        throw new Error('引用資料庫目前限制匿名存取，請使用下方外部工具。');
+      throw error;
+    }
+  }
+
+  async function lookupRelations(metrics, direction) {
+    if (metrics.provider === 'OpenAlex') {
+      const data = await requestResearch(
+        openAlexUrl({
+          filter: `${direction === 'references' ? 'cited_by' : 'cites'}:${metrics.id}`,
+          per_page: 20,
+          sort: direction === 'references' ? 'cited_by_count:desc' : 'publication_date:desc',
+          select: 'id,title,publication_year,cited_by_count',
+        })
+      );
+      if (!Array.isArray(data.results)) throw new Error('引用關係回應格式不符');
+      return data.results.map((work) => ({
+        id: work.id?.match(/^https:\/\/openalex\.org\/(W\d+)$/)?.[1],
+        provider: metrics.provider,
+        title: work.title,
+        year: work.publication_year,
+      }));
+    }
+    const data = await requestResearch(
+      `https://api.semanticscholar.org/graph/v1/paper/${metrics.id}/${direction}?limit=20&fields=title,year`
+    );
+    if (!Array.isArray(data.data)) throw new Error('引用關係回應格式不符');
+    return data.data.map((item) => {
+      const work = direction === 'references' ? item.citedPaper : item.citingPaper;
+      return {
+        id: work?.paperId,
+        provider: metrics.provider,
+        title: work?.title,
+        year: work?.year,
+      };
+    });
+  }
+
+  function appendRelations(container, metrics, isCurrent) {
+    for (const [direction, label] of [
+      ['references', '上游：本篇引用的研究'],
+      ['citations', '下游：引用本篇的研究'],
+    ]) {
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.textContent = label;
+      const body = document.createElement('div');
+      body.className = `${NS}-relations`;
+      details.append(summary, body);
+      container.append(details);
+      let busy = false;
+      let loaded = false;
+      async function load() {
+        if (busy || loaded || !isCurrent() || !details.isConnected) return;
+        busy = true;
+        body.textContent = '正在查詢…';
+        try {
+          const works = await lookupRelations(metrics, direction);
+          if (!isCurrent() || !details.isConnected) return;
+          body.replaceChildren();
+          const list = document.createElement('ol');
+          for (const work of works) {
+            if (!validMetrics({ ...work, checkedAt: 0 }) || typeof work.title !== 'string')
+              continue;
+            const row = document.createElement('li');
+            row.append(makeLink(work.title, metricsUrl(work), '在資料來源查看這篇論文'));
+            if (Number.isInteger(work.year)) row.append(`（${work.year}）`);
+            list.append(row);
+          }
+          body.append(list);
+          const note = document.createElement('p');
+          note.textContent = list.childElementCount
+            ? `顯示 ${list.childElementCount} 篇（最多 20 篇）；更多結果請至資料來源。`
+            : '資料庫尚未提供可顯示的引用關係。';
+          body.append(note);
+          loaded = true;
+        } catch (error) {
+          if (!isCurrent() || !details.isConnected) return;
+          body.textContent =
+            error.status === 429
+              ? '資料庫暫時限流，請稍後再試。'
+              : '引用關係查詢失敗，可重試或至資料來源查看。';
+          const retry = document.createElement('button');
+          retry.type = 'button';
+          retry.textContent = '重試';
+          retry.addEventListener('click', load);
+          body.append(retry);
+        } finally {
+          busy = false;
+        }
+      }
+      details.addEventListener('toggle', () => {
+        if (details.open) void load();
+      });
+    }
+  }
+
+  function addResearchCard(panel, paper) {
+    if (document.getElementById(RESEARCH_ID)) return;
+    const route = location.pathname;
+    const card = document.createElement('section');
+    card.id = RESEARCH_ID;
+    card.setAttribute('aria-label', '論文資訊與引用探索');
+    const isCurrent = () => card.isConnected && location.pathname === route;
+    const heading = document.createElement('strong');
+    heading.textContent = '論文資訊';
+    const dates = document.createElement('div');
+    dates.id = `${NS}-dates`;
+    const metrics = document.createElement('div');
+    metrics.id = `${NS}-metrics`;
+    const status = document.createElement('p');
+    status.setAttribute('role', 'status');
+    status.textContent = '引用資料尚未查詢。';
+    const lookup = document.createElement('button');
+    lookup.type = 'button';
+    lookup.textContent = '查詢引用';
+    lookup.id = `${NS}-lookup`;
+    const tools = document.createElement('div');
+    tools.className = `${NS}-actions`;
+    const baseId = basePaperId(paper.id);
+    const scholar = new URL('https://scholar.google.com/scholar');
+    scholar.search = new URLSearchParams({ q: `"${paper.title}"` });
+    tools.append(
+      makeLink('Google Scholar', scholar.href, '以完整題名搜尋，查看被引用與相關文章'),
+      makeLink(
+        'Semantic Scholar',
+        `https://api.semanticscholar.org/arXiv:${baseId}`,
+        '以 arXiv ID 開啟文獻紀錄'
+      ),
+      makeLink(
+        'Connected Papers',
+        `https://www.connectedpapers.com/api/redirect/arxiv/${encodeURIComponent(baseId)}`,
+        '探索相似論文圖譜；圖中的連線表示相似性，並非直接引用'
+      )
+    );
+    const help = document.createElement('p');
+    help.className = `${NS}-muted`;
+    help.textContent = '引用依資料庫收錄；Connected Papers 提供相似性圖譜。';
+    card.append(heading, dates, lookup, status, metrics, tools, help);
+    panel.append(card);
+
+    function showMetrics(value, cached = false) {
+      metrics.replaceChildren();
+      const counts = document.createElement('p');
+      counts.textContent = `被引用：${countLabel(value.citations)} · 參考文獻：${countLabel(value.references)}`;
+      const source = document.createElement('p');
+      source.append(
+        makeLink(
+          value.provider,
+          metricsUrl(value),
+          '查看資料庫中的整篇論文紀錄（可能合併多個版本）'
+        )
+      );
+      source.append(
+        ` · ${new Date(value.checkedAt).toISOString().replace('T', ' ').slice(0, 16)} UTC${cached ? '（快取）' : ''}`
+      );
+      source.className = `${NS}-muted`;
+      metrics.append(counts, source);
+      appendRelations(metrics, value, isCurrent);
+      status.textContent = '依整篇論文紀錄統計，可能合併版本；資料快取 24 小時。';
+      lookup.textContent = '更新引用資料';
+    }
+    const cached = researchCache(paper.id, 'metrics');
+    if (validMetrics(cached)) showMetrics(cached, true);
+    lookup.addEventListener('click', async () => {
+      if (lookup.disabled || !isCurrent()) return;
+      lookup.disabled = true;
+      status.textContent = '正在查詢引用資料…';
+      try {
+        const value = await lookupMetrics(paper);
+        researchCache(paper.id, 'metrics', value);
+        if (isCurrent()) showMetrics(value);
+      } catch (error) {
+        if (isCurrent())
+          status.textContent = `未能更新引用資料：${error.message}（查詢失敗不代表零引用。）`;
+      } finally {
+        lookup.disabled = false;
+      }
+    });
+
+    if (location.hostname === 'arxiv.org') {
+      const value = readDates(document);
+      renderDates(dates, value, paper.id);
+      if (value.submittedAt !== null) researchCache(paper.id, 'dates', value);
+    } else {
+      const cachedDates = researchCache(paper.id, 'dates');
+      if (cachedDates) {
+        renderDates(dates, cachedDates, paper.id);
+        dates.title = 'arXiv 提交紀錄（24 小時快取）';
+      } else {
+        dates.textContent = '正在讀取 arXiv 提交紀錄…';
+        void requestResearch(`https://arxiv.org/abs/${baseId}`, 'text')
+          .then((html) => {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const returnedId = doc.querySelector('meta[name="citation_arxiv_id"]')?.content;
+            if (!returnedId || basePaperId(returnedId) !== baseId)
+              throw new Error('arXiv 紀錄不符');
+            const value = readDates(doc);
+            if (value.submittedAt === null) throw new Error('未提供提交紀錄');
+            researchCache(paper.id, 'dates', value);
+            if (isCurrent()) renderDates(dates, value, paper.id);
+          })
+          .catch(() => {
+            if (isCurrent()) dates.textContent = '未取得提交紀錄，請按「↗ arXiv」查看。';
+          });
+      }
+    }
+  }
+
   async function initArxiv() {
     const list = await waitFor(
       () => document.querySelector('.extra-services .full-text > ul'),
@@ -275,6 +762,7 @@
     );
     panel.append(heading, actions);
     list.append(panel);
+    addResearchCard(panel, paper);
   }
 
   async function initPapersCool() {
@@ -299,6 +787,15 @@
     badge.setAttribute('aria-hidden', 'true');
     link.append(badge);
     heading.append(link);
+    const panel = document.createElement('div');
+    panel.id = PANEL_ID;
+    heading.after(panel);
+    const title =
+      normalizeText(
+        document.querySelector('meta[name="citation_title"]')?.content ||
+          heading.querySelector('.title-link')?.textContent
+      ) || `arXiv ${id}`;
+    addResearchCard(panel, { id, title });
   }
 
   async function expandPapersCoolFaq(id) {

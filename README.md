@@ -17,9 +17,7 @@
 
 | Script | 用途 | 生效網站 | Version | 安裝 |
 | --- | --- | --- | --- | --- |
-| [arXiv AI Assistant](userscripts/arxiv-ai-assistant/) | 在 arXiv 加入 papers.cool、Kimi 與 Gemini 入口，自動展開 FAQ 或送出繁中論文摘要請求 | `https://arxiv.org/abs/*`<br>`https://papers.cool/arxiv/*`<br>`https://gemini.google.com/app*` | 0.1.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/arxiv-ai-assistant/arxiv-ai-assistant.user.js) |
 | [ChatGPT Export Markdown](userscripts/chatgpt-export-markdown/) | 把 ChatGPT 對話匯成 Markdown，另提供樹狀選取、Agent Handoff 與可攜 JSON 存檔 | `https://chatgpt.com/*` | 1.4.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js) |
-| [arXiv AI Assistant](userscripts/arxiv-ai-assistant/) | 在 arXiv 與 papers.cool 間快速跳轉，自動展開 FAQ 或用 Kimi／Gemini 取得繁中論文摘要 | `https://arxiv.org/abs/*`<br>`https://papers.cool/arxiv/*`<br>`https://gemini.google.com/app*` | 0.2.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/arxiv-ai-assistant/arxiv-ai-assistant.user.js) |
 | [Claude Export Markdown](userscripts/claude-export-markdown/) | 把整段 Claude 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用 | `https://claude.ai/*` | 1.0.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/claude-export-markdown/claude-export-markdown.user.js) |
 | [Copilot Export Markdown](userscripts/copilot-export-markdown/) | 把整段 Microsoft Copilot 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用 | `https://copilot.microsoft.com/*`<br>`https://www.copilot.com/*` | 1.2.1 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/copilot-export-markdown/copilot-export-markdown.user.js) |
 | [Gemini Export Markdown](userscripts/gemini-export-markdown/) | 把整段 Gemini 對話匯成 Markdown（含 share 頁與 Agent Handoff），貼給 coding agent 用 | `https://gemini.google.com/*` | 0.2.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/gemini-export-markdown/gemini-export-markdown.user.js) |
@@ -30,6 +28,7 @@
 
 | Script | 用途 | 生效網站 | Version | 安裝 |
 | --- | --- | --- | --- | --- |
+| [arXiv AI Assistant](userscripts/arxiv-ai-assistant/) | arXiv／papers.cool 論文資訊、引用與關聯探索，以及 Kimi／Gemini 繁中摘要 | `https://arxiv.org/abs/*`<br>`https://papers.cool/arxiv/*`<br>`https://gemini.google.com/app*` | 0.3.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/arxiv-ai-assistant/arxiv-ai-assistant.user.js) |
 | [Media Helper](userscripts/media-helper/) | 預覽網頁圖片與影片、選擇頁面最大圖片版本，支援單檔與多選逐檔下載 | `https://*/*`<br>`http://*/*` | 0.1.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/media-helper/media-helper.user.js) |
 | [Page Reader & Markdown](userscripts/page-reader-markdown/) | 從目前網頁擷取乾淨正文，支援專注閱讀、Markdown 與含附件 ZIP 匯出 | `https://*/*`<br>`http://*/*` | 0.1.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/page-reader-markdown/page-reader-markdown.user.js) |
 | [YouTube Gemini Summary](userscripts/youtube-gemini-summary/) | 在 YouTube 影片卡片與觀看頁一鍵開啟 Gemini，送出繁中摘要提示 | `https://www.youtube.com/*`<br>`https://gemini.google.com/app*` | 0.1.2 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/youtube-gemini-summary/youtube-gemini-summary.user.js) |

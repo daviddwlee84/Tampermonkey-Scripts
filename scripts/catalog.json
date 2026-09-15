@@ -16,7 +16,12 @@
     "title": "閱讀與媒體工具",
     "description": "網頁正文、圖片影片與 YouTube 摘要。",
     "default": true,
-    "scripts": ["media-helper", "page-reader-markdown", "youtube-gemini-summary"]
+    "scripts": [
+      "arxiv-ai-assistant",
+      "media-helper",
+      "page-reader-markdown",
+      "youtube-gemini-summary"
+    ]
   },
   {
     "id": "keyboard",
