@@ -17,6 +17,7 @@
 
 | Script | 用途 | 生效網站 | Version | 安裝 |
 | --- | --- | --- | --- | --- |
+| [arXiv AI Assistant](userscripts/arxiv-ai-assistant/) | 在 arXiv 加入 papers.cool、Kimi 與 Gemini 入口，自動展開 FAQ 或送出繁中論文摘要請求 | `https://arxiv.org/abs/*`<br>`https://papers.cool/arxiv/*`<br>`https://gemini.google.com/app*` | 0.1.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/arxiv-ai-assistant/arxiv-ai-assistant.user.js) |
 | [ChatGPT Export Markdown](userscripts/chatgpt-export-markdown/) | 把 ChatGPT 對話匯成 Markdown，另提供樹狀選取、Agent Handoff 與可攜 JSON 存檔 | `https://chatgpt.com/*` | 1.4.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js) |
 | [Claude Export Markdown](userscripts/claude-export-markdown/) | 把整段 Claude 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用 | `https://claude.ai/*` | 1.0.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/claude-export-markdown/claude-export-markdown.user.js) |
 | [Copilot Export Markdown](userscripts/copilot-export-markdown/) | 把整段 Microsoft Copilot 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用 | `https://copilot.microsoft.com/*`<br>`https://www.copilot.com/*` | 1.2.1 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/copilot-export-markdown/copilot-export-markdown.user.js) |
