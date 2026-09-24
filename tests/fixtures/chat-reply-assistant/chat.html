@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Chat Reply Assistant — deterministic DOM fixture</title>
+    <style>
+      body {
+        font: 16px system-ui;
+        margin: 0;
+      }
+      nav {
+        width: 180px;
+        padding: 16px;
+        float: left;
+      }
+      main {
+        margin-left: 210px;
+        max-width: 650px;
+        padding: 24px;
+      }
+      [role='log'] {
+        height: 380px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        padding: 12px;
+      }
+      [role='row'] {
+        padding: 8px;
+        margin-bottom: 8px;
+        border-radius: 6px;
+        background: #eee;
+      }
+      [data-direction='self'] {
+        margin-left: 80px;
+        background: #ddf;
+      }
+      h4 {
+        margin: 0 0 4px;
+      }
+      time {
+        font-size: 11px;
+        color: #666;
+      }
+      [contenteditable] {
+        min-height: 36px;
+        padding: 8px;
+        border: 1px solid #999;
+        margin-top: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav role="navigation">
+      <a href="/profile/fixture-self" aria-current="true" data-self-id="fixture-self">My profile</a>
+      <div role="row"><span dir="auto">SIDEBAR SENTINEL DO NOT CAPTURE</span></div>
+    </nav>
+    <main>
+      <section data-thread-id="100">
+        <h2>Alice</h2>
+        <div role="log" aria-label="Messages" data-scope="messages_table">
+          <div role="row" data-message-id="m1" data-sender-id="alice" data-sender-name="Alice">
+            <h4>Alice</h4>
+            <div data-message-text>週六有空嗎</div>
+            <time datetime="2026-09-24T12:00:00Z">20:00</time>
+          </div>
+          <div
+            role="row"
+            data-message-id="m2"
+            data-sender-id="fixture-self"
+            data-sender-name="You"
+            data-direction="self"
+            aria-label="You sent"
+          >
+            <div data-message-text>有啊 想去哪</div>
+            <time datetime="2026-09-24T12:01:00Z">20:01</time>
+          </div>
+          <div role="row" data-message-id="m3" data-sender-id="alice" data-sender-name="Alice">
+            <h4>Alice</h4>
+            <div data-message-text>一起去喝咖啡吧</div>
+            <time datetime="2026-09-24T12:02:00Z">20:02</time>
+          </div>
+        </div>
+        <div
+          contenteditable="true"
+          role="textbox"
+          data-lexical-editor="true"
+          aria-label="Message"
+        ></div>
+        <button id="fixture-send" type="button">Send</button>
+      </section>
+    </main>
+    <script>
+      (() => {
+        const log = () => document.querySelector('[role="log"]');
+        let sequence = 10;
+        window.__fixtureSent = 0;
+        document
+          .querySelector('#fixture-send')
+          .addEventListener('click', () => window.__fixtureSent++);
+        document.querySelector('[contenteditable]').addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' && !event.shiftKey) window.__fixtureSent++;
+        });
+        window.__chatFixture = {
+          add({
+            id = `added-${++sequence}`,
+            text,
+            sender = 'Alice',
+            self = false,
+            prepend = false,
+            timestamp,
+          } = {}) {
+            const row = document.createElement('div');
+            row.setAttribute('role', 'row');
+            row.dataset.messageId = id;
+            if (sender) {
+              row.dataset.senderId = self ? 'fixture-self' : sender.toLowerCase();
+              row.dataset.senderName = sender;
+              if (!self) {
+                const name = document.createElement('h4');
+                name.textContent = sender;
+                row.append(name);
+              }
+            }
+            if (self) {
+              row.dataset.direction = 'self';
+              row.setAttribute('aria-label', 'You sent');
+            }
+            const content = document.createElement('div');
+            content.dataset.messageText = '';
+            content.textContent = text;
+            row.append(content);
+            const time = document.createElement('time');
+            time.dateTime =
+              timestamp ||
+              (prepend
+                ? '2026-09-20T12:00:00Z'
+                : new Date(Date.now() + sequence * 1000).toISOString());
+            time.textContent = time.dateTime;
+            row.append(time);
+            if (prepend) log().prepend(row);
+            else {
+              log().append(row);
+              log().scrollTop = log().scrollHeight;
+            }
+            return id;
+          },
+          group() {
+            document.querySelector('h2').textContent = 'Alice and Bob';
+            const row = document.querySelector('[data-message-id="m3"]');
+            row.dataset.senderId = 'bob';
+            row.dataset.senderName = 'Bob';
+            row.querySelector('h4').textContent = 'Bob';
+          },
+          react() {
+            const reaction = document.createElement('button');
+            reaction.setAttribute('aria-label', 'Reaction: heart');
+            reaction.textContent = '❤️';
+            document.querySelector('[data-message-id="m3"]').append(reaction);
+          },
+          remove(id) {
+            document.querySelector(`[data-message-id="${id}"]`)?.remove();
+          },
+          switchThread(id = '200') {
+            const path = location.hostname.includes('instagram') ? `/direct/t/${id}/` : `/t/${id}`;
+            history.pushState({}, '', path);
+            document.querySelector('section').dataset.threadId = id;
+            document.querySelector('h2').textContent = 'Charlie';
+            log().replaceChildren();
+            this.add({ id: `thread-${id}`, sender: 'Charlie', text: 'OTHER THREAD SENTINEL' });
+          },
+        };
+        if (new URL(location.href).searchParams.has('group')) window.__chatFixture.group();
+      })();
+    </script>
+  </body>
+</html>

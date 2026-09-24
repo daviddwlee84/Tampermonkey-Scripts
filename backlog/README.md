@@ -9,3 +9,5 @@
 | [Vimium C Companion 互動橋接](vimium-c-companion-bridge.md) | needs evaluation | P? / XL |
 | [Vimium C Companion 任務式練習卡](vimium-c-companion-practice.md) | deferred | P3 / L |
 | [Media Helper 串流完整下載](media-helper-stream-download.md) | needs evaluation | P? / L |
+| [Chat Reply Assistant 個人口吻模擬](chat-reply-assistant-voice-style.md) | deferred | P3 / L |
+| [Chat Reply Assistant OpenCode bridge](chat-reply-assistant-opencode-bridge.md) | needs evaluation | P? / L |
