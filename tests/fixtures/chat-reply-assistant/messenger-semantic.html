@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Messenger 語義測試頁</title>
+    <!-- 依公開 adapter 的 ARIA／messages_table 語義重建；尚非本次登入帳號的真站 DOM 擷取。 -->
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font: 14px/1.4 system-ui;
+        color-scheme: light dark;
+        color: CanvasText;
+        background: Canvas;
+      }
+      .workspace {
+        display: flex;
+        height: 100vh;
+      }
+      nav {
+        width: 190px;
+        padding: 16px;
+        border-right: 1px solid #9995;
+      }
+      main {
+        flex: 1;
+        min-width: 0;
+        padding: 16px;
+      }
+      .thread {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      h2 {
+        font-size: 17px;
+        margin: 8px 0 16px;
+      }
+      h4 {
+        margin: 4px 0;
+      }
+      [role='log'] {
+        flex: 1;
+        min-height: 100px;
+        overflow-y: auto;
+        padding: 8px;
+      }
+      [role='row'] {
+        margin: 8px 0;
+      }
+      .bubble {
+        max-width: 78%;
+        width: fit-content;
+        padding: 10px 14px;
+        border-radius: 18px;
+        background: #8882;
+      }
+      .own .bubble {
+        margin-left: auto;
+        background: #0084ff;
+        color: white;
+      }
+      .composer-shell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+        border-radius: 22px;
+        padding: 10px;
+        background: #8882;
+      }
+      [contenteditable] {
+        flex: 1;
+        min-width: 40px;
+        min-height: 24px;
+        max-height: 160px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        outline: none;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+        border: 0;
+        background: transparent;
+        color: #0084ff;
+      }
+      .stamp {
+        color: #888;
+        text-align: center;
+        font-size: 11px;
+      }
+      @media (max-width: 650px) {
+        nav {
+          display: none;
+        }
+        main {
+          padding: 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="workspace">
+      <nav aria-label="Navigation">
+        <a href="https://www.facebook.com/profile.php?id=1000" aria-label="Your profile"
+          >My profile</a
+        >
+        <div aria-label="Thread list">
+          <a href="/t/100">Alice</a><a href="/t/200">Bob</a
+          ><span dir="auto">SIDEBAR SENTINEL DO NOT CAPTURE</span>
+        </div>
+      </nav>
+      <main role="main">
+        <section class="thread">
+          <h2>Alice</h2>
+          <div role="log" data-scope="messages_table">
+            <div class="stamp"><span dir="auto">Sat 4:00 PM</span></div>
+            <div role="row" aria-label="Alice sent a message">
+              <h4>Alice</h4>
+              <div class="bubble"><span dir="auto">週六有空嗎</span></div>
+            </div>
+            <div role="row" class="own" aria-label="You sent a message">
+              <div class="bubble"><span dir="auto">有啊 想去哪</span></div>
+            </div>
+            <div role="row" aria-label="Alice sent a photo">
+              <div class="bubble">
+                <button aria-label="Open photo">
+                  <img
+                    alt="Open photo"
+                    width="150"
+                    height="90"
+                    src="https://scontent.xx.fbcdn.net/fixtures/meeting.png?token=one"
+                  />
+                </button>
+              </div>
+              <div class="stamp"><span dir="auto">Sat 4:05 PM</span></div>
+            </div>
+            <div role="group" aria-label="Messages from Alice">
+              <h4>Alice</h4>
+              <div role="row">
+                <div class="bubble"><span dir="auto">一起去喝咖啡吧</span></div>
+              </div>
+              <div role="row">
+                <div class="bubble"><span dir="auto">帶上那本書</span></div>
+              </div>
+            </div>
+            <div role="row" class="own" aria-label="You sent a message">
+              <div class="bubble"><span dir="auto">Sat 4:05 PM</span></div>
+            </div>
+          </div>
+          <div class="composer-shell">
+            <button aria-label="Open more actions">⊕</button
+            ><button aria-label="Attach a file">▣</button>
+            <div contenteditable="true" role="textbox" aria-label="Message"></div>
+            <button aria-label="Choose an emoji">☺</button><button aria-label="Send">Send</button>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script>
+      (() => {
+        const log = () => document.querySelector('[role="log"]');
+        window.__fixtureSent = 0;
+        document.addEventListener('click', (event) => {
+          if (event.target.closest('[aria-label="Send"]')) window.__fixtureSent++;
+        });
+        document.addEventListener('keydown', (event) => {
+          if (event.target.closest('[contenteditable]') && event.key === 'Enter' && !event.shiftKey)
+            window.__fixtureSent++;
+        });
+        window.__semanticFixture = {
+          add({ sender = 'Alice', text = '', photo = '', timestamp = '', prepend = false } = {}) {
+            const row = document.createElement('div');
+            row.setAttribute('role', 'row');
+            row.setAttribute('aria-label', `${sender} sent a message`);
+            if (sender === 'You') row.className = 'own';
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            if (photo) {
+              const button = document.createElement('button');
+              button.setAttribute('aria-label', 'Open photo');
+              const image = document.createElement('img');
+              image.alt = 'Open photo';
+              image.src = photo;
+              image.width = 150;
+              image.height = 90;
+              button.append(image);
+              bubble.append(button);
+            }
+            if (text) {
+              const span = document.createElement('span');
+              span.dir = 'auto';
+              span.textContent = text;
+              bubble.append(span);
+            }
+            row.append(bubble);
+            if (timestamp) {
+              const time = document.createElement('div');
+              time.className = 'stamp';
+              time.textContent = timestamp;
+              row.append(time);
+            }
+            if (prepend) log().prepend(row);
+            else {
+              log().append(row);
+              log().scrollTop = log().scrollHeight;
+            }
+            return row;
+          },
+          group() {
+            document.querySelector('h2').textContent = 'Weekend Group';
+            return this.add({ sender: 'Bob', text: 'GROUP THIRD PERSON SENTINEL' });
+          },
+          switchThread(id = '200') {
+            history.pushState(
+              {},
+              '',
+              `${location.hostname.includes('facebook') ? '/messages' : ''}/t/${id}`
+            );
+            document.querySelector('h2').textContent = 'Charlie';
+            log().replaceChildren();
+            this.add({ sender: 'Charlie', text: 'OTHER THREAD SENTINEL' });
+          },
+          remountComposer() {
+            const old = document.querySelector('.composer-shell');
+            old.replaceWith(old.cloneNode(true));
+          },
+        };
+        log().scrollTop = log().scrollHeight;
+      })();
+    </script>
+  </body>
+</html>

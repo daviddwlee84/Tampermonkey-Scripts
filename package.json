@@ -29,7 +29,7 @@
     "dino": "node scripts/dino-server.mjs",
     "test:dino-ai": "node --test tests/dino-ai-lab.test.mjs",
     "benchmark:dino": "node scripts/dino-benchmark.mjs",
-    "test:chat-reply-assistant": "node --test tests/chat-reply-assistant-core.test.mjs tests/chat-reply-assistant.test.mjs"
+    "test:chat-reply-assistant": "node --test tests/chat-reply-assistant-core.test.mjs tests/chat-reply-assistant-providers.test.mjs tests/chat-reply-assistant.test.mjs"
   },
   "devDependencies": {
     "prettier": "^3.4.2",
