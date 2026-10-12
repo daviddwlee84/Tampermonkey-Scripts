@@ -106,7 +106,8 @@ code fence、表格、citation 都可能失真。
   Violentmonkey 安裝驗證，尚未使用真實登入 session 測試。
 - 尚未完成的 Deep Research 還沒有 `report_message`；預設不會替它虛構回答。開啟
   **含 Deep Research 計畫／狀態**時，仍可匯出目前的 plan 與執行狀態。
-- 圖片：**Download .zip** 會用 `/backend-api/files/download/<file id>` 換 signed URL 再下載你上傳的圖片；
+- 圖片：**Download .zip** 會用 `/backend-api/files/download/<file id>` 換 signed URL 再下載你上傳的圖片
+  （分享頁帶 `shared_conversation_id`，不需要登入；signed URL 在 `*.oaiusercontent.com`，以不帶 cookie 的 `fetch` 讀取）；
   下載失敗的圖片在 Markdown 裡保留原本的 `sediment://…` pointer，狀態列會顯示失敗張數。
   其他匯出動作仍只輸出 `![image](<asset_pointer>)` 佔位。Intelligent UI 的網路圖片（`images.openai.com`）
   只保留遠端連結、不打包；工具產生的圖片（生圖）目前沒有樣本可驗證，尚未處理。
@@ -116,6 +117,8 @@ code fence、表格、citation 都可能失真。
 - 從 v1.3.1 起，修正多次研究共用 `plan_id` 時只剩最後一份報告的問題。
 - 從 v1.5.0 起，支援 Intelligent UI 回覆、修正 code block widget 被刪掉的問題，並新增含圖片的 ZIP 匯出
   （ZIP writer 是 [`shared/zip-store.js`](../../shared/zip-store.js)，只做不壓縮的 STORE）。
+- 從 v1.5.1 起，修正 ZIP 在分享頁與跨域 signed URL 上抓不到圖片的問題；`shared/zip-store.js`
+  沒載入時顯示更新提示，而不是 `ZipStore is not defined`。
 
 ## 分支保存
 

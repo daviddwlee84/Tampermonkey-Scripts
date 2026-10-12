@@ -47,6 +47,11 @@ assert the source page's HTML/scroll/overflow survive opening and closing a read
   failed links remote and report incomplete offline coverage.
 - Register Playwright's download listener before clicking. Inspect saved bytes,
   archive members and rewritten links in addition to observing an event.
+- A signed URL on another host (CDN/blob storage) usually answers
+  `Access-Control-Allow-Origin: *`, which rejects `credentials: 'include'`. Send
+  cookies only to same-origin URLs; a fixture should return `ACAO: *` so the
+  browser enforces this. Treat query strings on asset pointers as API
+  parameters, not as part of the file id.
 - Detect binary data with `ArrayBuffer.isView` / `Object.prototype.toString`,
   not `instanceof Uint8Array`: buffers from page `fetch` can come from another
   realm (manager sandbox, iframe, `vm` test context).

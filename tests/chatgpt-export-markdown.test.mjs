@@ -291,15 +291,27 @@ describe('ChatGPT export transformations', () => {
   });
 
   it('lists each image asset once with attachment name and MIME type', () => {
-    const context = vm.createContext({});
+    const context = vm.createContext({ URLSearchParams });
     vm.runInContext(SHARED + '\n' + ADAPTER + '\nglobalThis.A = ChatGPTAdapter;', context);
     const data = intelligentUi();
     const user = data.mapping['user-1'].message;
-    user.content.parts.push(clone(user.content.parts[0]));
+    user.content.parts.push(clone(user.content.parts[0]), {
+      content_type: 'image_asset_pointer',
+      asset_pointer: `${IMAGE_POINTER}?shared_conversation_id=share-1`,
+    });
     assert.deepEqual(JSON.parse(JSON.stringify(context.A.imageAssets(data, {}))), [
       {
         pointer: IMAGE_POINTER,
         fileId: 'file_00000000cb9c82099aa48ba2cc79a330',
+        params: {},
+        name: 'image(20261012-020309).png',
+        mime: 'image/png',
+      },
+      {
+        // 分享頁的 pointer：query 是 API 參數，file id 與附件名稱都不能被它污染
+        pointer: `${IMAGE_POINTER}?shared_conversation_id=share-1`,
+        fileId: 'file_00000000cb9c82099aa48ba2cc79a330',
+        params: { shared_conversation_id: 'share-1' },
         name: 'image(20261012-020309).png',
         mime: 'image/png',
       },
@@ -404,6 +416,13 @@ for (const [engineName, engine] of [
         if (file) {
           const auth = route.request().headers().authorization;
           if (file[1] === 'file_missing') return route.fulfill({ status: 404, json: {} });
+          if (file[1] === 'file_shared') {
+            if (url.searchParams.get('shared_conversation_id') !== 'share-fixture')
+              return route.fulfill({ status: 403, json: { error: 'Invalid URL' } });
+            return route.fulfill({
+              json: { download_url: 'https://files.oaiusercontent.com/raw/shared?sig=1' },
+            });
+          }
           if (file[1] === 'file_login')
             return route.fulfill({
               json: { download_url: 'https://chatgpt.com/backend-api/estuary/login-page' },
@@ -422,6 +441,14 @@ for (const [engineName, engine] of [
           if (url.searchParams.get('auth') !== 'true' || !url.searchParams.get('cid'))
             return route.fulfill({ status: 403, body: '' });
           return route.fulfill({ contentType: 'image/png', body: Buffer.from(PNG) });
+        }
+        if (url.host === 'files.oaiusercontent.com') {
+          // 真實 signed URL 回 `*`：用 credentials: 'include' 去抓會被 CORS 擋
+          return route.fulfill({
+            contentType: 'image/png',
+            headers: { 'access-control-allow-origin': '*' },
+            body: Buffer.from(PNG),
+          });
         }
         if (url.pathname === '/share/fixture' || url.pathname === '/c/fixture-conversation') {
           return route.fulfill({
@@ -500,10 +527,14 @@ for (const [engineName, engine] of [
     it('downloads a zip with Markdown and images, keeping pointers for failed images', async () => {
       const data = intelligentUi();
       const user = data.mapping['user-1'].message;
-      for (const id of ['file_missing', 'file_login'])
+      for (const pointer of [
+        'file_missing',
+        'file_login',
+        'file_shared?shared_conversation_id=share-fixture',
+      ])
         user.content.parts.push({
           content_type: 'image_asset_pointer',
-          asset_pointer: `sediment://${id}`,
+          asset_pointer: `sediment://${pointer}`,
         });
       const { page, errors } = await open(data, 'router');
       try {
@@ -516,17 +547,20 @@ for (const [engineName, engine] of [
         const files = readZip(await readFile(path));
         const [mdName, ...images] = [...files.keys()];
         assert.equal(mdName, download.suggestedFilename().replace(/\.zip$/, '.md'));
-        assert.deepEqual(images, ['images/01-image-20261012-020309.png']);
-        assert.deepEqual([...files.get(images[0])], PNG);
+        assert.deepEqual(images, [
+          'images/01-image-20261012-020309.png',
+          'images/04-file_shared.png',
+        ]);
+        for (const image of images) assert.deepEqual([...files.get(image)], PNG);
         const markdown = files.get(mdName).toString('utf8');
         assertIntelligentUi(markdown);
-        assert.ok(markdown.includes(`![image](${images[0]})`));
+        for (const image of images) assert.ok(markdown.includes(`![image](${image})`));
         assert.ok(markdown.includes('![image](sediment://file_missing)'));
         assert.ok(
           markdown.includes('![image](sediment://file_login)'),
           'HTML is not saved as an image'
         );
-        await page.getByText(/^已下載 ZIP（1\/3 張圖片，2 張失敗/).waitFor();
+        await page.getByText(/^已下載 ZIP（2\/4 張圖片，2 張失敗/).waitFor();
         assert.deepEqual(errors, []);
       } finally {
         await page.close();

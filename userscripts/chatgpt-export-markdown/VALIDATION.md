@@ -1,4 +1,22 @@
-# v1.5.0 validation — 2026-10-12
+# v1.5.1 validation — 2026-10-12
+
+## Fixes
+
+| Symptom (v1.5.0)                                  | Cause                                                                                                                                           | Fix                                                                                                                                |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 失敗：ZipStore is not defined                     | The manager ran the script without the new `@require` (`shared/zip-store.js`); its first fetch happened before the file was reachable on GitHub | Version bump makes the manager fetch every `@require` again; the ZIP action now reports the missing dependency instead of throwing |
+| Share page: 0/2 images, `files/download HTTP 403` | Share pointers are `sediment://file_…?shared_conversation_id=…`; the query became part of the file id (`{"error": "Invalid URL"}`)              | `imageAssets` splits the pointer into `fileId` + `params`; `fetchAsset` forwards the params                                        |
+| Signed URL fetch: `Failed to fetch`               | `download_url` is on `*.oaiusercontent.com` with `Access-Control-Allow-Origin: *`; `credentials: 'include'` is rejected by CORS                 | Cross-origin signed URLs are fetched with `credentials: 'omit'`                                                                    |
+
+## Checks
+
+| Layer                                                   | Result    | Coverage                                                                                                                                              |
+| ------------------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run test:chatgpt-export`                           | 30 passed | Adds a share pointer and a cross-origin `ACAO: *` signed URL to the ZIP action test; reverting the `credentials` fix fails it in Chromium and Firefox |
+| `npm run test:chat-explorer`                            | 33 passed | Unchanged                                                                                                                                             |
+| Real share page (`npm run preview`, Chromium, no login) | Passed    | `已下載 ZIP（2/2 張圖片；來源：router-state）` on a public share of the Intelligent UI conversation                                                   |
+
+Still not verified: logged-in `/c/` pages in a real manager (the `conversation_id` path), and image-generation output.
 
 ## Automated checks
 

@@ -15,3 +15,4 @@
 | 症狀 | 文件 |
 | --- | --- |
 | ChatGPT 匯出的 code block 整段消失、DIL 標記（`<box>`、`<Cite/>`）漏出 | [chatgpt-export-code-block-disappears.md](chatgpt-export-code-block-disappears.md) |
+| 新增 `@require` 後 `ZipStore is not defined` 之類的全域變數不存在 | [userscript-new-require-is-not-defined.md](userscript-new-require-is-not-defined.md) |

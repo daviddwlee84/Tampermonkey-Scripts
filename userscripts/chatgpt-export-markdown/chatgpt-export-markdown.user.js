@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      1.5.0
+// @version      1.5.1
 // @description  把 ChatGPT 對話匯成 Markdown，另提供樹狀選取、Agent Handoff 與可攜 JSON 存檔
 // @author       Da-Wei Lee
 // @license      MIT
@@ -46,7 +46,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.5.0';
+  const VERSION = '1.5.1';
   const NS = 'cgpt-export-md';
   const EXPORTER = `chatgpt-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[chatgpt-export-markdown]';
@@ -370,8 +370,8 @@
     try {
       const headers = { accept: 'application/json' };
       if (authorization) headers.authorization = authorization;
-      const query = new URLSearchParams({ inline: 'false' });
-      if (convId) query.set('conversation_id', convId);
+      const query = new URLSearchParams({ ...asset.params, inline: 'false' });
+      if (convId && !query.has('shared_conversation_id')) query.set('conversation_id', convId);
       const meta = await fetch(
         `/backend-api/files/download/${encodeURIComponent(asset.fileId)}?${query}`,
         { credentials: 'include', headers, signal }
@@ -379,7 +379,12 @@
       if (!meta.ok) throw new Error(`files/download HTTP ${meta.status}`);
       const { download_url: downloadUrl } = await meta.json();
       if (!downloadUrl) throw new Error('files/download 沒有 download_url');
-      const file = await fetch(downloadUrl, { credentials: 'include', signal });
+      // signed URL 常在 *.oaiusercontent.com：自帶簽章，跨域帶 cookie 反而會被 CORS 擋
+      const sameOrigin = new URL(downloadUrl, location.href).origin === location.origin;
+      const file = await fetch(downloadUrl, {
+        credentials: sameOrigin ? 'include' : 'omit',
+        signal,
+      });
       if (!file.ok) throw new Error(`download_url HTTP ${file.status}`);
       const mime = (file.headers.get('content-type') || '').split(';')[0].trim();
       // 200 也可能是登入頁或錯誤 JSON；不是圖片就別存成 .png
@@ -392,6 +397,13 @@
   }
 
   async function doZipExport() {
+    // 新加的 @require 若在檔案 push 前就被 manager 抓過（404），manager 會不帶它繼續執行
+    if (typeof ZipStore === 'undefined') {
+      ui.setStatus(
+        '失敗：shared/zip-store.js 沒有載入，請在 manager 對這支腳本「檢查更新」或重新安裝'
+      );
+      return;
+    }
     ui.setStatus('讀取對話…');
     try {
       const target = currentIds();

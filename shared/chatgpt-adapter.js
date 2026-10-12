@@ -432,11 +432,13 @@ const ChatGPTAdapter = (() => {
         if (part?.content_type !== 'image_asset_pointer' || !part.asset_pointer) continue;
         const pointer = part.asset_pointer;
         if (assets.has(pointer)) continue;
-        const fileId = pointer.replace(/^[a-z-]+:\/\//, '');
+        // 分享頁的 pointer 會帶 `?shared_conversation_id=…`；那是 API 參數，不是 file id 的一部分
+        const [fileId, query = ''] = pointer.replace(/^[a-z-]+:\/\//, '').split('?');
         const attachment = attachments.get(fileId) || {};
         assets.set(pointer, {
           pointer,
           fileId,
+          params: Object.fromEntries(new URLSearchParams(query)),
           name: attachment.name || '',
           mime: attachment.mime_type || '',
         });

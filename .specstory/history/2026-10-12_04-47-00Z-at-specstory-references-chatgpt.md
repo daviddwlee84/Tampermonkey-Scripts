@@ -5571,3 +5571,1690 @@ I left one file out on purpose: the 1.2MB raw JSON, `.specstory/references/chatg
 The commit does include the reference `.md`, the specstory history and statistics, and the plan file, since the repo has been committing those alongside features.
 
 Nothing reaches your installs until it's pushed, because Tampermonkey updates from `main` on GitHub. Want me to push?
+
+---
+
+_**User (2026-10-12 06:18:24Z)**_
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - First: decide whether `userscripts/chatgpt-export-markdown/` needs Intelligent UI support. Answer: yes. Code blocks were lost and DIL tags leaked into the output.
+   - Second: use the raw JSON (`.specstory/references/chatgpt-ChatGPT介面原理解析-20261012-1256.json`) to update the script. Also consider how to download input and output images, and whether users want to keep the HTML UI or fall back to Markdown.
+     - User chose "Markdown fallback": use `fallbackMarkdown`; the raw DIL stays in Download .json.
+     - User chose "ZIP bundle" for images.
+     - The plan was approved.
+   - Third: "git commit". Done.
+
+2. Key Technical Concepts:
+   - ChatGPT DIL v2: `metadata.model_dil_v2 = {code, constants, appData.opGenui.componentResults, clientDefinedWidgets, fallbackMarkdown, fallbackMarkdownVersion:1, requiredComponents}`.
+   - Private-use sentinels: `\uE200kind\uE202arg…\uE201`, with kinds `url`, `cite`, `entity`, `image_group`.
+   - `content_references` type `client_defined_widget`, category `code_block`, `alt: null`.
+   - AsyncImage mapping: in `code`, `"__resolutionId":__dilConstants["N"]` → `constants[N]` → componentResults key.
+   - Image files: `sediment://file_…` asset pointers resolved via `/backend-api/files/download/<id>?conversation_id=&inline=false`, which returns a signed `download_url`.
+   - ZIP format: STORE only, UTF-8 name flag (bit 11), Unix made-by host, CRC32.
+   - Detect binary data across realms with `ArrayBuffer.isView` instead of `instanceof`.
+   - Repo conventions: bump `@version`; run `npm run check`/`index`/`verify`; Tampermonkey + Violentmonkey portability; comments in Traditional Chinese.
+
+3. Files and Code Sections:
+   - `shared/chatgpt-adapter.js`
+     - `applyCitations` now skips refs with `type === 'client_defined_widget'`.
+     - New functions: `dilOf`, `refIdOf`, `dilSources` (componentResults Cite items + `search_result_groups`), `dilImages`, `escapeLinkText`, `imageMarkdown`.
+     - New `resolveDilSentinels(text, message, dil)`:
+       - cite → ` ([label](url))`, with no extra space when the preceding character is whitespace
+       - url → `[title](url)`
+       - entity → `JSON.parse(arg)[1]`
+       - image_group → `[![title](content_url)](url)`
+       - unknown kinds → `''`
+       - Uses the `'\uE202'` escape, not the literal character.
+     - New `markdownOf(message)`: uses the resolved fallback when it is non-empty; otherwise `applyCitations(textOf(message), message)`.
+     - New `imageAssets(data, opts)` → `[{pointer, fileId, name, mime}]`.
+     - New `selectedMessages(data, opts)`; `normalize` now uses it together with `markdownOf`.
+     - Exports `markdownOf` and `imageAssets`.
+   - `shared/conversation-archive.js:127`: changed to `markdown: A.markdownOf(message)`.
+   - `shared/zip-store.js` (new)
+     - API: `ZipStore.build(entries, {date}) → Blob`, `bytes()`, `crc32()`.
+     - Version made by: `(3 << 8) | 20`; external attributes: `0o100644 << 16`; UTF-8 flag `0x0800`.
+     - `toBytes` uses `ArrayBuffer.isView` and `Object.prototype.toString` checks.
+     - Throws on duplicate names.
+   - `shared/chat-export.js`: added `downloadBlob(filename, blob)`; `downloadText` now delegates to it.
+   - `userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js`
+     - Version 1.5.0, both in metadata and in `VERSION`.
+     - Added `@require …/shared/zip-store.js`; globals now include `downloadBlob` and `ZipStore`.
+     - New `authorizationHeader()`, extracted out of `fromBackendApi`.
+     - New `EXTENSIONS` map and `imagePath(asset, index, mime)`. Names become `images/NN-<sanitized>.<ext>`; the sanitizer is `/[^\p{L}\p{N}._-]+/gu`.
+     - New `fetchAsset(asset, {convId, authorization})`:
+       - Uses `AbortSignal.timeout(30_000)`.
+       - Rejects non-`image/` content types.
+       - Returns `null` on failure.
+     - New `doZipExport()`:
+       - Rewrites `](pointer)` to `](path)`.
+       - Builds the ZIP from `filenameFor(doc,'md')` plus the image files.
+       - Status message: `已下載 ZIP（x/y 張圖片，n 張失敗、保留原連結；來源：…）`.
+     - New action `{ label: 'Download .zip (含圖片)', run: () => doZipExport() }`.
+   - `tests/chatgpt-export-markdown.test.mjs`
+     - Loads the ZIP script and the `intelligent-ui.json` fixture.
+     - New helpers: `readZip` (independent parser with `node:zlib` crc32 checks) and `assertIntelligentUi`.
+     - Harness context gains `TextEncoder`/`Blob` and a `downloadBlob` capture.
+     - New tests:
+       - fallback rendering
+       - empty-fallback path
+       - `imageAssets` dedup
+       - ZIP round-trip
+       - browser ZIP action with mocked `/api/auth/session`, `files/download` (`file_missing` → 404, `file_login` → HTML) and estuary
+     - The browser ZIP test expects `1/3 張圖片，2 張失敗`.
+   - `tests/conversation-archive.test.mjs`: new test checking that archive blocks use the fallback while `raw` keeps the DIL payload.
+   - `tests/fixtures/chatgpt-export/intelligent-ui.json` (new, ~12KB): generated by a scratchpad Python script. The README section records SHA-256 `d1969edb…` for the fixture and `9ef200d9…` for the source.
+   - Documentation:
+     - `userscripts/chatgpt-export-markdown/README.md`: new ZIP row, Intelligent UI and widget notes, updated image limitations, v1.5.0 note, updated test description.
+     - `VALIDATION.md`: new v1.5.0 section.
+     - `pitfalls/chatgpt-export-code-block-disappears.md` (new) and an index entry in `pitfalls/README.md`.
+     - `TODO.md`: two P2 items (HTML snapshot, L; image-generation output images, S).
+     - `.agents/skills/userscript-development/references/content-extraction.md`: lessons on cross-realm detection, ZIP UTF-8 names, and placeholder replacement.
+     - Root `README.md`: index regenerated to show 1.5.0.
+
+4. Errors and fixes:
+   - The Edit tool wrote a literal U+E202 character into `split('…')`. I replaced it with the `'\uE202'` escape via Python and checked that no PUA characters remain in any `.js` file.
+   - Info-ZIP garbled the Chinese filename. I set the Unix made-by host and file attributes. Extraction now works with bsdtar, ditto, Python, and `unzip -p`. The `unzip -l` listing still displays the name incorrectly; this is an Info-ZIP display quirk.
+   - `TextEncoder` was not defined in the vm harness. I added it, along with `Blob`, to the harness context.
+   - `instanceof Uint8Array` failed across realms. I switched to `ArrayBuffer.isView`.
+   - Playwright Firefox was missing. I ran `npx playwright install firefox`.
+   - The README index was stale after the version bump. I ran `npm run index`.
+   - Prettier reported issues in TODO, VALIDATION, the pitfall doc, and the skill doc. I formatted them and re-validated TODO.
+
+5. Problem Solving:
+   - Verified against the full raw JSON: 5 code fences restored (jsx, bash ×2, json, text), 0 JSX tags outside code, 0 PUA characters, 22 citation links. The old v1.4.0 export had 0 fences and 126 leaked tags.
+   - Final test results: `test:chatgpt-export` 30 passed; `test:chat-explorer` 33 passed (Chromium + Firefox); `verify` OK.
+   - `npm run preview` on chatgpt.com: the menu loads and the script fails gracefully when there is no session.
+   - Still unverified: the real logged-in `files/download` response shape, and whether `download_url` is same-origin. The CORS fallback would be `GM_xmlhttpRequest` plus `@connect`.
+
+6. All user messages:
+   - "@.specstory/references/chatgpt-ChatGPT介面原理解析-20261012-1242.md 現在ChatGPT推出了 Intelligent UI 幫我看看我們 @userscripts/chatgpt-export-markdown/ 是否需要針對相關內容進行support 還是說其實不影響 幫忙分析一下"
+   - "@.specstory/references/chatgpt-ChatGPT介面原理解析-20261012-1256.json 這是同一份的JSON 看看怎麽更新這個script （此外關於輸入輸出的image是否也有下載方法） 也要考慮user 會想somehow保留HTML UI?還是fallback to markdown？"
+   - AskUserQuestion answers: "Markdown fallback (Recommended)" and "ZIP bundle (Recommended)"; the plan was then approved.
+   - "git commit"
+
+7. Pending Tasks:
+   - None were requested. Optional follow-ups the user hasn't asked for:
+     - real logged-in verification of the ZIP image download
+     - syncing the skill to `daviddwlee84/agent-skills`
+     - pushing
+
+8. Current Work:
+   - The commit is done: `3d1ad3f feat(chatgpt-export-markdown): support Intelligent UI replies and image ZIP export`, on `main`, matching the repo's existing pattern.
+   - It includes the code, tests, fixture, docs, plan file, specstory history, statistics, and reference `.md`.
+   - It deliberately excludes `.specstory/references/chatgpt-ChatGPT介面原理解析-20261012-1256.json` (1.2MB raw payload with account metadata; the fixture README says the source isn't checked in). That file remains untracked.
+
+9. Optional Next Step:
+   - None required. Tell the user the commit hash, that the raw 1256.json was left uncommitted (and why), and that nothing has been pushed. If asked, the next step would be verifying Download .zip in a real logged-in manager session.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/david/.claude/projects/-Users-david-Documents-Program-Tampermonkey-Scripts/4a8a6b37-16f6-4c79-9561-111896abb9bc.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
+
+---
+
+_**User (2026-10-12 12:36:26Z)**_
+
+ZIP會遇到 失敗：ZipStore is not defined
+@.specstory/references/chatgpt-ChatGPT介面原理解析-20261012-2034.md  markdown下載則是這樣
+
+---
+
+_**Agent (claude-opus-5-5 2026-10-12 12:36:37Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check push state, requires, and remote zip-store.js
+
+`git log --oneline -3 && git status -sb | head -3 && grep -n "@require\|@version\|ZipStore" userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js | head -20 && head -c 300 shared/chat-export.js | tail -c 200; echo; curl -sI https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/zip-store.js | head -1`
+
+```text
+6be30d1 feat(chatgpt-export-markdown): support Intelligent UI replies and image ZIP export
+8a6ecc2 feat(chat-reply-assistant): add inline controls and multimodal context selection
+0932e9f feat(chat-reply-assistant): add contextual reply suggestions with BYOK
+## main...origin/main
+ M .specstory/history/2026-10-12_04-47-00Z-at-specstory-references-chatgpt.md
+ M .specstory/statistics.json
+4:// @version      1.5.0
+16:// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/chat-export.js
+17:// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/export-ui.js
+18:// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/chatgpt-adapter.js
+19:// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/conversation-archive.js
+20:// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/vendor/marked-18.0.13.umd.js
+21:// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/vendor/dompurify-3.4.15.min.js
+22:// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/conversation-explorer.js
+23:// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/zip-store.js
+28:/* global createExportPanel, downloadBlob, downloadText, filenameFor, ZipStore, renderTranscript, ChatGPTAdapter, ConversationArchive, createConversationExplorer */
+423:        ZipStore.build([{ name: filename, data: text }, ...files])
+�� exporter 用 `@require` 引入：
+ *
+ *   // @require https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/chat-export.js
+ *
+ * 這不是 ES module —— `@require` 進�
+HTTP/2 200
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:36:46Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Compare global declarations in shared files
+
+`grep -nE "^(const|var|let|function|window\.|globalThis)" shared/*.js | grep -v vendor | head -30; git log --format='%h %ci' -1 origin/main; curl -s https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/zip-store.js | head -3`
+
+```text
+shared/dom.js:14:function waitForElement(selector, { timeout = 10_000, root = document.documentElement } = {}) {
+shared/dom.js:37:function onUrlChange(callback) {
+shared/dom.js:50:function debounce(fn, ms = 200) {
+shared/dom.js:59:function markOnce(element, key) {
+shared/dom.js:66:function addFloatingButton({ id, label, onClick, offset = 16 }) {
+shared/dom.js:86:function downloadText(filename, text, mime = 'text/markdown;charset=utf-8') {
+shared/conversation-explorer.js:3:function createConversationExplorer(config) {
+shared/chat-export.js:28:function fence(body, lang = '') {
+shared/chat-export.js:36:function jsonFence(value) {
+shared/chat-export.js:44:function pad(n) {
+shared/chat-export.js:49:function toDate(value) {
+shared/chat-export.js:61:function formatUtc(value) {
+shared/chat-export.js:71:function localIso(date = new Date()) {
+shared/chat-export.js:82:function yaml(value) {
+shared/chat-export.js:90:function mergeSections(sections) {
+shared/chat-export.js:112:function sourcesBlock(citations) {
+shared/chat-export.js:124:function handoffHeader(label) {
+shared/chat-export.js:147:function renderTranscript(doc, opts = {}) {
+shared/chat-export.js:185:function filenameFor(doc, extension) {
+shared/chat-export.js:200:function downloadBlob(filename, blob) {
+shared/chat-export.js:210:function downloadText(filename, text, mime = 'text/markdown;charset=utf-8') {
+shared/chatgpt-adapter.js:3:const ChatGPTAdapter = (() => {
+shared/zip-store.js:15:const ZipStore = (() => {
+shared/conversation-archive.js:3:const ConversationArchive = (() => {
+shared/export-ui.js:26:function createExportPanel(config) {
+6be30d1 2026-10-12 13:47:07 +0800
+/**
+ * 最小的 ZIP writer：只做 STORE（不壓縮），給「Markdown + 圖片」這種打包用。
+ *
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:36:53Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Find tooling that handles shared requires
+
+`grep -rn "chat-export.js\|conversation-archive\|shared/" scripts/ justfile 2>/dev/null | grep -v "^scripts/.*test" | head -30`
+
+```text
+scripts/preview.mjs:118:// itself. Do the same, or a script built on shared/ dies on the first call.
+scripts/build-chat-explorer.mjs:10:    await readFile(resolve(ROOT, 'shared/vendor/conversation-explorer-dependencies.json'), 'utf8')
+scripts/build-chat-explorer.mjs:13:    const bytes = await readFile(resolve(ROOT, 'shared/vendor', dependency.file));
+scripts/build-chat-explorer.mjs:31:        `${name}\n${await readFile(resolve(ROOT, 'shared/vendor', `${name}-LICENSE`), 'utf8')}`
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:36:59Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+List tooling files mentioning require
+
+`grep -rln "require" scripts/*.mjs scripts/lib/*.mjs | head; ls scripts scripts/lib; grep -n "require" justfile | head`
+
+```text
+scripts/check-meta.mjs
+scripts/preview.mjs
+scripts/lib/meta.mjs
+scripts/test-arxiv-ai-assistant.mjs
+scripts:
+lib
+build-chat-explorer.mjs
+build-index.mjs
+catalog.json
+check-meta.mjs
+dino-benchmark.mjs
+dino-server.mjs
+new-script.mjs
+open-violentmonkey.py
+preview.mjs
+sync-userscripts.py
+test-arxiv-ai-assistant.mjs
+
+scripts/lib:
+catalog.mjs
+icon.mjs
+meta.mjs
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:37:17Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Search docs for require caching notes
+
+`grep -rniE "require.*(cache|快取)|(cache|快取).*require" --include=*.md . 2>/dev/null | grep -v node_modules | grep -v .specstory | head -15; ls pitfalls`
+
+```text
+(eval):1: no matches found: --include=*.md
+chatgpt-export-code-block-disappears.md
+README.md
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:37:19Z)**_
+
+Looking into why `ZipStore` is missing at runtime. The Markdown export you attached looks right: code fences are back and no DIL tags remain.
+
+_**Agent (claude-opus-5-5 2026-10-12 12:37:21Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Search tutorial docs for require caching notes
+
+`grep -rniE "require" docs/*.md | grep -iE "cache|快取|更新|404" | head -15`
+
+```text
+docs/03-metadata-reference.md:145:- `@require` 會在腳本執行前先載入並執行那個 JS（會被 manager 快取）
+docs/14-ios-userscripts.md:64:| 遠端 `@require` | 支援 URL，下載後本機快取 | 五支 exporter 的 shared 檔可被載入，但更新有下節的快取問題 |
+docs/14-ios-userscripts.md:80:正式支援時可考慮發佈含 shared 的單檔產物，或使用隨發佈更新的不可變依賴 URL。現有使用者依官方做法移除該 `@require`、儲存、再加回並儲存，才能強制重新取得相同 URL 的資源。依據：[README 的 require 說明](https://github.com/quoid/userscripts/blob/v4.8.6/README.md#metadata)、[`getRequiredCode`](https://github.com/quoid/userscripts/blob/v4.8.6/xcode/Ext-Safari/Functions.swift#L757)。
+docs/16-desktop-install.md:88:- `shared/` 和第三方依賴不打包，`@require` 仍由 manager 下載原本的遠端 URL。本地 shared 改動與遠端依賴快取要另行處理。
+docs/15-sync-to-ipad.md:68:- 目標是平鋪的 `<slug>.user.js`，完整保留原始 bytes、版本、grant、更新 URL 及 `@require`；不改腳本功能。
+docs/15-sync-to-ipad.md:75:**`shared/` 不會被複製或打包。** 目前腳本仍由 `@require` 讀取遠端 shared／第三方依賴。若只在本地修改 shared，這條同步命令不會把變更帶到 iPad；固定 URL 的相依快取限制見 [14 的 shared 更新說明](./14-ios-userscripts.md#shared-更新是另一個獨立風險)。同樣，遠端 `@updateURL` 保持有效，使用 manager 的更新功能可能把本地未發佈版本換成 GitHub 版本。
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:37:35Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read ZIP export code and pitfall index
+
+`sed -n 385,440p userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js; grep -n "VERSION =" userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js; cat pitfalls/README.md`
+
+```text
+      // 200 也可能是登入頁或錯誤 JSON；不是圖片就別存成 .png
+      if (mime && !mime.startsWith('image/')) throw new Error(`download_url 回傳 ${mime}`);
+      return { bytes: new Uint8Array(await file.arrayBuffer()), mime };
+    } catch (error) {
+      log('image download failed:', asset.fileId, error.message);
+      return null;
+    }
+  }
+
+  async function doZipExport() {
+    ui.setStatus('讀取對話…');
+    try {
+      const target = currentIds();
+      const { data, source } = await resolveConversation(target);
+      const url = target.shareId ? `${location.origin}/share/${target.shareId}` : location.href;
+      const doc = ChatGPTAdapter.normalize(data, { url }, settings);
+      let text = renderTranscript(doc, { ...settings, exporter: EXPORTER });
+
+      const assets = ChatGPTAdapter.imageAssets(data, settings);
+      const authorization = assets.length ? await authorizationHeader() : null;
+      const convId = target.convId || data.conversation_id || null;
+      const files = [];
+      let failed = 0;
+      for (const [index, asset] of assets.entries()) {
+        ui.setStatus(`下載圖片 ${index + 1}/${assets.length}…`);
+        const file = await fetchAsset(asset, { convId, authorization });
+        if (!file) {
+          failed++;
+          continue;
+        }
+        const path = imagePath(asset, index, file.mime);
+        files.push({ name: path, data: file.bytes });
+        text = text.split(`](${asset.pointer})`).join(`](${path})`);
+      }
+
+      const filename = filenameFor(doc, 'md');
+      downloadBlob(
+        filenameFor(doc, 'zip'),
+        ZipStore.build([{ name: filename, data: text }, ...files])
+      );
+      const summary = `${files.length}/${assets.length} 張圖片`;
+      ui.setStatus(
+        failed
+          ? `已下載 ZIP（${summary}，${failed} 張失敗、保留原連結；來源：${source}）`
+          : `已下載 ZIP（${summary}；來源：${source}）`
+      );
+      log('exported zip', { source, images: files.length, failed });
+    } catch (error) {
+      ui.setStatus(`失敗：${error.message}`);
+      log('zip export failed:', error);
+    }
+  }
+
+  function exportFromShareUrl(raw) {
+    const shareId = shareIdFromUrl(raw);
+    if (!shareId) {
+49:  const VERSION = '1.5.0';
+# 已知陷阱
+
+以症狀或錯誤原文搜尋問題。當非顯然的問題花了超過約 15 分鐘釐清，而且容易再次發生時，記下症狀、原因、解法、預防方式與來源。
+
+尚未做的工作放在 [TODO.md](../TODO.md)／[backlog/](../backlog/)；目前的使用方式放在各 userscript README；必須遵守的 repo 規則放在 [CLAUDE.md](../CLAUDE.md)。本目錄是維護資料，不會包含在個別 userscript 的 raw 下載中。
+
+## 已有文件的問題
+
+| 症狀 | 文件 | 為何保留在原處 |
+| --- | --- | --- |
+| Playwright 注入測試通過，但真實 manager 注入／權限不同 | [Playwright 與 userscript 的邊界](../docs/13-playwright-vs-userscript.md) | 屬於測試工具的使用說明 |
+
+## 問題
+
+| 症狀 | 文件 |
+| --- | --- |
+| ChatGPT 匯出的 code block 整段消失、DIL 標記（`<box>`、`<Cite/>`）漏出 | [chatgpt-export-code-block-disappears.md](chatgpt-export-code-block-disappears.md) |
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:37:39Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check memory index and desktop install flow
+
+`cat /Users/david/.claude/projects/-Users-david-Documents-Program-Tampermonkey-Scripts/memory/MEMORY.md 2>/dev/null; sed -n 1,60p /Users/david/Documents/Program/Tampermonkey-Scripts/docs/16-desktop-install.md | grep -nE "vm-pack|import|匯入|require" `
+
+```text
+3:**`just vm-pack` 把目前工作區的腳本打成 ZIP，在 Violentmonkey 一次匯入。**
+4:Arc／Chrome／Edge／Zen／Firefox 的每個 profile 各匯入一次，同一份 ZIP 可以重複使用。
+5:這也適合本機尚未 push 的修改；要更新時重新打包、匯入即可。
+37:just vm-pack   # 寫入 dist/violentmonkey-scripts.zip
+55:just vm-pack --category ai-export --category page-tools
+56:just vm-pack --category examples
+57:just vm-pack --only page-reader-markdown --only media-helper
+58:just vm-pack --all
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:37:58Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Inspect how vm-pack builds the import ZIP
+
+`grep -n "vm-pack" -A4 justfile | head; grep -n "require\|shared\|def \|zip" scripts/sync-userscripts.py | head -40`
+
+```text
+24:vm-pack *args:
+25-    @python3 scripts/sync-userscripts.py --zip dist/violentmonkey-scripts.zip "$@"
+26-
+27-# 只列出準備同步的腳本，不連接裝置、不寫檔
+28-sync-plan *args:
+3:# requires-python = ">=3.10"
+19:import zipfile
+27:def collect_scripts(root, only=()):
+50:def select_zip_scripts(root, scripts, categories=(), include_all=False, only=()):
+88:def pack_zip(scripts, destination, dry_run=False):
+91:    if destination.suffix.lower() != ".zip":
+92:        raise ValueError("ZIP destination must end in .zip")
+107:        with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+109:                info = zipfile.ZipInfo(name, date_time=(2020, 1, 1, 0, 0, 0))
+110:                info.compress_type = zipfile.ZIP_DEFLATED
+113:        with zipfile.ZipFile(temporary) as archive:
+122:    print("Violentmonkey → Dashboard → Settings → Import from zip → choose this ZIP.")
+123:    print("Repeat in each browser profile. Source bytes and @require unchanged; no settings or GM values included.")
+127:    def __init__(self, root):
+130:    def path(self, relative):
+138:    async def read(self, name):
+142:    async def write(self, name, content):
+147:    async def rename(self, source, target):
+154:    def __init__(self, service, folder, missing_error):
+159:    async def ensure_directory(self, path):
+171:    async def read(self, name):
+186:    async def write(self, name, content):
+191:    async def rename(self, source, target):
+197:async def sync(scripts, store, dry_run=False):
+242:def select_usb_device(devices, udid=None):
+253:async def usb(args, scripts):
+286:def parse_args(argv=None):
+290:    mode.add_argument("--zip", metavar="FILE", help="Build a Violentmonkey import ZIP; defaults to practical categories")
+293:    parser.add_argument("--udid", help="Select one USB iPad (required when multiple devices are attached)")
+303:    if args.udid and (args.folder or args.zip or args.plan or args.list_devices):
+305:    if (args.category or args.all) and not args.zip:
+306:        parser.error("--category / --all require --zip; iPad/folder sync already defaults to all scripts")
+310:def main():
+313:        scripts = [] if args.list_devices else collect_scripts(REPO_ROOT, () if args.zip else args.only)
+314:        if args.zip:
+315:            scripts = select_zip_scripts(REPO_ROOT, scripts, args.category, args.all, args.only)
+316:            pack_zip(scripts, args.zip, args.dry_run)
+320:            print(f"{len(scripts)} script(s); _template excluded; source bytes and @require unchanged.")
+331:        if not args.folder and not args.zip and not args.plan:
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:38:09Z)**_
+
+<think><details><summary>Thought Process</summary>
+Likely cause: `ZipStore` failed to load because `shared/zip-store.js` 404'd before it was pushed to GitHub, but it's live now. I'll bump the version to force a re-download of all `@require` files and add a clearer error for this case.
+
+</details></think>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:38:12Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Bump to 1.5.1 and add missing-require guard
+
+```bash
+python3 - <<'EOF'
+p='userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js'
+s=open(p,encoding='utf-8').read()
+s=s.replace("// @version      1.5.0","// @version      1.5.1",1).replace("const VERSION = '1.5.0';","const VERSION = '1.5.1';",1)
+old="""  async function doZipExport() {
+    ui.setStatus('讀取對話…');
+    try {
+"""
+new="""  async function doZipExport() {
+    // 新加的 @require 若在檔案 push 前就被 manager 抓過（404），manager 會不帶它繼續執行
+    if (typeof ZipStore === 'undefined') {
+      ui.setStatus('失敗：shared/zip-store.js 沒有載入，請在 manager 對這支腳本「檢查更新」或重新安裝');
+      return;
+    }
+    ui.setStatus('讀取對話…');
+    try {
+"""
+assert old in s
+s=s.replace(old,new,1)
+open(p,'w',encoding='utf-8').write(s)
+EOF
+grep -n "1.5.0" userscripts/chatgpt-export-markdown/README.md VALIDATION.md | head
+```
+
+```text
+ugrep: warning: VALIDATION.md: No such file or directory
+117:- 從 v1.5.0 起，支援 Intelligent UI 回覆、修正 code block widget 被刪掉的問題，並新增含圖片的 ZIP 匯出
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:38:18Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Compare push time with local pack time
+
+`git reflog show --date=iso origin/main | head -3; git reflog --date=iso | head -4; ls -l --time-style=+%F\ %T dist/ 2>/dev/null || ls -lT dist/`
+
+```text
+Exit code 2
+6be30d1 refs/remotes/origin/main@{2026-10-12 13:47:13 +0800}: update by push
+8a6ecc2 refs/remotes/origin/main@{2026-10-12 12:45:03 +0800}: pull: fast-forward
+f993074 refs/remotes/origin/main@{2026-09-15 22:32:26 +0800}: update by push
+6be30d1 HEAD@{2026-10-12 13:47:07 +0800}: commit (amend): feat(chatgpt-export-markdown): support Intelligent UI replies and image ZIP export
+3d1ad3f HEAD@{2026-10-12 13:23:42 +0800}: commit: feat(chatgpt-export-markdown): support Intelligent UI replies and image ZIP export
+8a6ecc2 HEAD@{2026-10-12 13:12:19 +0800}: reset: moving to HEAD
+8a6ecc2 HEAD@{2026-10-12 12:45:03 +0800}: pull: Fast-forward
+"dist/": No such file or directory (os error 2)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:38:27Z)**_
+
+Checking whether any other script or shared module uses `ZipStore` without requiring it.
+
+_**Agent (claude-opus-5-5 2026-10-12 12:38:28Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Find all users of ZipStore
+
+`grep -rln "ZipStore\|Download .zip" --include=*.js . | grep -v node_modules`
+
+```text
+(eval):1: no matches found: --include=*.js
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:38:41Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Find ZipStore users and menu captions
+
+`command grep -rl "ZipStore" userscripts shared tests; command grep -n "registerMenuCommand\|label: '" userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js | head -20`
+
+```text
+userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+shared/zip-store.js
+tests/chatgpt-export-markdown.test.mjs
+12:// @grant        GM_registerMenuCommand
+534:    { label: 'Copy Markdown', run: () => doExport({ mode: 'transcript', to: 'clipboard' }) },
+535:    { label: 'Copy Agent Handoff', run: () => doExport({ mode: 'handoff', to: 'clipboard' }) },
+536:    { label: 'Download .md', run: () => doExport({ mode: 'transcript', to: 'file' }) },
+537:    { label: 'Download .zip (含圖片)', run: () => doZipExport() },
+538:    { label: 'Download .json', run: () => doExport({ mode: 'json', to: 'file' }) },
+539:    { label: '瀏覽／選取…', run: () => openExplorer() },
+550:        label: '含 thinking / reasoning',
+555:        label: '含工具呼叫與搜尋結果',
+560:        label: '含 Deep Research 計畫／狀態',
+577:      GM_registerMenuCommand(action.label, () => {
+582:    GM_registerMenuCommand('Export from share URL…', () => {
+587:    GM_registerMenuCommand('Toggle thinking / reasoning', () => {
+592:    GM_registerMenuCommand('Toggle 工具呼叫與搜尋結果', () => {
+597:    GM_registerMenuCommand('Toggle Deep Research 計畫／狀態', () => {
+602:    GM_registerMenuCommand('Reset button position', () => {
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:38:43Z)**_
+
+Running the ZIP flow on your share link through the preview harness, which loads the local `@require` files.
+
+_**Agent (claude-opus-5-5 2026-10-12 12:39:10Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Preview ZIP export on the share page
+
+`timeout 120 npm run preview -- chatgpt-export-markdown https://chatgpt.com/share/6accd4aa-5124-83e8-9afd-24981bd315ab --menu "Download .zip (含圖片)" --wait 12000 2>&1 | tail -40`
+
+```text
+  <body>
+    <div class="container">
+      <div class="logo">
+        <svg
+          width="41"
+          height="41"
+          viewBox="0 0 41 41"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          strokeWidth="2"
+          class="scale-appear"
+        >
+          <path
+            d="M37.5324 16.8707C37.9808 15.5241 38.1363 14.0974 37.9886 12.6859C37.8409 11.2744 37.3934 9.91076 36.676 8.68622C35.6126 6.83404 33.9882 5.3676 32.0373 4.4985C30.0864 3.62941 27.9098 3.40259 25.8215 3.85078C24.8796 2.7893 23.7219 1.94125 22.4257 1.36341C21.1295 0.785575 19.7249 0.491269 18.3058 0.500197C16.1708 0.495044 14.0893 1.16803 12.3614 2.42214C10.6335 3.67624 9.34853 5.44666 8.6917 7.47815C7.30085 7.76286 5.98686 8.3414 4.8377 9.17505C3.68854 10.0087 2.73073 11.0782 2.02839 12.312C0.956464 14.1591 0.498905 16.2988 0.721698 18.4228C0.944492 20.5467 1.83612 22.5449 3.268 24.1293C2.81966 25.4759 2.66413 26.9026 2.81182 28.3141C2.95951 29.7256 3.40701 31.0892 4.12437 32.3138C5.18791 34.1659 6.8123 35.6322 8.76321 36.5013C10.7141 37.3704 12.8907 37.5973 14.9789 37.1492C15.9208 38.2107 17.0786 39.0587 18.3747 39.6366C19.6709 40.2144 21.0755 40.5087 22.4946 40.4998C24.6307 40.5054 26.7133 39.8321 28.4418 38.5772C30.1704 37.3223 31.4556 35.5506 32.1119 33.5179C33.5027 33.2332 34.8167 32.6547 35.9659 31.821C37.115 30.9874 38.0728 29.9178 38.7752 28.684C39.8458 26.8371 40.3023 24.6979 40.0789 22.5748C39.8556 20.4517 38.9639 18.4544 37.5324 16.8707ZM22.4978 37.8849C20.7443 37.8874 19.0459 37.2733 17.6994 36.1501C17.7601 36.117 17.8666 36.0586 17.936 36.0161L25.9004 31.4156C26.1003 31.3019 26.2663 31.137 26.3813 30.9378C26.4964 30.7386 26.5563 30.5124 26.5549 30.2825V19.0542L29.9213 20.998C29.9389 21.0068 29.9541 21.0198 29.9656 21.0359C29.977 21.052 29.9842 21.0707 29.9867 21.0902V30.3889C29.9842 32.375 29.1946 34.2791 27.7909 35.6841C26.3872 37.0892 24.4838 37.8806 22.4978 37.8849ZM6.39227 31.0064C5.51397 29.4888 5.19742 27.7107 5.49804 25.9832C5.55718 26.0187 5.66048 26.0818 5.73461 26.1244L13.699 30.7248C13.8975 30.8408 14.1233 30.902 14.3532 30.902C14.583 30.902 14.8088 30.8408 15.0073 30.7248L24.731 25.1103V28.9979C24.7321 29.0177 24.7283 29.0376 24.7199 29.0556C24.7115 29.0736 24.6988 29.0893 24.6829 29.1012L16.6317 33.7497C14.9096 34.7416 12.8643 35.0097 10.9447 34.4954C9.02506 33.9811 7.38785 32.7263 6.39227 31.0064ZM4.29707 13.6194C5.17156 12.0998 6.55279 10.9364 8.19885 10.3327C8.19885 10.4013 8.19491 10.5228 8.19491 10.6071V19.808C8.19351 20.0378 8.25334 20.2638 8.36823 20.4629C8.48312 20.6619 8.64893 20.8267 8.84863 20.9404L18.5723 26.5542L15.206 28.4979C15.1894 28.5089 15.1703 28.5155 15.1505 28.5173C15.1307 28.5191 15.1107 28.516 15.0924 28.5082L7.04046 23.8557C5.32135 22.8601 4.06716 21.2235 3.55289 19.3046C3.03862 17.3858 3.30624 15.3413 4.29707 13.6194ZM31.955 20.0556L22.2312 14.4411L25.5976 12.4981C25.6142 12.4872 25.6333 12.4805 25.6531 12.4787C25.6729 12.4769 25.6928 12.4801 25.7111 12.4879L33.7631 17.1364C34.9967 17.849 36.0017 18.8982 36.6606 20.1613C37.3194 21.4244 37.6047 22.849 37.4832 24.2684C37.3617 25.6878 36.8382 27.0432 35.9743 28.1759C35.1103 29.3086 33.9415 30.1717 32.6047 30.6641C32.6047 30.5947 32.6047 30.4733 32.6047 30.3889V21.188C32.6066 20.9586 32.5474 20.7328 32.4332 20.5338C32.319 20.3348 32.154 20.1698 31.955 20.0556ZM35.3055 15.0128C35.2464 14.9765 35.1431 14.9142 35.069 14.8717L27.1045 10.2712C26.906 10.1554 26.6803 10.0943 26.4504 10.0943C26.2206 10.0943 25.9948 10.1554 25.7963 10.2712L16.0726 15.8858V11.9982C16.0715 11.9783 16.0753 11.9585 16.0837 11.9405C16.0921 11.9225 16.1048 11.9068 16.1207 11.8949L24.1719 7.25025C25.4053 6.53903 26.8158 6.19376 28.2383 6.25482C29.6608 6.31589 31.0364 6.78077 32.2044 7.59508C33.3723 8.40939 34.2842 9.53945 34.8334 10.8531C35.3826 12.1667 35.5464 13.6095 35.3055 15.0128ZM14.2424 21.9419L10.8752 19.9981C10.8576 19.9893 10.8423 19.9763 10.8309 19.9602C10.8195 19.9441 10.8122 19.9254 10.8098 19.9058V10.6071C10.8107 9.18295 11.2173 7.78848 11.9819 6.58696C12.7466 5.38544 13.8377 4.42659 15.1275 3.82264C16.4173 3.21869 17.8524 2.99464 19.2649 3.1767C20.6775 3.35876 22.0089 3.93941 23.1034 4.85067C23.0427 4.88379 22.937 4.94215 22.8668 4.98473L14.9024 9.58517C14.7025 9.69878 14.5366 9.86356 14.4215 10.0626C14.3065 10.2616 14.2466 10.4877 14.2479 10.7175L14.2424 21.9419ZM16.071 17.9991L20.4018 15.4978L24.7325 17.9975V22.9985L20.4018 25.4983L16.071 22.9985V17.9991Z"
+            fill="currentColor"
+          />
+        </svg>
+      </div>
+      <div class="data"><div class="main-wrapper" role="main"><div class="main-content"><noscript><div class="h2"><span id="challenge-error-text">Enable JavaScript and cookies to continue</span></div></noscript></div></div><script>(function(){window._cf_chl_opt = {cFPWv: 'g',cH: 'CMOR6TJdgb1aauw84GIidP1itP_.Bckt783q_4MxMrE-1791808748-1.2.1.1-fM2SBqDSBQsmHSSU_HlZkIIMP4UJ8T0lGsOw5LCJP5GsOrDFMup7YVXn5Tl7JL7l',cITimeS: '1791808748',cRay: 'a4962a674b0af212',cTplC:1,cTplO:0,cTplV:5,cType: 'managed',cUPMDTk:"/ces/v1/rgstr?k=client-nb0qtYlZuy2tCMN5s5ncnuIBCJncjRViT0IzFm7GqST\u0026st=javascript-client\u0026sv=3.33.1\u0026t=1791808748602\u0026sid=e7ff04b5-db8d-43f8-b792-7dd32788078b\u0026ec=2\u0026gz=1\u0026__cf_chl_tk=iwCKfliKhCrS137ecLN_WG2I1taI4PqpAOYHjNKEdOA-1791808748-1.0.1.1-omZe_xBfR6_9jsQturpmsUGulwmLqeeVAP2czYgSuDo",cvId: '3',cZone: 'chatgpt.com',fa:"/ces/v1/rgstr?k=client-nb0qtYlZuy2tCMN5s5ncnuIBCJncjRViT0IzFm7GqST\u0026st=javascript-client\u0026sv=3.33.1\u0026t=1791808748602\u0026sid=e7ff04b5-db8d-43f8-b792-7dd32788078b\u0026ec=2\u0026gz=1\u0026__cf_chl_f_tk=iwCKfliKhCrS137ecLN_WG2I1taI4PqpAOYHjNKEdOA-1791808748-1.0.1.1-omZe_xBfR6_9jsQturpmsUGulwmLqeeVAP2czYgSuDo",md: 'rmYl0VZog_7SBO78EPC0nbfTuH5Ss49_q59wkYobTVE-1791808748-1.2.1.1-fSuQDs7RmypAxoGExEYLXpTnF4lChsrkoyseF5fFYk2fAbqLCcqF7eZ.Jts6_x9wlcvs_3knH2AyfDk87.CbOx4770Q4sYqoRUQXtdjOMgu6cb_3BfI4N0lyEzDIkMKaN9Wec_m39I6Q0u2TJHZXm41fsWAWT4jQLO4hqztwU3Hn01Q.zQND98QmDavfN7eiBf6DX215c7eUIUyJLb_AA7FkMbMwhuxctUvbt6GRK3sGFrYbN8gO2HVhDJCBFiZSgk2Yy4zflURoW_hL0wJUZQc34nMPbJVv6A0mcOOzMyl_dVb_bSVItr6gzMd_Vy4..Nvx2DPU7vUY41NQH_CP3QRq.5b9_n_ADTX1.hO92MtW1ctHuAJmSsHNcQz2mjsSdOz4Q3TK1aBmGobha9X9YmKPxgn0rH4bt2Jf6g1No2CGGCOMhS7YJ19PUI1pPPmRJG9wXdkB6yqJlPUY5HnHIq5erlsEjsEHOsbK83_qiJt.3NNSXZk01GSD9U0uq9nb7pSnKTHJP07iOxzBQIb2G28Mqp1RUxL3dUdReD__dlAG5WFOAApsIxTMnoXi7tmPnTJB2_4KHJHxuRaemPyGYiSfQs2VuDj.MutzBMBBDxoo7kAC6OBB_PVzonE_eT6K.3jjVsaaqQjEG9GS5VqMVFeGujy6PLiX9xbMFdDqh7Zf_69ILGh3j5mESWYNAU1Mtddrgaex97r5MFkH7FTbiafD6kV13PY.bQK70JpaepChXQiXkuv4MSyGjqbLSnSzMLEcqwVn2lPG8BhskgspyxEC.4PIfxkEGZYloUH.RNFlG5O8GH3D6qh2GGg0S9U3xM0Mbijm09fnQMtZQ39htbSp9nxiv8MW22UiXLEPD5vRxblzO4A49F4HKv2vaVHjPDj6e_hbq.MJ8BFcjkmhpXUT2g2NJ7yzw6saj_j_qNZQwjioOiznFL9.HKAsRGvqUMgUGRSwxEorO.7C0C8n_yA3lcMYyDmnV5gvRI4M2npmBZfrqK_QwCgViyDiIg8dDaX92Zuv6KaU2RqxObCvtpPHrKTBzyBSGP5wapIZVntpF32UaCdmhE6Dv8WseeQ9EznJFoW0z.3IXjgf6qzAj2VTI9AbJ9fQtuwIu1wJMwFFHJhwugzi1Hs2kBq7bg3OCVTmO.o480dPNVUFLS2vrTpQ_mGknHHbYBiUFASd_RrKC7psqCnOHGc83N4iUaZYHiv.LvPg_UQyQ7UdlmK.lkQ2ZELofRXW1z_qFQBo6Ty5GZEXMiDLijGGJz4_06c_QyQt0.FUslPEO92xLCVlgDcf.0a8OBYSlo58p2RO5ImGmoS9e3d1HW5EnFSV.3DxYwfulewPY16V3lYpPR40YX4npdNBn2eJyxgOthhnLbVBBzhtwutct5gU0vDx4aGNr8IQpnK5ZzVb72NXPt30zYTkKLV3Do_PEl8Iz.qON9.kErrfHQqTHMs74LKcjdr5',mdrd: '9KAFXKlrUBNh75kwNHPOKkxe7aYhLsiQIs.wRDXw9G4-1791808748-1.2.1.1-2IXHzuh2wGgIF3WnhhDaUnAaUk0H7TIb2xOLIU.keJI9gWSFBa8fDtoFG4JGm2fYRpOcAxtWtkvsX8zSyaMn.T9sBg_ZO2sQK_lqqXERFo2cOjpe3wPyCyp6_sIX1D1jkYPyoKOrJ67mR_8KZEEIhMjtVxAdlOjXhm7kAKn1vASxDweNEXjMpPxKEhw6RDcT2Q5ijLM4Xxt4YvYrEyZrvoTZuaLXuRnYCdLmokbcHKOLIjEx0OcixfeiNK4ayXnvneXQgHo78NCnQ8FLdUUkroXCmhb6cmUc3xnkmPa6y82YPcz9xvq39jvld.FzpuadaSJA21sWVbeR7u.N771MWTaK5xWZzxcTDM.ODob8WyutwjMF6YXA31frWeE.rk8.5LKnb5OqmYT2avGYQA5mTa3Qal3UyhFQRi9wv9Dkz0IpbvojxWW8u_hyWiT1dJ4Cn5P2FszK0DsRvRp3d5yt3K78qeWwrbZo.GrXpNYEZ9Bn8kRz203vySRVK9pLX7n8drNo2ATwJMW85gs5V1qjcJ0B8zmqkuW5rvyVHQNvWF02XW5kZvkGwQ6pE2mptod66A2ixpd23H9QZNAvro87pqdefxWkgTkZh1YSCe.Rc6fUvz4hjmQXXIGTPGGR3rbycYBmkl7LezKO0845sJ4esfhDY.AMSzK8akPle1f2Nea5uY9o2NMPy81elxX.1VaNvqPykT8ETIsst1fuAjMKO8br.nETp5sYXDUlfsLPZT8AIVGIRLBsWFN9syiWuK04OM_b2X.3mQWZAN0qGEDz96LGzzsDqiPOwxMRz1bnsD1HJsgZ98NCBv2o9VkXIBpcSY6MqsB9w.eZwqO6E700t530M2qLv9h2SY96CiXPSu_MGak6uwnj13nq8wNoWTmnZNVeeLG5RAH6xlIvsOi0sGgGv8uZjRosJxpAKAu2cJa72TzSigkHQUREMBOmyjxNEalVbjBUTTSFwxqWOrBBL_.00Tp2ToqGl4WgwHIQ_CD6ZaBPrl_pspOd3cFRTVBwHECW6rSBGWs048WuyWZrSAqtmjFNshKhKldfIcpis7Bl9G736RbPrQvSNcHusJNpR7pFConAwBwHSI24GV9PmiWswjRoeIk7aZQupB6zAD.uhYr93sraFokJyQahd8eVTVrsX8yUMSpHdgPIN5kIgGa3Mwyw1UILQlfjTPSiTBFLF_z7a02esPY5Z6rHs1yo786s9Gu.4eA_5guU.8fc_p73LVu1U1v14_KzkHlfqPgb2l5owCI5_IX1ZcMr6_EviQJnpJimPztNyP2xlG16ifduPV2ke22zB5CYf1FY2WfMFlT6o9o2DwILLIfJ2dqaUr9OgHz7EBdaHCZNgwOK0wXJUNWK88POAuybPYqbWBHhvV_6Jr4448Bw9tFZpv8fXSOS8maOpHfS7pih70UMDLsrxhr8kHwVXIBkYOzfA4F7jqcBkjkHTDdqC1hf.7LyKz1g3JeUnKvrqRctEcWUuNUk64Yiqhdu_C0eWhfsZ1Bs61x8_zrZXUVCg3QZ6mVZGLS.98wNUnJpfq6cCkyAQxsGkx5GK4b3cSrbAsOUspfhzd2cK6v.qBC7j2KGKNEgrJO_494RJduNX1mKVoXvxj__hVGCmjeDr7feiLyHT_VJYn_kOgY83Xk1UivZvmm.6YbG1vGW9C8LnwpZTh7xLljlRECJ7Rg2UEgMYN139o9Xnj11w4w3wRqiaheohvWimHhYYBgql9rkwOw.8a2zTJzDx3kATgFpMVo1FCLUcnxI85FqYQ79U7g7y.QCnN1vt4BQUEYehAUAczViiuwUGLnG49g4mR4qq0Df4l8Vmq0RzRuLM.8ADE_yjkSBcv1TevwNnIewASNxY_07K9V01krKjn4iC4e71id7KjchRmQKEcF7p3mo5JljAcft12jgwY90aMsKU3gxTcXF0SrY8Hu5kKymVY3GfbqmlMkWGtMrLAitqZhthM62k9FScZLUa3R6GgAZBw9OzHc3S0A.rFjzj2Z_Ir9yW.wNUhgAn_3_Fp47NRxzINYqJ7Oq8ERECCcfF0zy84KP9Ku8F9m6xMke0MwuwwHkboH45oiGXuoa3srL7RcoOELwZfXTtAXI8wmJl6gERI9L8XanzoJvxglHB1DTIakeac5cnYcw8lx1fhKm2EiUpKEaOvbzf2wzmaB.4_ExzDdYXTC6VrMi6rRv7DrvArToU7ORJ0ge019UlzmNmtr_Hs2ZZmyTcjmti72DjxIZHlZ7_nUJYoTRSK_nO2wqQY7XqssSHWawb7_FwcJrLLFSLQmaFBgtJKwZT3zUa6QxEojC_oK3Jc0meYK.OZa8rxHKXvZFl2aZLvjSjsS5kKQ41FyvRx5oIaN7bOOHq_cg_q1RpCfxR8qlFQbl2DI3KiOT5N01pHvwQyrcwXizXNpoEt2K9O_1Y9J6Q7yGlgrpJZ8lGj_kKUbL35egRx7_l4T99MxA_w9skC991Sn0cprYbMO.xIARJxRqFZBsit3Pl3PSMCOCrQoSjdj1_uhXCuckZ5uMDOu5NjwNjmeF4ajbeuWxqIgQTXKwh9jcUEJmaMaZAGKTq.qI9x4Y_9_EHe_f6VuFm3HHOFVprk7Kwz61IHstx8dBKqpf_tyxzXyrbop6.MdYYHOp0kYo1Xv413oJmaj0VIjwv17u9rLaAP6FjlaR.UO.gXxnFLH40EdEuxnUL4yJfMGkq2mHm3BK0MmE2kMCHwRiJhVUbSgzEg_KtoDgf6Cpk9._bbKoBtPJapopew2Atd3c5A',};var a = document.createElement('script');a.src = '/cdn-cgi/challenge-platform/h/g/orchestrate/chl_page/v1?ray=a4962a674b0af212';window._cf_chl_opt.cOgUHash = location.hash === '' && location.href.indexOf('#') !== -1 ? '#' : location.hash;window._cf_chl_opt.cOgUQuery = location.search === '' && location.href.slice(0, location.href.length - window._cf_chl_opt.cOgUHash.length).indexOf('?') !== -1 ? '?' : location.search;if (window.history && window.history.replaceState) {var ogU = location.pathname + window._cf_chl_opt.cOgUQuery + window._cf_chl_opt.cOgUHash;history.replaceState(null, null,"/ces/v1/rgstr?k=client-nb0qtYlZuy2tCMN5s5ncnuIBCJncjRViT0IzFm7GqST\u0026st=javascript-client\u0026sv=3.33.1\u0026t=1791808748602\u0026sid=e7ff04b5-db8d-43f8-b792-7dd32788078b\u0026ec=2\u0026gz=1\u0026__cf_chl_rt_tk=iwCKfliKhCrS137ecLN_WG2I1taI4PqpAOYHjNKEdOA-1791808748-1.0.1.1-omZe_xBfR6_9jsQturpmsUGulwmLqeeVAP2czYgSuDo"+ window._cf_chl_opt.cOgUHash);a.onload = function() {history.replaceState(null, null, ogU);}}document.getElementsByTagName('head')[0].appendChild(a);}());</script></div>
+    </div>
+  </body>
+</html>
+
+    at e.default.<anonymous> (https://chatgpt.com/cdn/assets/2340486e-oc6d2eodbcrmxur3.js:29:132005)
+    at Generator.next (<anonymous>)
+    at o (https://chatgpt.com/cdn/assets/2340486e-oc6d2eodbcrmxur3.js:29:129081)
+  [warning] [GSI_LOGGER]: Your client application may not display Google One Tap when FedCM becomes mandatory. Opt-in to FedCM to test that you have the proper cross-origin permission policy set up. Ignore this message if One Tap is displayed after opt-in to FedCM. Learn more: (https://developers.google.com/identity/gsi/web/guides/fedcm-migration?s=dc#cross_origin)
+  [warning] [GSI_LOGGER]: Your client application uses one of the Google One Tap prompt UI status methods that may stop functioning when FedCM becomes mandatory. Refer to the migration guide to update your code accordingly and opt-in to FedCM to test your changes. Learn more: https://developers.google.com/identity/gsi/web/guides/fedcm-migration?s=dc#display_moment and https://developers.google.com/identity/gsi/web/guides/fedcm-migration?s=dc#skipped_moment
+  [error] Failed to load resource: the server responded with a status of 403 ()
+  [log] [chatgpt-export-markdown] 下載圖片 1/2…
+  [error] Failed to load resource: the server responded with a status of 403 ()
+  [log] [chatgpt-export-markdown] image download failed: file_00000000cb9c82099aa48ba2cc79a330?shared_conversation_id=6accd4aa-5124-83e8-9afd-24981bd315ab files/download HTTP 403
+  [log] [chatgpt-export-markdown] 下載圖片 2/2…
+  [error] Failed to load resource: the server responded with a status of 403 ()
+  [log] [chatgpt-export-markdown] image download failed: file_0000000062e48211a38ef4c83722daf0?shared_conversation_id=6accd4aa-5124-83e8-9afd-24981bd315ab files/download HTTP 403
+  [log] [chatgpt-export-markdown] 已下載 ZIP（0/2 張圖片，2 張失敗、保留原連結；來源：share-iframe）
+  [log] [chatgpt-export-markdown] exported zip {source: share-iframe, images: 0, failed: 2}
+  [error] [GSI_LOGGER]: FedCM get() rejects with NetworkError: Error retrieving a token.
+
+screenshot     : /Users/david/Documents/Program/Tampermonkey-Scripts/.preview/chatgpt-export-markdown.png
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:39:18Z)**_
+
+<think><details><summary>Thought Process</summary>
+Confirmed the share link flow works once zip-store.js loads, backing up the @require diagnosis. Also found a new bug: shared pages have image pointers with a trailing query string that's getting pasted directly into the file id, breaking the download URL — fixing that next.
+
+</details></think>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:39:18Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read file id parsing and asset fetch code
+
+`command grep -n "sediment\|fileId" shared/chatgpt-adapter.js | head; command grep -n "async function fetchAsset" -A22 userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js`
+
+```text
+435:        const fileId = pointer.replace(/^[a-z-]+:\/\//, '');
+436:        const attachment = attachments.get(fileId) || {};
+439:          fileId,
+368:  async function fetchAsset(asset, { convId, authorization }) {
+369-    const signal = AbortSignal.timeout(30_000);
+370-    try {
+371-      const headers = { accept: 'application/json' };
+372-      if (authorization) headers.authorization = authorization;
+373-      const query = new URLSearchParams({ inline: 'false' });
+374-      if (convId) query.set('conversation_id', convId);
+375-      const meta = await fetch(
+376-        `/backend-api/files/download/${encodeURIComponent(asset.fileId)}?${query}`,
+377-        { credentials: 'include', headers, signal }
+378-      );
+379-      if (!meta.ok) throw new Error(`files/download HTTP ${meta.status}`);
+380-      const { download_url: downloadUrl } = await meta.json();
+381-      if (!downloadUrl) throw new Error('files/download 沒有 download_url');
+382-      const file = await fetch(downloadUrl, { credentials: 'include', signal });
+383-      if (!file.ok) throw new Error(`download_url HTTP ${file.status}`);
+384-      const mime = (file.headers.get('content-type') || '').split(';')[0].trim();
+385-      // 200 也可能是登入頁或錯誤 JSON；不是圖片就別存成 .png
+386-      if (mime && !mime.startsWith('image/')) throw new Error(`download_url 回傳 ${mime}`);
+387-      return { bytes: new Uint8Array(await file.arrayBuffer()), mime };
+388-    } catch (error) {
+389-      log('image download failed:', asset.fileId, error.message);
+390-      return null;
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:39:29Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Probe share-page image download endpoints
+
+```bash
+S=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/4a8a6b37-16f6-4c79-9561-111896abb9bc/scratchpad && cat > $S/probe.mjs <<'EOF'
+import { chromium } from 'playwright';
+const b = await chromium.launch();
+const p = await b.newPage();
+await p.goto('https://chatgpt.com/share/6accd4aa-5124-83e8-9afd-24981bd315ab', { waitUntil: 'domcontentloaded' });
+await p.waitForTimeout(8000);
+const out = await p.evaluate(async () => {
+  const id = 'file_00000000cb9c82099aa48ba2cc79a330', sid = '6accd4aa-5124-83e8-9afd-24981bd315ab';
+  const urls = [
+    `/backend-api/files/download/${id}?shared_conversation_id=${sid}&inline=false`,
+    `/backend-api/files/download/${id}?shared_conversation_id=${sid}`,
+    `/backend-api/files/download/${encodeURIComponent(id + '?shared_conversation_id=' + sid)}?inline=false`,
+    `/backend-api/files/${id}/download?shared_conversation_id=${sid}`,
+  ];
+  const r = [];
+  for (const u of urls) { const res = await fetch(u, { credentials: 'include' }); r.push([u, res.status, res.headers.get('content-type'), (await res.text()).slice(0, 200)]); }
+  r.push(['imgs', [...document.querySelectorAll('img')].map(i => i.src).filter(s => /estuary|files|sediment/.test(s))]);
+  return r;
+});
+console.log(JSON.stringify(out, null, 1));
+await b.close();
+EOF
+node $S/probe.mjs
+```
+
+```text
+Exit code 1
+node:internal/modules/package_json_reader:301
+  throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null);
+        ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright' imported from /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/4a8a6b37-16f6-4c79-9561-111896abb9bc/scratchpad/probe.mjs
+    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:301:9)
+    at packageResolve (node:internal/modules/esm/resolve:769:81)
+    at moduleResolve (node:internal/modules/esm/resolve:860:18)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:719:20)
+    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:736:38)
+    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:765:52)
+    at #resolve (node:internal/modules/esm/loader:701:17)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:621:35)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:160:33) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v24.13.1
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:39:57Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Rerun probe with repo Playwright
+
+`S=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/4a8a6b37-16f6-4c79-9561-111896abb9bc/scratchpad && sed -i '' "s#from 'playwright'#from '$PWD/node_modules/playwright/index.mjs'#" $S/probe.mjs && node $S/probe.mjs`
+
+```text
+[
+ [
+  "/backend-api/files/download/file_00000000cb9c82099aa48ba2cc79a330?shared_conversation_id=6accd4aa-5124-83e8-9afd-24981bd315ab&inline=false",
+  200,
+  "application/json",
+  "{\"status\":\"success\",\"download_url\":\"https://sdmntprjapaneast.oaiusercontent.com/files/00000000-cb9c-8209-9aa4-8ba2cc79a330/raw?se=2026-10-12T12%3A44%3A53Z&sp=r&sv=2026-02-06&sr=b&scid=4fc50b15-1f59-4f"
+ ],
+ [
+  "/backend-api/files/download/file_00000000cb9c82099aa48ba2cc79a330?shared_conversation_id=6accd4aa-5124-83e8-9afd-24981bd315ab",
+  200,
+  "application/json",
+  "{\"status\":\"success\",\"download_url\":\"https://sdmntprjapaneast.oaiusercontent.com/files/00000000-cb9c-8209-9aa4-8ba2cc79a330/raw?se=2026-10-12T12%3A44%3A54Z&sp=r&sv=2026-02-06&sr=b&scid=2f5e1c27-9f4b-41"
+ ],
+ [
+  "/backend-api/files/download/file_00000000cb9c82099aa48ba2cc79a330%3Fshared_conversation_id%3D6accd4aa-5124-83e8-9afd-24981bd315ab?inline=false",
+  403,
+  "application/json",
+  "{\"error\": \"Invalid URL\"}"
+ ],
+ [
+  "/backend-api/files/file_00000000cb9c82099aa48ba2cc79a330/download?shared_conversation_id=6accd4aa-5124-83e8-9afd-24981bd315ab",
+  403,
+  "application/json",
+  "{\"detail\":\"Forbidden\"}"
+ ],
+ [
+  "imgs",
+  []
+ ]
+]
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:40:02Z)**_
+
+<think><details><summary>Thought Process</summary>
+The endpoint works once I split the id from its query. It returns a signed URL on a different origin (`*.oaiusercontent.com`), so I'm checking if CORS allows fetch to read it.
+
+</details></think>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:40:21Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Probe CORS on signed download URL
+
+```bash
+S=/private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/4a8a6b37-16f6-4c79-9561-111896abb9bc/scratchpad && python3 - "$S/probe.mjs" <<'EOF'
+import sys,re
+p=sys.argv[1]; s=open(p).read()
+start=s.index('const out'); end=s.index('console.log')
+s=s[:start]+'''const out = await p.evaluate(async () => {
+  const id = 'file_00000000cb9c82099aa48ba2cc79a330', sid = '6accd4aa-5124-83e8-9afd-24981bd315ab';
+  const meta = await (await fetch(`/backend-api/files/download/${id}?shared_conversation_id=${sid}&inline=false`)).json();
+  const r = [new URL(meta.download_url).host];
+  for (const credentials of ['include', 'omit']) {
+    try { const f = await fetch(meta.download_url, { credentials }); r.push([credentials, f.status, f.headers.get('content-type'), (await f.arrayBuffer()).byteLength]); }
+    catch (e) { r.push([credentials, 'ERR', e.message]); }
+  }
+  return r;
+});
+'''+s[end:]
+open(p,'w').write(s)
+EOF
+node $S/probe.mjs
+```
+
+```text
+[
+ "sdmntprjapaneast.oaiusercontent.com",
+ [
+  "include",
+  "ERR",
+  "Failed to fetch"
+ ],
+ [
+  "omit",
+  200,
+  "image/png",
+  699452
+ ]
+]
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:40:30Z)**_
+
+<think><details><summary>Thought Process</summary>
+I identified the real ZIP bug: the signed URL is cross-origin, so fetching with `credentials: 'include'` fails CORS, while `credentials: 'omit'` correctly returns the image. Fixing both this and the missing `@require` issue now.
+
+</details></think>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:40:30Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read imageAssets in adapter
+
+`sed -n 418,450p shared/chatgpt-adapter.js`
+
+```text
+    // fallback 跟 parts[0] 是兩份不同的文字，content_references 的 index 只對得上後者。
+    if (dil && dil.fallbackMarkdown.trim())
+      return resolveDilSentinels(dil.fallbackMarkdown, message, dil);
+    return applyCitations(textOf(message), message);
+  }
+
+  /** 所選 thread 裡所有上傳／產生的圖片（`image_asset_pointer`），供 ZIP 匯出下載。 */
+  function imageAssets(data, opts) {
+    const assets = new Map();
+    for (const message of selectedMessages(data, opts)) {
+      const attachments = new Map(
+        (message.metadata?.attachments || []).map((attachment) => [attachment.id, attachment])
+      );
+      for (const part of message.content?.parts || []) {
+        if (part?.content_type !== 'image_asset_pointer' || !part.asset_pointer) continue;
+        const pointer = part.asset_pointer;
+        if (assets.has(pointer)) continue;
+        const fileId = pointer.replace(/^[a-z-]+:\/\//, '');
+        const attachment = attachments.get(fileId) || {};
+        assets.set(pointer, {
+          pointer,
+          fileId,
+          name: attachment.name || '',
+          mime: attachment.mime_type || '',
+        });
+      }
+    }
+    return [...assets.values()];
+  }
+
+  function roleOf(message) {
+    const role = message.author?.role;
+    if (role === 'user') return 'User';
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:40:33Z)**_
+
+Patching the adapter (split the pointer into id + query) and `fetchAsset` (pass the query through, omit credentials on the cross-origin signed URL).
+
+_**Agent (claude-opus-5-5 2026-10-12 12:41:03Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Fix pointer parsing and CORS, rerun share preview
+
+```bash
+python3 - <<'EOF'
+p='shared/chatgpt-adapter.js'
+s=open(p,encoding='utf-8').read()
+old="""        const fileId = pointer.replace(/^[a-z-]+:\\/\\//, '');
+        const attachment = attachments.get(fileId) || {};
+        assets.set(pointer, {
+          pointer,
+          fileId,
+"""
+new="""        // 分享頁的 pointer 會帶 `?shared_conversation_id=…`；那是 API 參數，不是 file id 的一部分
+        const [fileId, query = ''] = pointer.replace(/^[a-z-]+:\\/\\//, '').split('?');
+        const attachment = attachments.get(fileId) || {};
+        assets.set(pointer, {
+          pointer,
+          fileId,
+          params: Object.fromEntries(new URLSearchParams(query)),
+"""
+assert old in s; s=s.replace(old,new,1); open(p,'w',encoding='utf-8').write(s)
+
+p='userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js'
+s=open(p,encoding='utf-8').read()
+old="""      const query = new URLSearchParams({ inline: 'false' });
+      if (convId) query.set('conversation_id', convId);
+"""
+new="""      const query = new URLSearchParams({ ...asset.params, inline: 'false' });
+      if (convId && !query.has('shared_conversation_id')) query.set('conversation_id', convId);
+"""
+assert old in s; s=s.replace(old,new,1)
+old="""      const file = await fetch(downloadUrl, { credentials: 'include', signal });"""
+new="""      // signed URL 常在 *.oaiusercontent.com：自帶簽章，跨域帶 cookie 反而會被 CORS 擋
+      const sameOrigin = new URL(downloadUrl, location.href).origin === location.origin;
+      const file = await fetch(downloadUrl, {
+        credentials: sameOrigin ? 'include' : 'omit',
+        signal,
+      });"""
+assert old in s; s=s.replace(old,new,1)
+open(p,'w',encoding='utf-8').write(s)
+EOF
+timeout 120 npm run preview -- chatgpt-export-markdown https://chatgpt.com/share/6accd4aa-5124-83e8-9afd-24981bd315ab --menu "Download .zip (含圖片)" --wait 15000 2>&1 | command grep "chatgpt-export-markdown\]\|download\|screenshot" | tail -12
+```
+
+```text
+  [log] [chatgpt-export-markdown] 讀取對話…
+  [log] [chatgpt-export-markdown] 下載圖片 1/2…
+  [log] [chatgpt-export-markdown] 下載圖片 2/2…
+  [log] [chatgpt-export-markdown] 已下載 ZIP（2/2 張圖片；來源：router-state）
+  [log] [chatgpt-export-markdown] exported zip {source: router-state, images: 2, failed: 0}
+screenshot     : /Users/david/Documents/Program/Tampermonkey-Scripts/.preview/chatgpt-export-markdown.png
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:41:06Z)**_
+
+Share page now gives `2/2 張圖片`. Adding regression coverage for the share pointer and the cross-origin `credentials`.
+
+_**Agent (claude-opus-5-5 2026-10-12 12:41:08Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Locate ZIP test mocks and fixture pointers
+
+`command grep -n "files/download\|estuary\|file_missing\|file_login\|imageAssets\|sediment\|credentials\|1/3" tests/chatgpt-export-markdown.test.mjs | head -40; command grep -n "sediment" tests/fixtures/chatgpt-export/intelligent-ui.json | head`
+
+```text
+21:const IMAGE_POINTER = 'sediment://file_00000000cb9c82099aa48ba2cc79a330';
+299:    assert.deepEqual(JSON.parse(JSON.stringify(context.A.imageAssets(data, {}))), [
+406:          if (file[1] === 'file_missing') return route.fulfill({ status: 404, json: {} });
+407:          if (file[1] === 'file_login')
+409:              json: { download_url: 'https://chatgpt.com/backend-api/estuary/login-page' },
+414:              download_url: `https://chatgpt.com/backend-api/estuary/content?id=${file[1]}&auth=${auth === 'Bearer fixture-token'}&cid=${url.searchParams.get('conversation_id')}`,
+418:        if (url.pathname === '/backend-api/estuary/login-page') {
+421:        if (url.pathname === '/backend-api/estuary/content') {
+503:      for (const id of ['file_missing', 'file_login'])
+506:          asset_pointer: `sediment://${id}`,
+524:        assert.ok(markdown.includes('![image](sediment://file_missing)'));
+526:          markdown.includes('![image](sediment://file_login)'),
+35:              "asset_pointer": "sediment://file_00000000cb9c82099aa48ba2cc79a330",
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:41:11Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read imageAssets and browser ZIP tests
+
+`sed -n 290,320p tests/chatgpt-export-markdown.test.mjs; sed -n 385,540p tests/chatgpt-export-markdown.test.mjs`
+
+````text
+    assert.ok(markdown.includes('```bash\nnpx skills add thesysdev/skills --skill openui\n```'));
+  });
+
+  it('lists each image asset once with attachment name and MIME type', () => {
+    const context = vm.createContext({});
+    vm.runInContext(SHARED + '\n' + ADAPTER + '\nglobalThis.A = ChatGPTAdapter;', context);
+    const data = intelligentUi();
+    const user = data.mapping['user-1'].message;
+    user.content.parts.push(clone(user.content.parts[0]));
+    assert.deepEqual(JSON.parse(JSON.stringify(context.A.imageAssets(data, {}))), [
+      {
+        pointer: IMAGE_POINTER,
+        fileId: 'file_00000000cb9c82099aa48ba2cc79a330',
+        name: 'image(20261012-020309).png',
+        mime: 'image/png',
+      },
+    ]);
+  });
+
+  it('builds STORE zips that an independent reader and CRC check accept', () => {
+    const context = vm.createContext({ TextEncoder, Blob });
+    vm.runInContext(ZIP + '\nglobalThis.Z = ZipStore;', context);
+    const files = readZip(
+      context.Z.bytes([
+        { name: '對話.md', data: '# 你好\n' },
+        { name: 'images/01-a.png', data: new Uint8Array(PNG) },
+      ])
+    );
+    assert.deepEqual([...files.keys()], ['對話.md', 'images/01-a.png']);
+    assert.equal(files.get('對話.md').toString('utf8'), '# 你好\n');
+    assert.deepEqual([...files.get('images/01-a.png')], PNG);
+
+    async function open(data, transport) {
+      const page = await browser.newPage({ acceptDownloads: true });
+      const errors = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      const captured = new Promise((resolve) => {
+        page.on('console', (message) => {
+          if (message.text().includes('captured conversation payload:')) resolve();
+        });
+      });
+      await page.route('**/*', async (route) => {
+        const url = new URL(route.request().url());
+        if (url.pathname === '/backend-api/conversation/fixture-conversation') {
+          return route.fulfill({ json: data });
+        }
+        if (url.pathname === '/api/auth/session') {
+          return route.fulfill({ json: { accessToken: 'fixture-token' } });
+        }
+        const file = url.pathname.match(/^\/backend-api\/files\/download\/(.+)$/);
+        if (file) {
+          const auth = route.request().headers().authorization;
+          if (file[1] === 'file_missing') return route.fulfill({ status: 404, json: {} });
+          if (file[1] === 'file_login')
+            return route.fulfill({
+              json: { download_url: 'https://chatgpt.com/backend-api/estuary/login-page' },
+            });
+          return route.fulfill({
+            json: {
+              status: 'success',
+              download_url: `https://chatgpt.com/backend-api/estuary/content?id=${file[1]}&auth=${auth === 'Bearer fixture-token'}&cid=${url.searchParams.get('conversation_id')}`,
+            },
+          });
+        }
+        if (url.pathname === '/backend-api/estuary/login-page') {
+          return route.fulfill({ contentType: 'text/html', body: '<!doctype html>login' });
+        }
+        if (url.pathname === '/backend-api/estuary/content') {
+          if (url.searchParams.get('auth') !== 'true' || !url.searchParams.get('cid'))
+            return route.fulfill({ status: 403, body: '' });
+          return route.fulfill({ contentType: 'image/png', body: Buffer.from(PNG) });
+        }
+        if (url.pathname === '/share/fixture' || url.pathname === '/c/fixture-conversation') {
+          return route.fulfill({
+            contentType: 'text/html',
+            body: '<!doctype html><html><body><main>Fixture UI sentinel</main></body></html>',
+          });
+        }
+        errors.push(`Unexpected request: ${url}`);
+        return route.abort();
+      });
+      await page.addInitScript({
+        content: `(${gmShim})(${JSON.stringify({ data, transport })});\n${SHARED}\n${UI}\n${ADAPTER}\n${ZIP}\n${SCRIPT}`,
+      });
+      await page.goto(
+        `https://chatgpt.com/${transport === 'router' ? 'share/fixture' : 'c/fixture-conversation'}`
+      );
+      if (transport === 'capture') {
+        await page.evaluate(() =>
+          fetch('/backend-api/conversation/fixture-conversation').then((response) =>
+            response.json()
+          )
+        );
+        await Promise.race([
+          captured,
+          new Promise((_, reject) => {
+            const timer = setTimeout(
+              () => reject(new Error('Network capture did not complete')),
+              5000
+            );
+            timer.unref();
+            captured.then(() => clearTimeout(timer));
+          }),
+        ]);
+      }
+      await page.getByRole('button', { name: '⇩ Export MD', exact: true }).click();
+      return { page, errors };
+    }
+
+    for (const transport of ['router', 'capture']) {
+      it(`copies and downloads complete Markdown, handoff, and raw JSON via ${transport}`, async () => {
+        const data = fixture(transport === 'router');
+        const { page, errors } = await open(data, transport);
+        try {
+          for (const label of ['Copy Markdown', 'Copy Agent Handoff']) {
+            await page.evaluate(() => {
+              window.__gmClipboard = null;
+            });
+            await page.getByRole('button', { name: label, exact: true }).click();
+            await page.waitForFunction(() => window.__gmClipboard !== null);
+            const markdown = await page.evaluate(() => window.__gmClipboard);
+            assertComplete(markdown);
+            assert.equal(
+              markdown.includes('# Prior ChatGPT Context'),
+              label === 'Copy Agent Handoff'
+            );
+            assert.doesNotMatch(markdown, /Fixture UI sentinel/);
+          }
+          for (const extension of ['md', 'json']) {
+            const downloaded = page.waitForEvent('download');
+            await page.getByRole('button', { name: `Download .${extension}`, exact: true }).click();
+            const download = await downloaded;
+            const path = new URL(`${engineName}-${transport}.${extension}`, OUT);
+            await download.saveAs(path.pathname);
+            const text = await readFile(path, 'utf8');
+            assert.ok(download.suggestedFilename().endsWith(`.${extension}`));
+            if (extension === 'json') assert.deepEqual(JSON.parse(text), data);
+            else assertComplete(text);
+          }
+          assert.deepEqual(errors, []);
+        } finally {
+          await page.close();
+        }
+      });
+    }
+
+    it('downloads a zip with Markdown and images, keeping pointers for failed images', async () => {
+      const data = intelligentUi();
+      const user = data.mapping['user-1'].message;
+      for (const id of ['file_missing', 'file_login'])
+        user.content.parts.push({
+          content_type: 'image_asset_pointer',
+          asset_pointer: `sediment://${id}`,
+        });
+      const { page, errors } = await open(data, 'router');
+      try {
+        const downloaded = page.waitForEvent('download');
+        await page.getByRole('button', { name: 'Download .zip (含圖片)', exact: true }).click();
+        const download = await downloaded;
+        const path = new URL(`${engineName}-images.zip`, OUT);
+        await download.saveAs(path.pathname);
+        assert.match(download.suggestedFilename(), /^chatgpt-.+-\d{8}-\d{4}\.zip$/);
+        const files = readZip(await readFile(path));
+        const [mdName, ...images] = [...files.keys()];
+        assert.equal(mdName, download.suggestedFilename().replace(/\.zip$/, '.md'));
+        assert.deepEqual(images, ['images/01-image-20261012-020309.png']);
+        assert.deepEqual([...files.get(images[0])], PNG);
+        const markdown = files.get(mdName).toString('utf8');
+        assertIntelligentUi(markdown);
+        assert.ok(markdown.includes(`![image](${images[0]})`));
+        assert.ok(markdown.includes('![image](sediment://file_missing)'));
+        assert.ok(
+          markdown.includes('![image](sediment://file_login)'),
+          'HTML is not saved as an image'
+        );
+        await page.getByText(/^已下載 ZIP（1\/3 張圖片，2 張失敗/).waitFor();
+        assert.deepEqual(errors, []);
+      } finally {
+        await page.close();
+      }
+    });
+
+    it('downloads unchanged raw JSON after a visible Markdown parsing failure', async () => {
+      const data = fixture();
+      sdk(data).widget_state = '{broken JSON';
+      const { page, errors } = await open(data, 'router');
+      try {
+````
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:41:21Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read imagePath naming
+
+`command grep -n "function imagePath" -A12 userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js`
+
+```text
+354:  function imagePath(asset, index, mime) {
+355-    const ext = EXTENSIONS[mime] || EXTENSIONS[asset.mime] || 'bin';
+356-    const base = (asset.name || asset.fileId)
+357-      .replace(/\.[a-z0-9]+$/i, '')
+358-      .replace(/[^\p{L}\p{N}._-]+/gu, '-')
+359-      .replace(/^-+|-+$/g, '')
+360-      .slice(0, 60);
+361-    return `images/${String(index + 1).padStart(2, '0')}-${base || 'image'}.${ext}`;
+362-  }
+363-
+364-  /**
+365-   * `sediment://file_…` → 位元組。先跟 backend 換 signed `download_url`，再抓檔案本體；
+366-   * 任何一步失敗都回 null，讓 Markdown 保留原本的 pointer，而不是整包匯出失敗。
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:42:06Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Add share-pointer and CORS regression tests, run suite
+
+```bash
+python3 - <<'EOF'
+p='tests/chatgpt-export-markdown.test.mjs'
+s=open(p,encoding='utf-8').read()
+def rep(old,new):
+    global s
+    assert old in s, old[:60]; s=s.replace(old,new,1)
+rep("""    user.content.parts.push(clone(user.content.parts[0]));
+    assert.deepEqual(JSON.parse(JSON.stringify(context.A.imageAssets(data, {}))), [
+      {
+        pointer: IMAGE_POINTER,
+        fileId: 'file_00000000cb9c82099aa48ba2cc79a330',
+        name: 'image(20261012-020309).png',
+        mime: 'image/png',
+      },
+    ]);""","""    user.content.parts.push(clone(user.content.parts[0]), {
+      content_type: 'image_asset_pointer',
+      asset_pointer: `${IMAGE_POINTER}?shared_conversation_id=share-1`,
+    });
+    assert.deepEqual(JSON.parse(JSON.stringify(context.A.imageAssets(data, {}))), [
+      {
+        pointer: IMAGE_POINTER,
+        fileId: 'file_00000000cb9c82099aa48ba2cc79a330',
+        params: {},
+        name: 'image(20261012-020309).png',
+        mime: 'image/png',
+      },
+      {
+        // 分享頁的 pointer：query 是 API 參數，file id 與附件名稱都不能被它污染
+        pointer: `${IMAGE_POINTER}?shared_conversation_id=share-1`,
+        fileId: 'file_00000000cb9c82099aa48ba2cc79a330',
+        params: { shared_conversation_id: 'share-1' },
+        name: 'image(20261012-020309).png',
+        mime: 'image/png',
+      },
+    ]);""")
+rep("""          if (file[1] === 'file_missing') return route.fulfill({ status: 404, json: {} });""","""          if (file[1] === 'file_missing') return route.fulfill({ status: 404, json: {} });
+          if (file[1] === 'file_shared') {
+            if (url.searchParams.get('shared_conversation_id') !== 'share-fixture')
+              return route.fulfill({ status: 403, json: { error: 'Invalid URL' } });
+            return route.fulfill({
+              json: { download_url: 'https://files.oaiusercontent.com/raw/shared?sig=1' },
+            });
+          }""")
+rep("""        if (url.pathname === '/share/fixture' ||""","""        if (url.host === 'files.oaiusercontent.com') {
+          // 真實 signed URL 回 `*`：用 credentials: 'include' 去抓會被 CORS 擋
+          return route.fulfill({
+            contentType: 'image/png',
+            headers: { 'access-control-allow-origin': '*' },
+            body: Buffer.from(PNG),
+          });
+        }
+        if (url.pathname === '/share/fixture' ||""")
+rep("""      for (const id of ['file_missing', 'file_login'])
+        user.content.parts.push({
+          content_type: 'image_asset_pointer',
+          asset_pointer: `sediment://${id}`,
+        });""","""      for (const pointer of [
+        'file_missing',
+        'file_login',
+        'file_shared?shared_conversation_id=share-fixture',
+      ])
+        user.content.parts.push({
+          content_type: 'image_asset_pointer',
+          asset_pointer: `sediment://${pointer}`,
+        });""")
+rep("""        assert.deepEqual(images, ['images/01-image-20261012-020309.png']);
+        assert.deepEqual([...files.get(images[0])], PNG);""","""        assert.deepEqual(images, [
+          'images/01-image-20261012-020309.png',
+          'images/04-file_shared.png',
+        ]);
+        for (const image of images) assert.deepEqual([...files.get(image)], PNG);""")
+rep("""        assert.ok(markdown.includes(`![image](${images[0]})`));""","""        for (const image of images) assert.ok(markdown.includes(`![image](${image})`));""")
+rep("""已下載 ZIP（1\\/3 張圖片，2 張失敗""","""已下載 ZIP（2\\/4 張圖片，2 張失敗""")
+open(p,'w',encoding='utf-8').write(s)
+EOF
+npm run test:chatgpt-export 2>&1 | tail -15
+```
+
+```text
+ℹ duration_ms 20745.781964
+
+✖ failing tests:
+
+test at tests/chatgpt-export-markdown.test.mjs:293:3
+✖ lists each image asset once with attachment name and MIME type (4.477503ms)
+  ReferenceError: URLSearchParams is not defined
+      at Object.imageAssets (evalmachine.<anonymous>:654:42)
+      at TestContext.<anonymous> (file:///Users/david/Documents/Program/Tampermonkey-Scripts/tests/chatgpt-export-markdown.test.mjs:302:58)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1103:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:785:18)
+      at Test.postRun (node:internal/test_runner/test:1232:19)
+      at Test.run (node:internal/test_runner/test:1160:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:785:7)
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:42:11Z)**_
+
+Only failure: the bare `vm` context in the unit test has no `URLSearchParams` global. Adding it there.
+
+_**Agent (claude-opus-5-5 2026-10-12 12:43:02Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Run suite, then confirm test catches CORS regression
+
+```bash
+python3 - <<'EOF'
+p='tests/chatgpt-export-markdown.test.mjs'
+s=open(p,encoding='utf-8').read()
+old="""  it('lists each image asset once with attachment name and MIME type', () => {
+    const context = vm.createContext({});"""
+assert old in s
+s=s.replace(old,old.replace("({})","({ URLSearchParams })"),1)
+open(p,'w',encoding='utf-8').write(s)
+EOF
+npm run test:chatgpt-export 2>&1 | command grep -E "^ℹ (tests|pass|fail)"
+# 反向驗證：還原 credentials 修正，browser ZIP 測試應該失敗
+cp userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/4a8a6b37-16f6-4c79-9561-111896abb9bc/scratchpad/keep.user.js
+sed -i '' "s/credentials: sameOrigin ? 'include' : 'omit',/credentials: 'include',/" userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+npm run test:chatgpt-export 2>&1 | command grep -E "^ℹ (pass|fail)|✖ downloads a zip"
+cp /private/tmp/claude-502/-Users-david-Documents-Program-Tampermonkey-Scripts/4a8a6b37-16f6-4c79-9561-111896abb9bc/scratchpad/keep.user.js userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+command grep -c "sameOrigin ? 'include'" userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+```
+
+```text
+ℹ tests 30
+ℹ pass 30
+ℹ fail 0
+  ✖ downloads a zip with Markdown and images, keeping pointers for failed images (457.375916ms)
+  ✖ downloads a zip with Markdown and images, keeping pointers for failed images (1487.314485ms)
+ℹ pass 28
+ℹ fail 2
+✖ downloads a zip with Markdown and images, keeping pointers for failed images (457.375916ms)
+✖ downloads a zip with Markdown and images, keeping pointers for failed images (1487.314485ms)
+1
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:43:09Z)**_
+
+The new test catches the CORS regression in both engines, and the fix is restored. Running the rest of the checks and updating the docs next.
+
+_**Agent (claude-opus-5-5 2026-10-12 12:44:05Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Run explorer tests, verify, locate docs
+
+`(npm run test:chat-explorer 2>&1 | command grep -E "^ℹ (pass|fail)"); npm run verify 2>&1 | tail -3; command grep -n '"format\|prettier' package.json; ls userscripts/chatgpt-export-markdown/; command grep -n "1.5.0\|v1.5" userscripts/chatgpt-export-markdown/VALIDATION.md 2>/dev/null | head -3`
+
+```text
+ℹ pass 33
+ℹ fail 0
+> node scripts/build-index.mjs --check
+
+README.md script index is out of date. Run: npm run index
+18:    "format": "prettier --write .",
+19:    "format:check": "prettier --check .",
+35:    "prettier": "^3.4.2",
+chatgpt-export-markdown.user.js
+README.md
+VALIDATION.md
+1:# v1.5.0 validation — 2026-10-12
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:44:21Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Regenerate index and read docs to update
+
+`npm run index >/dev/null && npm run verify 2>&1 | tail -2; sed -n 1,40p userscripts/chatgpt-export-markdown/VALIDATION.md; sed -n 105,125p userscripts/chatgpt-export-markdown/README.md; command grep -n "圖片\|ZIP\|zip" userscripts/chatgpt-export-markdown/README.md | head -20`
+
+```text
+README.md script index is up to date.
+# v1.5.0 validation — 2026-10-12
+
+## Automated checks
+
+| Layer                            | Result    | Coverage                                                                                                                                                                                                                |
+| -------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run test:chatgpt-export`    | 30 passed | Previous cases, plus Intelligent UI fallback and sentinels, code-block widgets, image asset listing, ZIP structure/CRC, and ZIP action with one failed image (Chromium 151 + Firefox 153 GM shim)                       |
+| `npm run test:chat-explorer`     | 33 passed | Previous cases, plus archive blocks built from `fallbackMarkdown` while `raw` keeps the DIL payload                                                                                                                     |
+| Full source payload              | Passed    | Rendering the unminimized 2026-10-12 conversation JSON restores all 5 code fences (`jsx`, `bash` ×2, `json`, `text`) that v1.4.0 dropped; 0 DIL tags outside code, 0 private-use characters, 22 resolved citation links |
+| ZIP readers                      | Passed    | `bsdtar`, `ditto -x -k`, Python `zipfile` and `unzip -t` accept a CJK-named archive. Info-ZIP's listing renders the UTF-8 name incorrectly, but extraction by name works                                                |
+| `npm run preview` on chatgpt.com | Passed    | Workspace `@require` (incl. `shared/zip-store.js`) loads and the new menu is registered; without a session it reports 「抓不到對話資料」 instead of throwing                                                            |
+
+## Not yet verified
+
+- `/backend-api/files/download/<id>` response shape and whether `download_url` is same-origin
+  were tested only against mocked endpoints. They need a logged-in session in a real manager.
+- Image-generation output (tool messages) has no sample payload.
+
+# v1.4.0 validation — 2026-09-14
+
+## Automated checks
+
+| Layer                                | Result    | Coverage                                                                                                                                        |
+| ------------------------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run test:chatgpt-export`        | 24 passed | Existing quick exports, report snapshots, missing IDs, citations and raw JSON failures                                                          |
+| `npm run test:chat-explorer`         | 32 passed | Archive v1, path selection, nested forks, late snapshots, orphan/cycle validation, mode isolation, UI and offline behavior                      |
+| Chromium 151.0.7922.34 + GM shim     | Passed    | Import, single/range/path selection, exact preview/download agreement, full archive, fresh snapshots, URL-only navigation, mobile and dark mode |
+| Firefox 153.0 + GM shim              | Passed    | Same scenarios, including `file://` and denied clipboard fallback                                                                               |
+| 5,000-node fixture                   | Passed    | Full selected export, at most 100 tree rows and 60 initial reading cards; End/Enter reaches the final message                                   |
+| Offline HTML                         | Passed    | No HTTP(S) requests during import/preview; HTML injection blocked; empty saved selection restored; invalid import retains the current archive   |
+| `npm run build:chat-explorer`        | Passed    | Vendored checksums, inline scripts/styles and third-party license text                                                                          |
+| Syntax / Prettier / `npm run verify` | Passed    | Script metadata, dependency files and generated index; existing unrelated dependency warnings remain                                            |
+
+Desktop, narrow viewport and dark-mode screenshots were inspected in
+`.preview/conversation-explorer-tests/`. The Markdown frontmatter is collapsed as export file
+information, and branch references use visible M-number labels on exported messages.
+
+## Real manager
+
+Violentmonkey **2.49.0**, Manifest V3, Chromium **151.0.7922.34**:
+- 真實 ChatGPT 網頁目前只驗證公開 share 頁；登入中的 `/c/` 以 fixture 與隔離的
+  Violentmonkey 安裝驗證，尚未使用真實登入 session 測試。
+- 尚未完成的 Deep Research 還沒有 `report_message`；預設不會替它虛構回答。開啟
+  **含 Deep Research 計畫／狀態**時，仍可匯出目前的 plan 與執行狀態。
+- 圖片：**Download .zip** 會用 `/backend-api/files/download/<file id>` 換 signed URL 再下載你上傳的圖片；
+  下載失敗的圖片在 Markdown 裡保留原本的 `sediment://…` pointer，狀態列會顯示失敗張數。
+  其他匯出動作仍只輸出 `![image](<asset_pointer>)` 佔位。Intelligent UI 的網路圖片（`images.openai.com`）
+  只保留遠端連結、不打包；工具產生的圖片（生圖）目前沒有樣本可驗證，尚未處理。
+- 從 v1.2.0 起，render 與浮動 UI 搬到 [`shared/`](../../shared/) 用 `@require` 引入
+  （跟 claude / copilot 兩支共用），所以安裝時多一個 raw.githubusercontent.com 的網路相依。
+- 從 v1.3.0 起，支援 Deep Research app widget 裡的完整最終報告。
+- 從 v1.3.1 起，修正多次研究共用 `plan_id` 時只剩最後一份報告的問題。
+- 從 v1.5.0 起，支援 Intelligent UI 回覆、修正 code block widget 被刪掉的問題，並新增含圖片的 ZIP 匯出
+  （ZIP writer 是 [`shared/zip-store.js`](../../shared/zip-store.js)，只做不壓縮的 STORE）。
+
+## 分支保存
+
+**Download .json** 仍保存原始回應：`mapping`、節點 `parent`／`children` 與 `current_node`
+皆保留。瀏覽模式另提供 **儲存完整對話＋選取**，產生 `.chat-archive.json`，
+包含完整已取得的樹、可讀 Markdown、原始回應及選取狀態；未勾選內容也在完整存檔中。
+重新匯入會還原勾選，包含刻意清空的選取。
+19:| Download .zip (含圖片) | 同 transcript，加上 `images/` 裡你上傳的圖片；Markdown 改用相對路徑 |
+83:  `entity` → 純文字、`image_group` → 指向原頁面的網路圖片連結。版面（卡片、顏色、按鈕）不保留；
+109:- 圖片：**Download .zip** 會用 `/backend-api/files/download/<file id>` 換 signed URL 再下載你上傳的圖片；
+110:  下載失敗的圖片在 Markdown 裡保留原本的 `sediment://…` pointer，狀態列會顯示失敗張數。
+111:  其他匯出動作仍只輸出 `![image](<asset_pointer>)` 佔位。Intelligent UI 的網路圖片（`images.openai.com`）
+112:  只保留遠端連結、不打包；工具產生的圖片（生圖）目前沒有樣本可驗證，尚未處理。
+117:- 從 v1.5.0 起，支援 Intelligent UI 回覆、修正 code block widget 被刪掉的問題，並新增含圖片的 ZIP 匯出
+118:  （ZIP writer 是 [`shared/zip-store.js`](../../shared/zip-store.js)，只做不壓縮的 STORE）。
+160:檔案在本機處理；外部圖片顯示成連結，不自動載入。剪貼簿權限不足時提供手動複製與下載。
+175:ZIP 由獨立的讀取器核對 central directory、UTF-8 檔名旗標與 CRC；瀏覽器測試會 mock 圖片下載端點，
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:44:24Z)**_
+
+Updating the README, VALIDATION, pitfall, and skill notes for 1.5.1.
+
+_**Agent (claude-opus-5-5 2026-10-12 12:45:00Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Write docs, pitfall, skill note; format and verify
+
+````bash
+python3 - <<'EOF'
+def edit(p, old, new):
+    s=open(p,encoding='utf-8').read(); assert old in s, (p, old[:50]); open(p,'w',encoding='utf-8').write(s.replace(old,new,1))
+
+R='userscripts/chatgpt-export-markdown/README.md'
+edit(R, """- 圖片：**Download .zip** 會用 `/backend-api/files/download/<file id>` 換 signed URL 再下載你上傳的圖片；
+""", """- 圖片：**Download .zip** 會用 `/backend-api/files/download/<file id>` 換 signed URL 再下載你上傳的圖片
+  （分享頁帶 `shared_conversation_id`，不需要登入；signed URL 在 `*.oaiusercontent.com`，以不帶 cookie 的 `fetch` 讀取）；
+""")
+edit(R, """  （ZIP writer 是 [`shared/zip-store.js`](../../shared/zip-store.js)，只做不壓縮的 STORE）。
+""", """  （ZIP writer 是 [`shared/zip-store.js`](../../shared/zip-store.js)，只做不壓縮的 STORE）。
+- 從 v1.5.1 起，修正 ZIP 在分享頁與跨域 signed URL 上抓不到圖片的問題；`shared/zip-store.js`
+  沒載入時顯示更新提示，而不是 `ZipStore is not defined`。
+""")
+
+V='userscripts/chatgpt-export-markdown/VALIDATION.md'
+edit(V, "# v1.5.0 validation — 2026-10-12\n", """# v1.5.1 validation — 2026-10-12
+
+## Fixes
+
+| Symptom (v1.5.0) | Cause | Fix |
+| --- | --- | --- |
+| 失敗：ZipStore is not defined | The manager ran the script without the new `@require` (`shared/zip-store.js`); its first fetch happened before the file was reachable on GitHub | Version bump makes the manager fetch every `@require` again; the ZIP action now reports the missing dependency instead of throwing |
+| Share page: 0/2 images, `files/download HTTP 403` | Share pointers are `sediment://file_…?shared_conversation_id=…`; the query became part of the file id (`{"error": "Invalid URL"}`) | `imageAssets` splits the pointer into `fileId` + `params`; `fetchAsset` forwards the params |
+| Signed URL fetch: `Failed to fetch` | `download_url` is on `*.oaiusercontent.com` with `Access-Control-Allow-Origin: *`; `credentials: 'include'` is rejected by CORS | Cross-origin signed URLs are fetched with `credentials: 'omit'` |
+
+## Checks
+
+| Layer | Result | Coverage |
+| --- | --- | --- |
+| `npm run test:chatgpt-export` | 30 passed | Adds a share pointer and a cross-origin `ACAO: *` signed URL to the ZIP action test; reverting the `credentials` fix fails it in Chromium and Firefox |
+| `npm run test:chat-explorer` | 33 passed | Unchanged |
+| Real share page (`npm run preview`, Chromium, no login) | Passed | `已下載 ZIP（2/2 張圖片；來源：router-state）` on a public share of the Intelligent UI conversation |
+
+Still not verified: logged-in `/c/` pages in a real manager (the `conversation_id` path), and image-generation output.
+
+""")
+EOF
+cat > pitfalls/userscript-new-require-is-not-defined.md <<'EOF'
+# 新增 `@require` 後，腳本執行時報 `XXX is not defined`
+
+## 症狀
+
+chatgpt-export-markdown v1.5.0 的 **Download .zip** 顯示：
+
+```text
+失敗：ZipStore is not defined
+```
+
+同一版的其他功能正常，包括同一個 commit 一起改的 `shared/chatgpt-adapter.js`。
+
+## 原因
+
+只有新的 `@require` URL（`shared/zip-store.js`）缺失。manager 在檔案能從
+raw.githubusercontent.com 取得之前（例如尚未 push、或 push 前就安裝／匯入）抓過它，
+得到 404，之後就不帶這個依賴執行腳本。已存在的 `@require` URL 不受影響，所以只有新的全域變數不存在。
+版本號不變時，manager 不會重抓。
+
+## 解法
+
+- 使用者：在 manager 對該腳本「檢查更新」或重新安裝／重新匯入。
+- 發布：再加一次 `@version`，讓已安裝的 manager 重新下載所有 `@require`。
+- 腳本：在入口檢查 `typeof XXX === 'undefined'`，顯示可操作的提示。
+
+## 預防
+
+- 新增 `shared/*.js` 時，先 push，再到 manager 安裝或執行 `just vm-pack` 匯入。
+- `npm run preview` 和測試都讀工作區檔案，抓不到這個問題；`npm run check` 只確認檔案存在於本機。
+- 相關：iOS Userscripts 對相同 URL 的快取問題見 [docs/14](../docs/14-ios-userscripts.md#shared-更新是另一個獨立風險)。
+EOF
+python3 - <<'EOF'
+p='pitfalls/README.md'; s=open(p,encoding='utf-8').read()
+s=s.rstrip('\n')+"\n| 新增 `@require` 後 `ZipStore is not defined` 之類的全域變數不存在 | [userscript-new-require-is-not-defined.md](userscript-new-require-is-not-defined.md) |\n"
+open(p,'w',encoding='utf-8').write(s)
+p='.agents/skills/userscript-development/references/content-extraction.md'; s=open(p,encoding='utf-8').read()
+old="- Detect binary data with"
+new="""- A signed URL on another host (CDN/blob storage) usually answers
+  `Access-Control-Allow-Origin: *`, which rejects `credentials: 'include'`. Send
+  cookies only to same-origin URLs; a fixture should return `ACAO: *` so the
+  browser enforces this. Treat query strings on asset pointers as API
+  parameters, not as part of the file id.
+- Detect binary data with"""
+assert old in s; open(p,'w',encoding='utf-8').write(s.replace(old,new,1))
+EOF
+npx prettier --write pitfalls userscripts/chatgpt-export-markdown/*.md .agents/skills/userscript-development/references/content-extraction.md >/dev/null && npx prettier --check pitfalls userscripts/chatgpt-export-markdown shared tests/chatgpt-export-markdown.test.mjs .agents/skills/userscript-development 2>&1 | tail -2; npm run verify 2>&1 | tail -1; git status --short
+````
+
+```text
+[warn] .agents/skills/userscript-development/SKILL.md
+[warn] Code style issues found in 9 files. Run Prettier with --write to fix.
+README.md script index is up to date.
+ M .agents/skills/userscript-development/references/content-extraction.md
+ M .specstory/history/2026-10-12_04-47-00Z-at-specstory-references-chatgpt.md
+ M .specstory/statistics.json
+ M README.md
+ M pitfalls/README.md
+ M shared/chatgpt-adapter.js
+ M tests/chatgpt-export-markdown.test.mjs
+ M userscripts/chatgpt-export-markdown/README.md
+ M userscripts/chatgpt-export-markdown/VALIDATION.md
+ M userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+?? ".specstory/references/chatgpt-ChatGPT\344\273\213\351\235\242\345\216\237\347\220\206\350\247\243\346\236\220-20261012-2034.md"
+?? pitfalls/userscript-new-require-is-not-defined.md
+[This command modified 1 file you've previously read: .agents/skills/userscript-development/references/content-extraction.md. Call Read before editing.]
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:45:14Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Check formatting of changed files vs baseline
+
+`npx prettier --check $(git diff --name-only | command grep -v specstory) pitfalls/userscript-new-require-is-not-defined.md 2>&1 | tail -4; git stash -q && npx prettier --check shared tests/chatgpt-export-markdown.test.mjs .agents/skills/userscript-development 2>&1 | tail -1; git stash pop -q && git status --short | wc -l`
+
+```text
+Checking formatting...
+[warn] userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+[warn] Code style issues found in the above file. Run Prettier with --write to fix.
+[warn] Code style issues found in 8 files. Run Prettier with --write to fix.
+      12
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:45:18Z)**_
+
+The other 8 Prettier warnings were already there before this change. Formatting the one file I touched.
+
+_**Agent (claude-opus-5-5 2026-10-12 12:45:49Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Format script, check metadata, rerun tests
+
+`npx prettier --write userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js >/dev/null && git diff --stat && npm run check 2>&1 | tail -1 && (npm run test:chatgpt-export 2>&1 | command grep -E "^ℹ (pass|fail)")`
+
+```text
+ .../references/content-extraction.md               |    5 +
+ ...12_04-47-00Z-at-specstory-references-chatgpt.md | 1581 ++++++++++++++++++++
+ .specstory/statistics.json                         |   10 +-
+ README.md                                          |    2 +-
+ pitfalls/README.md                                 |    1 +
+ shared/chatgpt-adapter.js                          |    4 +-
+ tests/chatgpt-export-markdown.test.mjs             |   50 +-
+ userscripts/chatgpt-export-markdown/README.md      |    5 +-
+ userscripts/chatgpt-export-markdown/VALIDATION.md  |   20 +-
+ .../chatgpt-export-markdown.user.js                |   22 +-
+ 10 files changed, 1678 insertions(+), 22 deletions(-)
+Checked 15 userscript(s): 0 error(s), 5 warning(s).
+ℹ pass 30
+ℹ fail 0
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:46:02Z)**_
+
+I've fixed the ZIP export and it's now at 1.5.1. On your share link it downloads both images: `已下載 ZIP（2/2 張圖片…）`. It isn't committed or pushed yet.
+
+**`ZipStore is not defined`:** your manager ran the script without `shared/zip-store.js`. The Markdown export proves the other shared files loaded new code, so only this new `@require` file was missing. My best guess is the manager tried to fetch it before it was on GitHub, got a 404, and kept running without it. I can't see your manager, so that part is unconfirmed. The file is on GitHub now, and the version bump makes the manager download every `@require` again. If it's still missing, Download .zip now shows a "please update or reinstall" message instead of crashing.
+
+**Two more bugs turned up once `ZipStore` loaded.** I ran the ZIP export on your link and got `0/2` images:
+1. **The image IDs were wrong.** On share pages the image pointer is `sediment://file_…?shared_conversation_id=…`, and the script treated the `?…` part as part of the file ID. The server answered `{"error": "Invalid URL"}`. The script now splits it off and sends it as a normal URL parameter.
+2. **The browser blocked the image download.** The temporary download link the server returns is on a different site (`*.oaiusercontent.com`). The script was sending your cookies with it, and that server refuses requests that do. The script now sends cookies only to `chatgpt.com`.
+
+**Your attached `.md` export looks right:** the code blocks are back and no `<box>`/`<Cite>` tags leak through. The images still show as `sediment://…` links. That's expected, because only Download .zip saves the image files.
+
+**Checks:** `test:chatgpt-export` (30) and `test:chat-explorer` (33) pass, and `verify` is OK. I added a test with a share-page image and the other-site download link. Putting the old cookie behaviour back makes it fail in both Chromium and Firefox. Two things are still untested: a logged-in `/c/…` conversation inside a real Tampermonkey or Violentmonkey (my run used the test setup and wasn't logged in), and images that ChatGPT generates.
+
+**Docs:** I updated the script README and `VALIDATION.md`, and added a pitfall note (`pitfalls/userscript-new-require-is-not-defined.md`). Its main rule: push a new `shared/` file before installing the script or running `just vm-pack`.
+
+Should I commit and push? Once it's pushed, check for updates in your manager to get 1.5.1, and it will download `zip-store.js` again.
+
+---
+
+_**User (2026-10-12 12:46:31Z)**_
+
+git commit
+
+---
+
+_**Agent (claude-opus-5-5 2026-10-12 12:46:45Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Stage all changes and commit the fix
+
+```bash
+git add -A && git status --short && git commit -q -F - <<'EOF'
+fix(chatgpt-export-markdown): download share-page images in ZIP export
+
+- Split `?shared_conversation_id=…` off share-page asset pointers and
+  forward it to `files/download` instead of treating it as the file id
+- Fetch cross-origin signed URLs (`*.oaiusercontent.com`, ACAO `*`)
+  without credentials so CORS accepts them
+- Report a missing `shared/zip-store.js` instead of throwing
+  `ZipStore is not defined`; bump to 1.5.1 so managers refetch @require
+- Cover share pointers and the CORS case in the ZIP action test; record
+  the stale-@require pitfall and v1.5.1 validation
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+EOF
+git log --oneline -1 && git status -sb | head -1
+```
+
+```text
+M  .agents/skills/userscript-development/references/content-extraction.md
+M  .specstory/history/2026-10-12_04-47-00Z-at-specstory-references-chatgpt.md
+A  ".specstory/references/chatgpt-ChatGPT\344\273\213\351\235\242\345\216\237\347\220\206\350\247\243\346\236\220-20261012-2034.md"
+M  .specstory/statistics.json
+M  README.md
+M  pitfalls/README.md
+A  pitfalls/userscript-new-require-is-not-defined.md
+M  shared/chatgpt-adapter.js
+M  tests/chatgpt-export-markdown.test.mjs
+M  userscripts/chatgpt-export-markdown/README.md
+M  userscripts/chatgpt-export-markdown/VALIDATION.md
+M  userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
+6155414 fix(chatgpt-export-markdown): download share-page images in ZIP export
+## main...origin/main [ahead 1]
+```
+</details></tool-use>
+
+_**Agent (claude-opus-5-5 2026-10-12 12:46:50Z)**_
+
+I committed the fix on `main` as `6155414 fix(chatgpt-export-markdown): download share-page images in ZIP export`. It's one commit ahead of `origin/main` and not pushed yet.
+
+The commit includes the script and tests, plus the docs and pitfall note. It also adds your `-2034.md` export to `.specstory/references/` and the updated specstory history, as with the previous commit.
+
+You'll only get 1.5.1 after it's pushed and you check for updates in your manager. That update will also download `zip-store.js` again. Want me to push?
