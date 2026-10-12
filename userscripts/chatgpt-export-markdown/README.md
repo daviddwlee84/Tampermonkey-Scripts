@@ -9,13 +9,14 @@
 
 ## 它做了什麼
 
-右下角一顆 **⇩ Export MD**，保留四個快速匯出動作：
+右下角一顆 **⇩ Export MD**，提供五個快速匯出動作：
 
 | 動作 | 輸出 |
 | --- | --- |
 | Copy Markdown | 完整 transcript（YAML frontmatter + `_**User**_` / `_**Assistant**_`）進剪貼簿 |
 | Copy Agent Handoff | 同上，但前面多一段給 agent 的指示（把已定案的決策當既有前提、不要重開已解決的問題） |
 | Download .md | 同 transcript，存成 `chatgpt-<標題>-<時間>.md` |
+| Download .zip (含圖片) | 同 transcript，加上 `images/` 裡你上傳的圖片；Markdown 改用相對路徑 |
 | Download .json | 原始對話 JSON，之後要重新 render / 建索引用 |
 
 另有 **瀏覽／選取…**，開啟獨立的對話樹瀏覽模式。一般快速匯出始終使用目前網頁的
@@ -74,6 +75,15 @@ code fence、表格、citation 都可能失真。
   `metadata.content_references` 換成現成的 markdown 連結，例如 `([GitHub](https://…))`。
   換的時候是**按 index 換那一段**而不是全文 `replace`——因為 `sources_footnote` 型的
   `matched_text` 是「一個半形空白」，全文替換會把整篇的空白刪光。
+- **Intelligent UI（GPT-6 的卡片、雙欄、圖示等）**：這類回覆的 `content.parts[0]` 是給
+  ChatGPT renderer 吃的 DIL 標記（`<box>`、`<row>`、`<Cite/>`、`<AsyncImage/>`…），直接匯出會整段漏出來。
+  腳本改用同一則訊息的 `metadata.model_dil_v2.fallbackMarkdown`——OpenAI 自己降級好的 Markdown，
+  表格與 code fence 都在。裡面剩下的私有區 sentinel 會再轉換：
+  `url` → `[標題](網址)`、`cite` → `([來源](網址))`（從 Cite 元件結果或 `search_result_groups` 對 ref ID）、
+  `entity` → 純文字、`image_group` → 指向原頁面的網路圖片連結。版面（卡片、顏色、按鈕）不保留；
+  **Download .json** 仍保存完整 DIL（`code`／`constants`／`appData`），之後要自己 render 可以從那裡拿。
+- **code block widget**：`content_references` 裡 `type: "client_defined_widget"` 的項目
+  `matched_text` 是整段 code fence、`alt` 是 null，照一般 citation 換掉等於把 code 刪光；這類項目保留原文。
 - **合併同 role 的連續訊息**：一輪 assistant 常被拆成「開場白 → 搜尋 → 正文」好幾則。
 - **只匯出目前選中的那條 branch**，編輯／重生過的分支不會混進來。
 - **Deep Research**：最終報告其實藏在工具訊息的
@@ -96,11 +106,16 @@ code fence、表格、citation 都可能失真。
   Violentmonkey 安裝驗證，尚未使用真實登入 session 測試。
 - 尚未完成的 Deep Research 還沒有 `report_message`；預設不會替它虛構回答。開啟
   **含 Deep Research 計畫／狀態**時，仍可匯出目前的 plan 與執行狀態。
-- 圖片只輸出 `![image](<asset_pointer>)` 佔位，不會下載檔案。
+- 圖片：**Download .zip** 會用 `/backend-api/files/download/<file id>` 換 signed URL 再下載你上傳的圖片；
+  下載失敗的圖片在 Markdown 裡保留原本的 `sediment://…` pointer，狀態列會顯示失敗張數。
+  其他匯出動作仍只輸出 `![image](<asset_pointer>)` 佔位。Intelligent UI 的網路圖片（`images.openai.com`）
+  只保留遠端連結、不打包；工具產生的圖片（生圖）目前沒有樣本可驗證，尚未處理。
 - 從 v1.2.0 起，render 與浮動 UI 搬到 [`shared/`](../../shared/) 用 `@require` 引入
   （跟 claude / copilot 兩支共用），所以安裝時多一個 raw.githubusercontent.com 的網路相依。
 - 從 v1.3.0 起，支援 Deep Research app widget 裡的完整最終報告。
 - 從 v1.3.1 起，修正多次研究共用 `plan_id` 時只剩最後一份報告的問題。
+- 從 v1.5.0 起，支援 Intelligent UI 回覆、修正 code block widget 被刪掉的問題，並新增含圖片的 ZIP 匯出
+  （ZIP writer 是 [`shared/zip-store.js`](../../shared/zip-store.js)，只做不壓縮的 STORE）。
 
 ## 分支保存
 
@@ -155,8 +170,11 @@ npm run test:chat-explorer
 ```
 
 測試直接執行實際 userscript 與共用 renderer，涵蓋共用 plan 的多份報告、重複快照、
-缺少 ID、研究狀態、分支篩選，以及 widget 損壞時的 JSON 保存。
-Chromium／Firefox fixture 另外檢查 router state 與 network capture 來源的四個匯出動作，
+缺少 ID、研究狀態、分支篩選、widget 損壞時的 JSON 保存，以及 Intelligent UI 的 fallback、
+sentinel 轉換與 code block widget（`tests/fixtures/chatgpt-export/intelligent-ui.json`）。
+ZIP 由獨立的讀取器核對 central directory、UTF-8 檔名旗標與 CRC；瀏覽器測試會 mock 圖片下載端點，
+包括單張失敗時保留原 pointer。
+Chromium／Firefox fixture 另外檢查 router state 與 network capture 來源的匯出動作，
 讀回下載檔案核對內容。GM shim 測試不代表真實 manager sandbox 或系統剪貼簿已通過驗證。
 新模式另測試模式隔離、樹狀存檔往返、多 path 與範圍選取、離線零外部請求、窄螢幕、
 鍵盤及 5,000 節點的按需渲染。實際驗證範圍見 [VALIDATION.md](./VALIDATION.md)。

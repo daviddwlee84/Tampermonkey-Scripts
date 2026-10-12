@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      1.4.0
+// @version      1.5.0
 // @description  把 ChatGPT 對話匯成 Markdown，另提供樹狀選取、Agent Handoff 與可攜 JSON 存檔
 // @author       Da-Wei Lee
 // @license      MIT
@@ -20,11 +20,12 @@
 // @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/vendor/marked-18.0.13.umd.js
 // @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/vendor/dompurify-3.4.15.min.js
 // @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/conversation-explorer.js
+// @require      https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/shared/zip-store.js
 // @updateURL    https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
 // @downloadURL  https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js
 // ==/UserScript==
 
-/* global createExportPanel, downloadText, filenameFor, renderTranscript, ChatGPTAdapter, ConversationArchive, createConversationExplorer */
+/* global createExportPanel, downloadBlob, downloadText, filenameFor, ZipStore, renderTranscript, ChatGPTAdapter, ConversationArchive, createConversationExplorer */
 
 /**
  * 把一整段 ChatGPT 對話匯成 Markdown，格式仿 SpecStory 的 chat history
@@ -45,7 +46,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.4.0';
+  const VERSION = '1.5.0';
   const NS = 'cgpt-export-md';
   const EXPORTER = `chatgpt-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[chatgpt-export-markdown]';
@@ -169,17 +170,21 @@
 
   // ------------------------------------------------------- 來源 3：backend API
 
-  async function fromBackendApi(convId, shareId, { signal } = {}) {
-    let authorization = null;
+  async function authorizationHeader({ signal } = {}) {
     try {
       const session = await fetch('/api/auth/session', { credentials: 'include', signal });
       if (session.ok) {
         const json = await session.json();
-        if (json?.accessToken) authorization = `Bearer ${json.accessToken}`;
+        if (json?.accessToken) return `Bearer ${json.accessToken}`;
       }
     } catch {
       /* 未登入或被擋，往下試沒有 token 的請求 */
     }
+    return null;
+  }
+
+  async function fromBackendApi(convId, shareId, { signal } = {}) {
+    const authorization = await authorizationHeader({ signal });
 
     const paths = [];
     if (convId) paths.push(`/backend-api/conversation/${convId}`);
@@ -335,6 +340,101 @@
     }
   }
 
+  // ------------------------------------------------------------ 圖片（ZIP）
+
+  const EXTENSIONS = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'image/svg+xml': 'svg',
+  };
+
+  /** 檔名只留字母、數字與 `._-`：括號、空白會讓 Markdown 的圖片連結斷掉。 */
+  function imagePath(asset, index, mime) {
+    const ext = EXTENSIONS[mime] || EXTENSIONS[asset.mime] || 'bin';
+    const base = (asset.name || asset.fileId)
+      .replace(/\.[a-z0-9]+$/i, '')
+      .replace(/[^\p{L}\p{N}._-]+/gu, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60);
+    return `images/${String(index + 1).padStart(2, '0')}-${base || 'image'}.${ext}`;
+  }
+
+  /**
+   * `sediment://file_…` → 位元組。先跟 backend 換 signed `download_url`，再抓檔案本體；
+   * 任何一步失敗都回 null，讓 Markdown 保留原本的 pointer，而不是整包匯出失敗。
+   */
+  async function fetchAsset(asset, { convId, authorization }) {
+    const signal = AbortSignal.timeout(30_000);
+    try {
+      const headers = { accept: 'application/json' };
+      if (authorization) headers.authorization = authorization;
+      const query = new URLSearchParams({ inline: 'false' });
+      if (convId) query.set('conversation_id', convId);
+      const meta = await fetch(
+        `/backend-api/files/download/${encodeURIComponent(asset.fileId)}?${query}`,
+        { credentials: 'include', headers, signal }
+      );
+      if (!meta.ok) throw new Error(`files/download HTTP ${meta.status}`);
+      const { download_url: downloadUrl } = await meta.json();
+      if (!downloadUrl) throw new Error('files/download 沒有 download_url');
+      const file = await fetch(downloadUrl, { credentials: 'include', signal });
+      if (!file.ok) throw new Error(`download_url HTTP ${file.status}`);
+      const mime = (file.headers.get('content-type') || '').split(';')[0].trim();
+      // 200 也可能是登入頁或錯誤 JSON；不是圖片就別存成 .png
+      if (mime && !mime.startsWith('image/')) throw new Error(`download_url 回傳 ${mime}`);
+      return { bytes: new Uint8Array(await file.arrayBuffer()), mime };
+    } catch (error) {
+      log('image download failed:', asset.fileId, error.message);
+      return null;
+    }
+  }
+
+  async function doZipExport() {
+    ui.setStatus('讀取對話…');
+    try {
+      const target = currentIds();
+      const { data, source } = await resolveConversation(target);
+      const url = target.shareId ? `${location.origin}/share/${target.shareId}` : location.href;
+      const doc = ChatGPTAdapter.normalize(data, { url }, settings);
+      let text = renderTranscript(doc, { ...settings, exporter: EXPORTER });
+
+      const assets = ChatGPTAdapter.imageAssets(data, settings);
+      const authorization = assets.length ? await authorizationHeader() : null;
+      const convId = target.convId || data.conversation_id || null;
+      const files = [];
+      let failed = 0;
+      for (const [index, asset] of assets.entries()) {
+        ui.setStatus(`下載圖片 ${index + 1}/${assets.length}…`);
+        const file = await fetchAsset(asset, { convId, authorization });
+        if (!file) {
+          failed++;
+          continue;
+        }
+        const path = imagePath(asset, index, file.mime);
+        files.push({ name: path, data: file.bytes });
+        text = text.split(`](${asset.pointer})`).join(`](${path})`);
+      }
+
+      const filename = filenameFor(doc, 'md');
+      downloadBlob(
+        filenameFor(doc, 'zip'),
+        ZipStore.build([{ name: filename, data: text }, ...files])
+      );
+      const summary = `${files.length}/${assets.length} 張圖片`;
+      ui.setStatus(
+        failed
+          ? `已下載 ZIP（${summary}，${failed} 張失敗、保留原連結；來源：${source}）`
+          : `已下載 ZIP（${summary}；來源：${source}）`
+      );
+      log('exported zip', { source, images: files.length, failed });
+    } catch (error) {
+      ui.setStatus(`失敗：${error.message}`);
+      log('zip export failed:', error);
+    }
+  }
+
   function exportFromShareUrl(raw) {
     const shareId = shareIdFromUrl(raw);
     if (!shareId) {
@@ -429,6 +529,7 @@
     { label: 'Copy Markdown', run: () => doExport({ mode: 'transcript', to: 'clipboard' }) },
     { label: 'Copy Agent Handoff', run: () => doExport({ mode: 'handoff', to: 'clipboard' }) },
     { label: 'Download .md', run: () => doExport({ mode: 'transcript', to: 'file' }) },
+    { label: 'Download .zip (含圖片)', run: () => doZipExport() },
     { label: 'Download .json', run: () => doExport({ mode: 'json', to: 'file' }) },
     { label: '瀏覽／選取…', run: () => openExplorer() },
   ];

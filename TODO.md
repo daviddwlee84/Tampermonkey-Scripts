@@ -10,6 +10,9 @@ Tampermonkey Scripts 的長期待辦索引；維護方式見 [CLAUDE.md](CLAUDE.
 
 ## P2
 
+- [ ] **[L] ChatGPT Export Intelligent UI HTML 快照** — 選擇性匯出網頁版已渲染的卡片／雙欄等版面為自包含 HTML；v1.5.0 只用 fallbackMarkdown，完整 DIL 保存在 .json。需處理 virtualized 列表與 inline CSS。
+- [ ] **[S] ChatGPT Export 生圖輸出圖片打包** — 把工具產生的圖片（tool message 的 image_asset_pointer）納入預設 transcript 與 ZIP；需要含生圖的原始 JSON 樣本驗證。
+
 ## P3
 
 - [ ] **[M] Vimium C Companion 常駐完整雙欄小抄** — 讓使用者可切換為常駐完整總表；v0.1 保留分類小抄與可展開的完整查詢。

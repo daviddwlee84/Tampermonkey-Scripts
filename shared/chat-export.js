@@ -196,12 +196,17 @@ function filenameFor(doc, extension) {
   return `${doc.source}-${slug}-${stamp}.${extension}`;
 }
 
-/** 不需要任何 @grant 的檔案下載（同 shared/dom.js 的 downloadText）。 */
-function downloadText(filename, text, mime = 'text/markdown;charset=utf-8') {
-  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+/** 不需要任何 @grant 的檔案下載。 */
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** 同 shared/dom.js 的 downloadText。 */
+function downloadText(filename, text, mime = 'text/markdown;charset=utf-8') {
+  downloadBlob(filename, new Blob([text], { type: mime }));
 }

@@ -2,18 +2,71 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, readFile } from 'node:fs/promises';
 import vm from 'node:vm';
+import { crc32 } from 'node:zlib';
 import { chromium, firefox } from 'playwright';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
-const [SCRIPT, SHARED, UI, FIXTURE, ADAPTER] = await Promise.all([
+const [SCRIPT, SHARED, UI, FIXTURE, ADAPTER, ZIP, IUI_FIXTURE] = await Promise.all([
   read('userscripts/chatgpt-export-markdown/chatgpt-export-markdown.user.js'),
   read('shared/chat-export.js'),
   read('shared/export-ui.js'),
   read('tests/fixtures/chatgpt-export/multiple-research.json'),
   read('shared/chatgpt-adapter.js'),
+  read('shared/zip-store.js'),
+  read('tests/fixtures/chatgpt-export/intelligent-ui.json'),
 ]);
 const OUT = new URL('../.preview/chatgpt-export-tests/', import.meta.url);
 const clone = (value) => JSON.parse(JSON.stringify(value));
+const intelligentUi = () => JSON.parse(IUI_FIXTURE);
+const IMAGE_POINTER = 'sediment://file_00000000cb9c82099aa48ba2cc79a330';
+const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3];
+
+/** 獨立於 ZipStore 的讀取器：走 central directory、核對 local header 與 CRC。 */
+function readZip(bytes) {
+  const buf = Buffer.from(bytes);
+  const end = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  assert.ok(end >= 0, 'missing end of central directory');
+  const count = buf.readUInt16LE(end + 10);
+  let at = buf.readUInt32LE(end + 16);
+  const files = new Map();
+  for (let i = 0; i < count; i++) {
+    assert.equal(buf.readUInt32LE(at), 0x02014b50);
+    assert.equal(buf.readUInt16LE(at + 8) & 0x0800, 0x0800, 'UTF-8 filename flag');
+    assert.equal(buf.readUInt16LE(at + 10), 0, 'STORE');
+    const crc = buf.readUInt32LE(at + 16);
+    const size = buf.readUInt32LE(at + 24);
+    const nameLength = buf.readUInt16LE(at + 28);
+    const offset = buf.readUInt32LE(at + 42);
+    const name = buf.subarray(at + 46, at + 46 + nameLength).toString('utf8');
+    assert.equal(buf.readUInt32LE(offset), 0x04034b50);
+    const start = offset + 30 + buf.readUInt16LE(offset + 26) + buf.readUInt16LE(offset + 28);
+    const data = buf.subarray(start, start + size);
+    assert.equal(crc32(data), crc, `CRC of ${name}`);
+    files.set(name, data);
+    at += 46 + nameLength + buf.readUInt16LE(at + 30) + buf.readUInt16LE(at + 32);
+  }
+  return files;
+}
+
+function assertIntelligentUi(markdown) {
+  // 原本被 client_defined_widget 的空 alt 刪掉的 code block
+  assert.ok(markdown.includes('```bash\nnpx skills add thesysdev/skills --skill openui\n```'));
+  assert.ok(markdown.includes('```python\nprint("widget kept")\n```'));
+  assert.ok(markdown.includes('**[Thesys OpenUI](https://github.com/thesysdev/openui)**'));
+  // 多 ref 的 cite：一個由 Cite 元件結果解出，一個只在 search_result_groups 裡；解不出的丟掉
+  assert.ok(
+    markdown.includes(
+      '開源的 Generative UI Framework。 ([GitHub](https://github.com/thesysdev/openui)) ' +
+        '([github.com](https://github.com/vercel-labs/json-render/blob/main/README.md))'
+    )
+  );
+  assert.ok(markdown.includes('以 json-render 為例'));
+  assert.match(
+    markdown,
+    /\[!\[[^\]]+\]\(https:\/\/images\.openai\.com\/[^)]+\)\]\(https:\/\/ottermind\.ai\//
+  );
+  assert.doesNotMatch(markdown, /<(box|row|Cite|Link|AsyncImage|Entity|caption)\b|[\uE000-\uF8FF]/);
+}
 
 function fixture(linear = true) {
   const data = JSON.parse(FIXTURE);
@@ -56,6 +109,8 @@ function harness(data, settings = {}) {
   let panel;
   const context = vm.createContext({
     console: { log() {} },
+    TextEncoder,
+    Blob,
     location: {
       origin: 'https://chatgpt.com',
       pathname: '/share/fixture',
@@ -77,8 +132,9 @@ function harness(data, settings = {}) {
     },
   });
   context.window = context;
-  vm.runInContext(SHARED + '\n' + ADAPTER, context);
+  vm.runInContext(SHARED + '\n' + ADAPTER + '\n' + ZIP, context);
   context.downloadText = (filename, text, mime) => result.downloads.push({ filename, text, mime });
+  context.downloadBlob = (filename, blob) => result.downloads.push({ filename, blob });
   vm.runInContext(SCRIPT, context);
   result.run = async (label = 'Copy Markdown') => {
     await panel.actions.find((action) => action.label === label).run();
@@ -217,6 +273,61 @@ describe('ChatGPT export transformations', () => {
     }
   }
 
+  it('exports Intelligent UI replies from fallbackMarkdown with resolved sentinels', async () => {
+    const data = intelligentUi();
+    const before = JSON.stringify(data);
+    const markdown = await harness(data).run();
+    assertIntelligentUi(markdown);
+    assert.ok(markdown.includes(`![image](${IMAGE_POINTER})`));
+    assert.equal(JSON.stringify(data), before, 'export must not mutate the source graph');
+  });
+
+  it('falls back to content_references when fallbackMarkdown is empty', async () => {
+    const data = intelligentUi();
+    data.mapping['assistant-dil'].message.metadata.model_dil_v2.fallbackMarkdown = '';
+    const markdown = await harness(data).run();
+    // 沒有 fallback 只能拿 parts[0]：JSX 會留著，但 code 不能再被吃掉
+    assert.ok(markdown.includes('```bash\nnpx skills add thesysdev/skills --skill openui\n```'));
+  });
+
+  it('lists each image asset once with attachment name and MIME type', () => {
+    const context = vm.createContext({});
+    vm.runInContext(SHARED + '\n' + ADAPTER + '\nglobalThis.A = ChatGPTAdapter;', context);
+    const data = intelligentUi();
+    const user = data.mapping['user-1'].message;
+    user.content.parts.push(clone(user.content.parts[0]));
+    assert.deepEqual(JSON.parse(JSON.stringify(context.A.imageAssets(data, {}))), [
+      {
+        pointer: IMAGE_POINTER,
+        fileId: 'file_00000000cb9c82099aa48ba2cc79a330',
+        name: 'image(20261012-020309).png',
+        mime: 'image/png',
+      },
+    ]);
+  });
+
+  it('builds STORE zips that an independent reader and CRC check accept', () => {
+    const context = vm.createContext({ TextEncoder, Blob });
+    vm.runInContext(ZIP + '\nglobalThis.Z = ZipStore;', context);
+    const files = readZip(
+      context.Z.bytes([
+        { name: '對話.md', data: '# 你好\n' },
+        { name: 'images/01-a.png', data: new Uint8Array(PNG) },
+      ])
+    );
+    assert.deepEqual([...files.keys()], ['對話.md', 'images/01-a.png']);
+    assert.equal(files.get('對話.md').toString('utf8'), '# 你好\n');
+    assert.deepEqual([...files.get('images/01-a.png')], PNG);
+    assert.throws(
+      () =>
+        context.Z.bytes([
+          { name: 'a', data: '' },
+          { name: 'a', data: '' },
+        ]),
+      /重複/
+    );
+  });
+
   for (const broken of ['malformed', 'completed-without-report']) {
     it(`keeps raw JSON and every branch downloadable when widget is ${broken}`, async () => {
       const data = fixture();
@@ -286,6 +397,32 @@ for (const [engineName, engine] of [
         if (url.pathname === '/backend-api/conversation/fixture-conversation') {
           return route.fulfill({ json: data });
         }
+        if (url.pathname === '/api/auth/session') {
+          return route.fulfill({ json: { accessToken: 'fixture-token' } });
+        }
+        const file = url.pathname.match(/^\/backend-api\/files\/download\/(.+)$/);
+        if (file) {
+          const auth = route.request().headers().authorization;
+          if (file[1] === 'file_missing') return route.fulfill({ status: 404, json: {} });
+          if (file[1] === 'file_login')
+            return route.fulfill({
+              json: { download_url: 'https://chatgpt.com/backend-api/estuary/login-page' },
+            });
+          return route.fulfill({
+            json: {
+              status: 'success',
+              download_url: `https://chatgpt.com/backend-api/estuary/content?id=${file[1]}&auth=${auth === 'Bearer fixture-token'}&cid=${url.searchParams.get('conversation_id')}`,
+            },
+          });
+        }
+        if (url.pathname === '/backend-api/estuary/login-page') {
+          return route.fulfill({ contentType: 'text/html', body: '<!doctype html>login' });
+        }
+        if (url.pathname === '/backend-api/estuary/content') {
+          if (url.searchParams.get('auth') !== 'true' || !url.searchParams.get('cid'))
+            return route.fulfill({ status: 403, body: '' });
+          return route.fulfill({ contentType: 'image/png', body: Buffer.from(PNG) });
+        }
         if (url.pathname === '/share/fixture' || url.pathname === '/c/fixture-conversation') {
           return route.fulfill({
             contentType: 'text/html',
@@ -296,7 +433,7 @@ for (const [engineName, engine] of [
         return route.abort();
       });
       await page.addInitScript({
-        content: `(${gmShim})(${JSON.stringify({ data, transport })});\n${SHARED}\n${UI}\n${ADAPTER}\n${SCRIPT}`,
+        content: `(${gmShim})(${JSON.stringify({ data, transport })});\n${SHARED}\n${UI}\n${ADAPTER}\n${ZIP}\n${SCRIPT}`,
       });
       await page.goto(
         `https://chatgpt.com/${transport === 'router' ? 'share/fixture' : 'c/fixture-conversation'}`
@@ -359,6 +496,42 @@ for (const [engineName, engine] of [
         }
       });
     }
+
+    it('downloads a zip with Markdown and images, keeping pointers for failed images', async () => {
+      const data = intelligentUi();
+      const user = data.mapping['user-1'].message;
+      for (const id of ['file_missing', 'file_login'])
+        user.content.parts.push({
+          content_type: 'image_asset_pointer',
+          asset_pointer: `sediment://${id}`,
+        });
+      const { page, errors } = await open(data, 'router');
+      try {
+        const downloaded = page.waitForEvent('download');
+        await page.getByRole('button', { name: 'Download .zip (含圖片)', exact: true }).click();
+        const download = await downloaded;
+        const path = new URL(`${engineName}-images.zip`, OUT);
+        await download.saveAs(path.pathname);
+        assert.match(download.suggestedFilename(), /^chatgpt-.+-\d{8}-\d{4}\.zip$/);
+        const files = readZip(await readFile(path));
+        const [mdName, ...images] = [...files.keys()];
+        assert.equal(mdName, download.suggestedFilename().replace(/\.zip$/, '.md'));
+        assert.deepEqual(images, ['images/01-image-20261012-020309.png']);
+        assert.deepEqual([...files.get(images[0])], PNG);
+        const markdown = files.get(mdName).toString('utf8');
+        assertIntelligentUi(markdown);
+        assert.ok(markdown.includes(`![image](${images[0]})`));
+        assert.ok(markdown.includes('![image](sediment://file_missing)'));
+        assert.ok(
+          markdown.includes('![image](sediment://file_login)'),
+          'HTML is not saved as an image'
+        );
+        await page.getByText(/^已下載 ZIP（1\/3 張圖片，2 張失敗/).waitFor();
+        assert.deepEqual(errors, []);
+      } finally {
+        await page.close();
+      }
+    });
 
     it('downloads unchanged raw JSON after a visible Markdown parsing failure', async () => {
       const data = fixture();

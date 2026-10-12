@@ -124,7 +124,7 @@ const ConversationArchive = (() => {
         role: A.roleOf(message),
         model: message.metadata?.model_slug || '',
         time: message.create_time ?? null,
-        markdown: A.applyCitations(A.textOf(message), message),
+        markdown: A.markdownOf(message),
         details: '',
         ...extra,
       };

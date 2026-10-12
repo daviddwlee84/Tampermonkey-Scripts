@@ -13,6 +13,7 @@ for (const path of [
   vm.runInContext(await read(path), context);
 const C = vm.runInContext('ConversationArchive', context);
 const fixture = JSON.parse(await read('tests/fixtures/chatgpt-export/multiple-research.json'));
+const INTELLIGENT_UI = await read('tests/fixtures/chatgpt-export/intelligent-ui.json');
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const create = (raw = fixture) =>
   C.fromChatGPT(raw, { url: 'https://chatgpt.com/c/fixture', type: 'fixture' });
@@ -39,6 +40,17 @@ describe('portable conversation archive', () => {
     assert.match(md, /\[Source\]\(https:\/\/example.com\/first-report\)/);
     assert.doesNotMatch(md, /UNSELECTED|此處省略/);
     assert.ok(md.indexOf('# First report') < md.indexOf('Follow-up question'));
+  });
+
+  it('stores Intelligent UI fallback Markdown instead of DIL JSX', () => {
+    const raw = JSON.parse(INTELLIGENT_UI);
+    const archive = create(raw);
+    const markdown = archive.graph.blocks[blockId(archive, 'assistant-dil')].markdown;
+    assert.ok(markdown.includes('```bash\nnpx skills add thesysdev/skills --skill openui\n```'));
+    assert.ok(markdown.includes('[Thesys OpenUI](https://github.com/thesysdev/openui)'));
+    assert.doesNotMatch(markdown, /<(box|row|Cite|AsyncImage)\b|[\uE000-\uF8FF]/);
+    assert.deepEqual(clone(archive.raw), raw, 'raw keeps the DIL payload for later re-rendering');
+    assert.match(render(archive), /print\("widget kept"\)/);
   });
 
   it('round-trips the graph, content, selection and options without re-parsing raw', () => {

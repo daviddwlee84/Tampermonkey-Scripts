@@ -47,6 +47,19 @@ assert the source page's HTML/scroll/overflow survive opening and closing a read
   failed links remote and report incomplete offline coverage.
 - Register Playwright's download listener before clicking. Inspect saved bytes,
   archive members and rewritten links in addition to observing an event.
+- Detect binary data with `ArrayBuffer.isView` / `Object.prototype.toString`,
+  not `instanceof Uint8Array`: buffers from page `fetch` can come from another
+  realm (manager sandbox, iframe, `vm` test context).
+- A hand-written ZIP with UTF-8 names needs general-purpose bit 11 and a
+  Unix "version made by" host. With an MS-DOS host, Info-ZIP ignores the flag
+  and decodes names as an OEM code page. Check with an independent reader:
+  parse the central directory and verify the CRCs.
+
+When an exporter replaces placeholders from site metadata (citation refs,
+widgets), check that each replacement is readable text. A new ref type with a
+`null`/empty `alt` can cover a whole code block. Keep the original text for
+unknown or empty replacements, and look at the raw payload's new `metadata`
+keys before you change the renderer.
 
 Example evidence shape (adapt to the project):
 
@@ -56,7 +69,7 @@ Example evidence shape (adapt to the project):
   "complete": false,
   "saved": 3,
   "failed": 1,
-  "failures": [{"url": "https://example.com/image.png", "reason": "timeout"}]
+  "failures": [{ "url": "https://example.com/image.png", "reason": "timeout" }]
 }
 ```
 

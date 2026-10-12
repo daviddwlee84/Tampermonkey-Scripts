@@ -1,3 +1,21 @@
+# v1.5.0 validation — 2026-10-12
+
+## Automated checks
+
+| Layer                            | Result    | Coverage                                                                                                                                                                                                                |
+| -------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run test:chatgpt-export`    | 30 passed | Previous cases, plus Intelligent UI fallback and sentinels, code-block widgets, image asset listing, ZIP structure/CRC, and ZIP action with one failed image (Chromium 151 + Firefox 153 GM shim)                       |
+| `npm run test:chat-explorer`     | 33 passed | Previous cases, plus archive blocks built from `fallbackMarkdown` while `raw` keeps the DIL payload                                                                                                                     |
+| Full source payload              | Passed    | Rendering the unminimized 2026-10-12 conversation JSON restores all 5 code fences (`jsx`, `bash` ×2, `json`, `text`) that v1.4.0 dropped; 0 DIL tags outside code, 0 private-use characters, 22 resolved citation links |
+| ZIP readers                      | Passed    | `bsdtar`, `ditto -x -k`, Python `zipfile` and `unzip -t` accept a CJK-named archive. Info-ZIP's listing renders the UTF-8 name incorrectly, but extraction by name works                                                |
+| `npm run preview` on chatgpt.com | Passed    | Workspace `@require` (incl. `shared/zip-store.js`) loads and the new menu is registered; without a session it reports 「抓不到對話資料」 instead of throwing                                                            |
+
+## Not yet verified
+
+- `/backend-api/files/download/<id>` response shape and whether `download_url` is same-origin
+  were tested only against mocked endpoints. They need a logged-in session in a real manager.
+- Image-generation output (tool messages) has no sample payload.
+
 # v1.4.0 validation — 2026-09-14
 
 ## Automated checks

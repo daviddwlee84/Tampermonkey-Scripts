@@ -263,7 +263,11 @@ const ChatGPTAdapter = (() => {
    */
   function applyCitations(text, message) {
     const refs = (message.metadata?.content_references || []).filter(
-      (ref) => typeof ref.matched_text === 'string' && ref.matched_text.trim() !== ''
+      (ref) =>
+        typeof ref.matched_text === 'string' &&
+        ref.matched_text.trim() !== '' &&
+        // code_block 之類的 widget：matched_text 是整段 fence、alt 是 null，換掉等於刪掉 code。
+        ref.type !== 'client_defined_widget'
     );
     let out = text;
     // 由後往前換，前面那些 start_idx 才不會被前一次替換推掉。
@@ -283,6 +287,162 @@ const ChatGPTAdapter = (() => {
     }
     // 有些 sentinel（例如 inline url 型）不會出現在 content_references 裡，掃掉。
     return out.replace(CITATION_SENTINEL, '');
+  }
+
+  // ------------------------------------------------ Intelligent UI（DIL v2）
+
+  /**
+   * Intelligent UI 的回覆：`parts[0]` 是 DIL JSX（`<box>`、`<Cite/>`…），給 renderer 吃的；
+   * `metadata.model_dil_v2.fallbackMarkdown` 才是 OpenAI 自己降級好的 Markdown。
+   */
+  function dilOf(message) {
+    const dil = message.metadata?.model_dil_v2;
+    return dil && typeof dil === 'object' && typeof dil.fallbackMarkdown === 'string' ? dil : null;
+  }
+
+  const refIdOf = (ref) =>
+    ref && typeof ref === 'object'
+      ? `turn${ref.turn_index}${ref.ref_type}${ref.ref_index}`
+      : String(ref || '');
+
+  /** `turn906760view0` → { url, label }，來源是 Cite 元件的解析結果與 search_result_groups。 */
+  function dilSources(message, dil) {
+    const sources = new Map();
+    const add = (id, url, label) => {
+      if (id && url && !sources.has(id)) sources.set(id, { url, label: label || url });
+    };
+    const results = Object.values(dil.appData?.opGenui?.componentResults || {});
+    for (const result of results) {
+      for (const item of result?.state?.items || []) {
+        add(item.ref_id, item.url, item.source_label || item.title);
+        for (const ref of item.refs || []) add(refIdOf(ref), item.url, item.source_label);
+      }
+    }
+    for (const group of message.metadata?.search_result_groups || []) {
+      for (const entry of group.entries || []) {
+        add(refIdOf(entry.ref_id), entry.url, entry.attribution || group.domain || entry.title);
+      }
+    }
+    return sources;
+  }
+
+  /** AsyncImage 依出現順序排好，並附上 query；image_group sentinel 用 query 對、對不到就照順序。 */
+  function dilImages(dil) {
+    const results = dil.appData?.opGenui?.componentResults || {};
+    const constants = dil.constants || {};
+    const images = [];
+    const pattern =
+      /jsx\(AsyncImage,\{"query":("(?:[^"\\]|\\.)*")[^}]*?"__resolutionId":__dilConstants\["(\d+)"\]/g;
+    for (const match of String(dil.code || '').matchAll(pattern)) {
+      let query = '';
+      try {
+        query = JSON.parse(match[1]);
+      } catch {
+        /* query 只拿來配對，解不開就靠順序 */
+      }
+      const result = results[constants[match[2]]];
+      if (result?.componentName === 'AsyncImage') images.push({ query, result, used: false });
+    }
+    return images;
+  }
+
+  const escapeLinkText = (text) => String(text).replace(/([[\]])/g, '\\$1');
+
+  function imageMarkdown(result) {
+    return (result.state?.images || [])
+      .map((image) => {
+        const src = image.content_url || image.thumbnail_url;
+        if (!src) return '';
+        const img = `![${escapeLinkText(image.title || 'image')}](${src})`;
+        return image.url ? `[${img}](${image.url})` : img;
+      })
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  /** 解 fallbackMarkdown 裡的私有區 sentinel：url／cite／entity／image_group。 */
+  function resolveDilSentinels(text, message, dil) {
+    const sources = dilSources(message, dil);
+    const images = dilImages(dil);
+    const nextImage = (queries) => {
+      const wanted = new Set(queries);
+      const hit =
+        images.find((image) => !image.used && wanted.has(image.query)) ||
+        images.find((image) => !image.used);
+      if (!hit) return '';
+      hit.used = true;
+      return imageMarkdown(hit.result);
+    };
+
+    return text.replace(CITATION_SENTINEL, (sentinel, offset, whole) => {
+      const [kind, ...args] = sentinel.slice(1, -1).split('\uE202');
+      switch (kind) {
+        case 'url': {
+          const [title, url] = args;
+          return url ? `[${escapeLinkText(title || url)}](${url})` : title || '';
+        }
+        case 'cite': {
+          const links = args
+            .map((id) => sources.get(id))
+            .filter(Boolean)
+            .map((source) => `([${escapeLinkText(source.label)}](${source.url}))`);
+          if (!links.length) return '';
+          return /\s$/.test(whole.slice(0, offset)) ? links.join(' ') : ` ${links.join(' ')}`;
+        }
+        case 'entity': {
+          try {
+            const value = JSON.parse(args[0]);
+            return Array.isArray(value) ? String(value[1] ?? '') : String(args[0] || '');
+          } catch {
+            return args[0] || '';
+          }
+        }
+        case 'image_group': {
+          let queries = [];
+          try {
+            queries = [].concat(JSON.parse(args[0])?.query || []);
+          } catch {
+            /* 沒 query 就照順序 */
+          }
+          return nextImage(queries);
+        }
+        default:
+          return '';
+      }
+    });
+  }
+
+  /** 訊息本文的 Markdown：Intelligent UI 走 fallback，其他照舊套 content_references。 */
+  function markdownOf(message) {
+    const dil = dilOf(message);
+    // fallback 跟 parts[0] 是兩份不同的文字，content_references 的 index 只對得上後者。
+    if (dil && dil.fallbackMarkdown.trim())
+      return resolveDilSentinels(dil.fallbackMarkdown, message, dil);
+    return applyCitations(textOf(message), message);
+  }
+
+  /** 所選 thread 裡所有上傳／產生的圖片（`image_asset_pointer`），供 ZIP 匯出下載。 */
+  function imageAssets(data, opts) {
+    const assets = new Map();
+    for (const message of selectedMessages(data, opts)) {
+      const attachments = new Map(
+        (message.metadata?.attachments || []).map((attachment) => [attachment.id, attachment])
+      );
+      for (const part of message.content?.parts || []) {
+        if (part?.content_type !== 'image_asset_pointer' || !part.asset_pointer) continue;
+        const pointer = part.asset_pointer;
+        if (assets.has(pointer)) continue;
+        const fileId = pointer.replace(/^[a-z-]+:\/\//, '');
+        const attachment = attachments.get(fileId) || {};
+        assets.set(pointer, {
+          pointer,
+          fileId,
+          name: attachment.name || '',
+          mime: attachment.mime_type || '',
+        });
+      }
+    }
+    return [...assets.values()];
   }
 
   function roleOf(message) {
@@ -319,12 +479,15 @@ const ChatGPTAdapter = (() => {
   }
 
   /** 把 ChatGPT 的對話 JSON 轉成 shared/chat-export.js 吃的正規化 doc。 */
+  function selectedMessages(data, opts) {
+    return visibleMessages(expandDeepResearchMessages(buildThread(data), opts), opts);
+  }
+
   function normalize(data, ctx, opts) {
-    const messages = expandDeepResearchMessages(buildThread(data), opts);
-    const sections = visibleMessages(messages, opts).map((message) => {
+    const sections = selectedMessages(data, opts).map((message) => {
       const role = roleOf(message);
       const details = opts.includeResearchDetails ? researchDetailsOf(message) : '';
-      const body = applyCitations(textOf(message), message);
+      const body = markdownOf(message);
       return {
         role,
         model: role === 'Assistant' ? message.metadata?.model_slug || '' : '',
@@ -353,6 +516,8 @@ const ChatGPTAdapter = (() => {
     candidateTimestamp,
     textOf,
     applyCitations,
+    markdownOf,
+    imageAssets,
     roleOf,
     visibleMessages,
     attachResearchState,

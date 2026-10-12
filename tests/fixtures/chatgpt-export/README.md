@@ -24,3 +24,35 @@ modify copies to exercise repeated snapshots, missing IDs, and malformed states.
 The shared page can change or become unavailable. This fixture verifies the
 observed data model; it is not evidence that live browser or manager behavior
 has been tested by itself.
+
+# Intelligent UI fixture
+
+`intelligent-ui.json` is a minimized `/backend-api/conversation` payload modeled on a
+GPT-6 Intelligent UI conversation (`6acc3fda-1f7c-83ec-95ad-546e1dce36e1`, exported raw on
+2026-10-12 and inspected against exporter v1.4.0). The source payload is not checked in.
+
+Observed in the source and kept here:
+
+- `metadata.model_dil_v2` with `code`, `constants`, `appData.opGenui.componentResults`,
+  `clientDefinedWidgets`, `fallbackMarkdown` and `fallbackMarkdownVersion: 1`.
+  `content.parts[0]` holds DIL JSX (`<row>`, `<AsyncImage/>`, `<Link/>`, `<Cite/>`, `<Entity/>`).
+- `fallbackMarkdown` sentinels of four kinds: `url`, `cite` (several refs), `entity`
+  (JSON array) and `image_group` (JSON with `query`). `AsyncImage` results are reached through
+  `"__resolutionId":__dilConstants["N"]` in `code`; Cite results carry `state.items[].ref_id`.
+- `content_references` of type `client_defined_widget` / `category: "code_block"`, whose
+  `matched_text` is a whole code fence and whose `alt` is `null`. v1.4.0 replaced it with an
+  empty string and deleted the code.
+- A user `image_asset_pointer` (`sediment://file_…`) with its `metadata.attachments` entry.
+
+The component results, image and citation URLs are copied from the source. The message text,
+DIL `code` excerpt and IDs are shortened or synthetic. Two cases are synthetic: the `cite`
+ref resolvable only through `search_result_groups`, plus an unresolvable ref, and the
+non-DIL assistant message carrying a code-block widget. The source did not contain them.
+
+- Source payload SHA-256 (raw download as saved):
+  `9ef200d9e087ce077b043eab64140246af1e23a7d2ada75a1d4ccc0eab43f0c8`
+- Fixture SHA-256:
+  `d1969edbcd1184d76e72859dcccf120ef20d9e392d16b10e021a6c798954635d`
+
+This verifies the observed data model only. Image downloads were tested against mocked
+endpoints, not a logged-in ChatGPT session.

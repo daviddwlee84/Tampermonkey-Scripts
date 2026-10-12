@@ -1,0 +1,289 @@
+{
+  "title": "ChatGPT\u4ecb\u9762\u539f\u7406\u89e3\u6790",
+  "conversation_id": "6acc3fda-1f7c-83ec-95ad-546e1dce36e1",
+  "create_time": 1791770587.0,
+  "default_model_slug": "gpt-6-thinking",
+  "current_node": "assistant-plain",
+  "mapping": {
+    "root": {
+      "id": "root",
+      "message": null,
+      "parent": null,
+      "children": [
+        "user-1"
+      ]
+    },
+    "user-1": {
+      "id": "user-1",
+      "message": {
+        "id": "user-1",
+        "author": {
+          "role": "user",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": 1791770589.0,
+        "status": "finished_successfully",
+        "recipient": "all",
+        "channel": null,
+        "weight": 1,
+        "content": {
+          "content_type": "multimodal_text",
+          "parts": [
+            {
+              "content_type": "image_asset_pointer",
+              "asset_pointer": "sediment://file_00000000cb9c82099aa48ba2cc79a330",
+              "size_bytes": 699452,
+              "width": 2048,
+              "height": 1295,
+              "fovea": null
+            },
+            "\u73fe\u5728ChatGPT\u7232\u4ec0\u9ebc\u6703\u6709\u9019\u7a2e\u597d\u770b\u7684\u8868\u683c\uff1f"
+          ]
+        },
+        "metadata": {
+          "attachments": [
+            {
+              "id": "file_00000000cb9c82099aa48ba2cc79a330",
+              "mime_type": "image/png",
+              "name": "image(20261012-020309).png",
+              "size": 699452,
+              "width": 2048,
+              "height": 1295
+            }
+          ]
+        }
+      },
+      "parent": "root",
+      "children": [
+        "assistant-dil"
+      ]
+    },
+    "assistant-dil": {
+      "id": "assistant-dil",
+      "message": {
+        "id": "assistant-dil",
+        "author": {
+          "role": "assistant",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": 1791770600.0,
+        "status": "finished_successfully",
+        "recipient": "all",
+        "channel": "final",
+        "weight": 1,
+        "content": {
+          "content_type": "text",
+          "parts": [
+            "## 2. \u6700\u503c\u5f97\u7814\u7a76\u7684\u958b\u6e90\u65b9\u6848\n\n<row align=start gap={3}>\n  <AsyncImage query=\"OpenAI GPT-6 Intelligent UI for everyone official blog interactive bicycle example October 2026\" aspectRatio=\"4:3\" maxWidth=\"180px\"/>\n  <box flex=\"1\" gap={1}>\n    **<Link url=\"https://github.com/thesysdev/openui\" title=\"Thesys OpenUI\"/>**\n\n    \u958b\u6e90\u7684 Generative UI Framework\u3002<Cite refs={[\"turn228783view0\",\"turn261223search1\"]}/>\n  </box>\n</row>\n\n\u4ee5 <Entity category=\"software\" value=\"json-render\" disambig=\"Vercel \u958b\u6e90 JSON UI rendering library\"/> \u70ba\u4f8b\uff1a\n\n```bash\nnpx skills add thesysdev/skills --skill openui\n```\n\n<caption>MIT License</caption>"
+          ]
+        },
+        "metadata": {
+          "model_slug": "gpt-6-thinking",
+          "content_references": [
+            {
+              "type": "client_defined_widget",
+              "category": "code_block",
+              "matched_text": "```bash\nnpx skills add thesysdev/skills --skill openui\n```",
+              "start_idx": 513,
+              "end_idx": 571,
+              "alt": null,
+              "prompt_text": null,
+              "refs": [],
+              "safe_urls": [],
+              "data": {
+                "content": "npx skills add thesysdev/skills --skill openui",
+                "language": "bash",
+                "widget_type": "code_block"
+              }
+            },
+            {
+              "type": "sources_footnote",
+              "matched_text": " ",
+              "start_idx": 603,
+              "end_idx": 604,
+              "alt": ""
+            }
+          ],
+          "search_result_groups": [
+            {
+              "type": "search_result_group",
+              "domain": "github.com",
+              "entries": [
+                {
+                  "type": "search_result",
+                  "url": "https://github.com/vercel-labs/json-render/blob/main/README.md",
+                  "title": "json-render/README.md at main \u00b7 vercel-labs/json-render \u00b7 GitHub",
+                  "snippet": "",
+                  "ref_id": {
+                    "turn_index": 261223,
+                    "ref_type": "search",
+                    "ref_index": 1
+                  },
+                  "attribution": "github.com"
+                }
+              ]
+            }
+          ],
+          "model_dil_v2": {
+            "code": "function __dilSafe(evaluate,failureValue){try{return evaluate()}catch{return failureValue}}\n\nDIL.render(__dil.jsx(()=>{const __dilConstants=DIL.useConstants();return __dil.jsx(__dil.Fragment,null,__dil.jsx(\"row\",{\"align\":\"start\",\"gap\":3},__dilSafe(()=>(__dil.jsx(AsyncImage,{\"query\":\"OpenAI GPT-6 Intelligent UI for everyone official blog interactive bicycle example October 2026\",\"aspectRatio\":\"4:3\",\"maxWidth\":\"180px\",\"__resolutionId\":__dilConstants[\"0\"]})),null)),__dil.jsx(\"text\",null,__dilConstants[\"1\"],__dilSafe(()=>(__dil.jsx(Cite,{\"refs\":[\"turn228783view0\",\"turn261223search1\"],\"__resolutionId\":__dilConstants[\"2\"]})),null)))}));",
+            "constants": {
+              "0": "img-0000",
+              "1": "\u958b\u6e90\u7684 Generative UI Framework\u3002",
+              "2": "cite-0000"
+            },
+            "appData": {
+              "opGenui": {
+                "componentResults": {
+                  "img-0000": {
+                    "status": "resolved",
+                    "state": {
+                      "frame_aspect_ratio": "4:3",
+                      "frame_width": "100%",
+                      "frame_max_width": "180px",
+                      "frame_height": "auto",
+                      "max_height": null,
+                      "presentation": {
+                        "min_width": "0px",
+                        "min_height": null,
+                        "radius": "xl",
+                        "frame": true
+                      },
+                      "has_fallback": false,
+                      "image_fit": "cover",
+                      "is_loading": false,
+                      "images": [
+                        {
+                          "url": "https://ottermind.ai/explore/gpt-6-astra/cs-240",
+                          "content_url": "https://images.openai.com/static-rsc-4/X476wuDte0j0MspGqfP6XNELoStSXC3uhO_V1B2dhD3eyVxuwDm8d5NkglTiKlmF9l1gmM_DZ7sACxBnKuyQcyN8Snr_q4seDDPhpgnR6d-Er7b0lq2aYOwdIkVQ7_NGhYV98JtAfdaGTiReEVPjoFBh5SIhkbN_GpAA6TYB3W4DQ3WYReSRrfNn-wCD2UTJ?purpose=fullsize",
+                          "thumbnail_url": "https://images.openai.com/static-rsc-4/GknPMy9HJtxNbG1h35ofSGbTgy6xVw6V9Y_IXZjo_jibWDxFEjvfG4rkGZd1F5TyYQQA5v-w806xQo6Gqd9fbiVs6X4rCssWRjL-F4_9w7Mhk1UuM_SaJZxVJdMMaaEIUXZhNwcxYLlDdp-bSSKV1BejwG6PgWJYHMeNXSfOz64?purpose=inline",
+                          "original_content_url": "https://cdn.ottermind.ai/public/explore/gpt-6-astra/cs-240/e2b96fc2e3d8764b5869cbfa.jpg",
+                          "save_target": "image",
+                          "title": "HyperFrames \u4e0e\u672c\u5730\u65c1\u767d\u7684\u53d1\u5e03\u89c6\u9891 \u2014 GPT-6 Astra | Ottermind",
+                          "show_url": true,
+                          "content_size": {
+                            "width": 1200,
+                            "height": 675
+                          },
+                          "thumbnail_size": {
+                            "width": 1200,
+                            "height": 675
+                          },
+                          "thumbnail_crop_info": {
+                            "center_x_percent": 0.2216796875,
+                            "center_y_percent": 0.12152777777777778
+                          },
+                          "shop_eligible": false
+                        }
+                      ],
+                      "default_on_click_action": null
+                    },
+                    "safe_urls": [
+                      "https://ottermind.ai/explore/gpt-6-astra/cs-240",
+                      "https://images.openai.com/static-rsc-4/X476wuDte0j0MspGqfP6XNELoStSXC3uhO_V1B2dhD3eyVxuwDm8d5NkglTiKlmF9l1gmM_DZ7sACxBnKuyQcyN8Snr_q4seDDPhpgnR6d-Er7b0lq2aYOwdIkVQ7_NGhYV98JtAfdaGTiReEVPjoFBh5SIhkbN_GpAA6TYB3W4DQ3WYReSRrfNn-wCD2UTJ?purpose=fullsize"
+                    ],
+                    "componentName": "AsyncImage"
+                  },
+                  "cite-0000": {
+                    "status": "resolved",
+                    "state": {
+                      "items": [
+                        {
+                          "url": "https://github.com/thesysdev/openui",
+                          "ref_id": "turn228783view0",
+                          "refs": [
+                            {
+                              "turn_index": 228783,
+                              "ref_type": "view",
+                              "ref_index": 0
+                            }
+                          ],
+                          "source_label": "GitHub",
+                          "title": "GitHub - thesysdev/openui: The Open Standard for Generative UI",
+                          "snippet": "Total lines: 491",
+                          "pub_timestamp": null,
+                          "metadata_label": null,
+                          "thumbnail_url": null
+                        }
+                      ],
+                      "active_index": 0,
+                      "sources_title": "1 Source"
+                    },
+                    "safe_urls": [
+                      "https://github.com/thesysdev/openui"
+                    ],
+                    "componentName": "Cite"
+                  }
+                },
+                "interactionSurface": "mainline",
+                "modelDataBindings": {}
+              }
+            },
+            "clientDefinedWidgets": {
+              "cdw-0000": {
+                "status": "resolved",
+                "refIndex": 0,
+                "isStreaming": false
+              }
+            },
+            "fallbackMarkdown": "## 2\\. \u6700\u503c\u5f97\u7814\u7a76\u7684\u958b\u6e90\u65b9\u6848\n\n\ue200image_group\ue202{\"query\": [\"OpenAI GPT-6 Intelligent UI for everyone official blog interactive bicycle example October 2026\"], \"aspect_ratio\": \"4:3\", \"layout\": \"carousel\", \"num_per_query\": 1}\ue201\n\n**\ue200url\ue202Thesys OpenUI\ue202https://github.com/thesysdev/openui\ue201**\n\n\u958b\u6e90\u7684 Generative UI Framework\u3002\ue200cite\ue202turn228783view0\ue202turn261223search1\ue201 \ue200cite\ue202turn000000view9\ue201\n\n\u4ee5 \ue200entity\ue202[\"software\", \"json-render\", \"Vercel \u958b\u6e90 JSON UI rendering library\"]\ue201 \u70ba\u4f8b\uff1a\n\n```bash\nnpx skills add thesysdev/skills --skill openui\n```\n\nMIT License\n",
+            "fallbackMarkdownVersion": 1,
+            "requiredComponents": [
+              "AsyncImage",
+              "Cite",
+              "Entity",
+              "Link"
+            ]
+          }
+        }
+      },
+      "parent": "user-1",
+      "children": [
+        "assistant-plain"
+      ]
+    },
+    "assistant-plain": {
+      "id": "assistant-plain",
+      "message": {
+        "id": "assistant-plain",
+        "author": {
+          "role": "assistant",
+          "name": null,
+          "metadata": {}
+        },
+        "create_time": 1791770700.0,
+        "status": "finished_successfully",
+        "recipient": "all",
+        "channel": "final",
+        "weight": 1,
+        "content": {
+          "content_type": "text",
+          "parts": [
+            "\u6c92\u6709 Intelligent UI \u7684\u56de\u8986\u4e5f\u53ef\u80fd\u5e36 code_block widget\uff1a\n\n```python\nprint(\"widget kept\")\n```\n"
+          ]
+        },
+        "metadata": {
+          "model_slug": "gpt-6-thinking",
+          "content_references": [
+            {
+              "type": "client_defined_widget",
+              "category": "code_block",
+              "matched_text": "```python\nprint(\"widget kept\")\n```",
+              "start_idx": 46,
+              "end_idx": 80,
+              "alt": null,
+              "data": {
+                "content": "print(\"widget kept\")",
+                "language": "python",
+                "widget_type": "code_block"
+              }
+            }
+          ]
+        }
+      },
+      "parent": "assistant-dil",
+      "children": []
+    }
+  }
+}

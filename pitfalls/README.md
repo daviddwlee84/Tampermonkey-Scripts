@@ -9,3 +9,9 @@
 | 症狀 | 文件 | 為何保留在原處 |
 | --- | --- | --- |
 | Playwright 注入測試通過，但真實 manager 注入／權限不同 | [Playwright 與 userscript 的邊界](../docs/13-playwright-vs-userscript.md) | 屬於測試工具的使用說明 |
+
+## 問題
+
+| 症狀 | 文件 |
+| --- | --- |
+| ChatGPT 匯出的 code block 整段消失、DIL 標記（`<box>`、`<Cite/>`）漏出 | [chatgpt-export-code-block-disappears.md](chatgpt-export-code-block-disappears.md) |
