@@ -226,6 +226,7 @@ for (const [engineName, engine] of engines) {
       const root = page.locator('#chat-reply-assistant');
       await root.waitFor();
       if (!(await root.locator('#panel').isVisible())) await root.locator('#toggle-panel').click();
+      if (clock) await page.clock.runFor(2500);
       await page.waitForFunction(
         (text) =>
           document
@@ -240,9 +241,11 @@ for (const [engineName, engine] of engines) {
     async function settings(root, values = {}) {
       if (!(await root.locator('#settings').isVisible()))
         await root.locator('#settings-toggle').click();
+      await root.locator('#provider-preset').selectOption(values['provider-preset'] || 'gemini');
       await root.locator('#model').fill('fixture-model');
       await root.locator('#api-key').fill(KEY);
       for (const [id, value] of Object.entries(values)) {
+        if (id === 'provider-preset') continue;
         const input = root.locator(`#${id}`);
         if (typeof value === 'boolean') await input.setChecked(value);
         else if ((await input.evaluate((node) => node.tagName)) === 'SELECT')
@@ -263,6 +266,16 @@ for (const [engineName, engine] of engines) {
       await showSelection(root);
       await root.locator(selector).click();
       await root.locator('#selection-done').click();
+    }
+    async function cardWithText(root, text) {
+      const cards = root.locator('.message-card');
+      const index = await cards.evaluateAll(
+        (nodes, expected) =>
+          nodes.findIndex((node) => node.querySelector('[data-edit-text]')?.value === expected),
+        text
+      );
+      assert.ok(index >= 0, `選取視窗應保留訊息：${text}`);
+      return cards.nth(index);
     }
     function userData(request) {
       const message = JSON.parse(request.data).messages.find((item) => item.role === 'user');
@@ -455,7 +468,7 @@ for (const [engineName, engine] of engines) {
     });
 
     it('reloads provider and thread preferences without storing or replaying generated content', async () => {
-      const harness = await open();
+      const harness = await open({ clock: true });
       const { page, root } = harness;
       try {
         await settings(root, {
@@ -467,6 +480,7 @@ for (const [engineName, engine] of engines) {
         assert.match(JSON.stringify(payload.messages), /THREAD STYLE SENTINEL/);
         await root.locator('#auto').check();
         await page.reload();
+        await advance(page, 2500);
         if (!(await root.locator('#panel').isVisible()))
           await root.locator('#toggle-panel').click();
         if (!(await root.locator('#settings').isVisible()))
@@ -482,6 +496,13 @@ for (const [engineName, engine] of engines) {
         );
         assert.equal(await root.locator('#replies [data-reply]').count(), 0);
         assert.equal((await calls(page)).length, 0);
+        await root.locator('#close-details').click();
+        await advance(page, 6000);
+        assert.equal(
+          (await calls(page)).length,
+          1,
+          '已保存自動生成偏好在重載後取得新的候選，不重播舊結果'
+        );
         await checkClean(harness);
       } finally {
         await page.close();
@@ -519,8 +540,8 @@ for (const [engineName, engine] of engines) {
         await settings(root);
         await advance(page, 6000);
         await root.locator('#auto').check();
-        await advance(page, 6000);
         await showSelection(root);
+        await advance(page, 6000);
         assert.equal(await root.locator('.message-card').count(), 3);
         const first = root.locator('.message-card').nth(0);
         const last = root.locator('.message-card').nth(2);
@@ -644,7 +665,7 @@ for (const [engineName, engine] of engines) {
         await generated(root);
         assert.equal((await calls(page))[0].headers.Authorization, `Bearer ${KEY}`);
         const stored = await page.evaluate((key) => window.__gmStore[key], SETTINGS_KEY);
-        assert.equal(stored.version, 2);
+        assert.equal(stored.version, 3);
         assert.equal(stored.profiles.gemini.apiKey, KEY);
         assert.equal(stored.profiles['copilot-sdk'].apiKey, 'fixture-local-proxy-key');
         assert.equal(stored.profiles['copilot-sdk'].model, 'sdk-local-model');
@@ -685,7 +706,7 @@ for (const [engineName, engine] of engines) {
         assert.equal(await root.locator('#jev-key').inputValue(), '');
         await root.locator('#save-settings').click();
         const stored = await page.evaluate((key) => window.__gmStore[key], SETTINGS_KEY);
-        assert.equal(stored.version, 2);
+        assert.equal(stored.version, 3);
         assert.equal(stored.profiles['copilot-sdk'].apiKey, 'fixture-legacy-proxy-key');
         assert.equal(stored.profiles.gemini.apiKey, '');
         assert.equal(stored.jev.profiles.typesafe.apiKey, 'fixture-legacy-typesafe-key');
@@ -1012,7 +1033,7 @@ for (const [engineName, engine] of engines) {
       }
     });
 
-    it('keeps group speakers and page-loaded history when rows are virtualized away', async () => {
+    it('keeps virtualized group history for review while uncertain old ordering is excluded until pinned', async () => {
       const harness = await open({ platform: 'messenger', group: true });
       const { page, root } = harness;
       try {
@@ -1026,8 +1047,14 @@ for (const [engineName, engine] of engines) {
         await selectionAction(root, '#refresh-context');
         const accumulated = await root.locator('#context').inputValue();
         assert.match(accumulated, /OLDER HISTORY SENTINEL/);
-        assert.match(accumulated, /週六有空嗎/);
+        assert.doesNotMatch(accumulated, /週六有空嗎/);
         assert.ok(accumulated.indexOf('OLDER HISTORY SENTINEL') < accumulated.indexOf('喝咖啡'));
+        await showSelection(root);
+        const retained = await cardWithText(root, '週六有空嗎');
+        assert.equal(await retained.locator('[data-select-message]').isChecked(), false);
+        await retained.locator('[data-select-message]').check();
+        await root.locator('#selection-done').click();
+        assert.match(await root.locator('#context').inputValue(), /週六有空嗎/);
         await selectionAction(root, '#clear-context');
         await selectionAction(root, '#refresh-context');
         const refreshed = await root.locator('#context').inputValue();
@@ -1110,15 +1137,15 @@ for (const [engineName, engine] of engines) {
           scroll.scrollTop = scroll.scrollHeight;
         });
         await advance(page, 6000);
-        assert.equal((await calls(page)).length, 1);
-        assert.match((await calls(page))[0].data, /NESTED SCROLLER INCOMING/);
+        assert.equal((await calls(page)).length, 2);
+        assert.match((await calls(page))[1].data, /NESTED SCROLLER INCOMING/);
         await checkClean(harness);
       } finally {
         await page.close();
       }
     });
 
-    it('keeps unidentified cached speakers visible and suppresses auto even after their DOM row disappears', async () => {
+    it('keeps older unknown roles explicitly marked while allowing a new trusted incoming turn to generate a draft', async () => {
       const harness = await open({ platform: 'messenger', group: true, clock: true });
       const { page, root } = harness;
       try {
@@ -1134,14 +1161,24 @@ for (const [engineName, engine] of engines) {
           })
         );
         await advance(page, 1500);
-        assert.match(await root.locator('#capture-status').textContent(), /發言者|發話者|辨識/);
+        assert.equal((await calls(page)).length, 1, '最新訊息身分未知時不產生新的建議');
+        assert.match(await root.locator('#diagnostic-details').textContent(), /發言者|發話者|辨識/);
         await page.evaluate(() => {
           window.__chatFixture.remove('unknown');
           window.__chatFixture.add({ text: 'KNOWN SPEAKER AFTER UNKNOWN' });
         });
         await advance(page, 10000);
-        assert.equal((await calls(page)).length, 0);
+        assert.equal((await calls(page)).length, 2);
+        assert.match(
+          userData((await calls(page))[1]).transcript,
+          /未辨識發言者 \[身分待確認\][^\n]*UNIDENTIFIED SPEAKER SENTINEL/
+        );
         assert.match(await root.locator('#context').inputValue(), /UNIDENTIFIED SPEAKER SENTINEL/);
+        await showSelection(root);
+        const uncertain = await cardWithText(root, 'UNIDENTIFIED SPEAKER SENTINEL');
+        assert.equal(await uncertain.locator('[data-select-message]').isChecked(), true);
+        assert.equal(await uncertain.locator('[data-edit-direction]').inputValue(), 'unknown');
+        assert.equal(await page.evaluate(() => window.__fixtureSent), 0);
         await checkClean(harness);
       } finally {
         await page.close();
@@ -1197,7 +1234,7 @@ for (const [engineName, engine] of engines) {
       }
     });
 
-    it('does not replay the baseline, prepended history, own messages, or reactions in auto mode', async () => {
+    it('generates once on entry, then ignores history, own messages and reactions while coalescing incoming turns', async () => {
       const harness = await open({ clock: true });
       const { page, root } = harness;
       try {
@@ -1205,33 +1242,33 @@ for (const [engineName, engine] of engines) {
         await advance(page, 6000);
         await root.locator('#auto').check();
         await advance(page, 6000);
-        assert.equal((await calls(page)).length, 0, 'enabling auto must establish a baseline');
+        assert.equal((await calls(page)).length, 1, '啟用後在目前來訊穩定時產生一次建議');
         await page.evaluate(() => {
           window.__chatFixture.add({ text: 'OLD PAGE SENTINEL', prepend: true });
           window.__chatFixture.add({ text: 'SELF MESSAGE SENTINEL', sender: 'You', self: true });
           window.__chatFixture.react();
         });
         await advance(page, 6000);
-        assert.equal((await calls(page)).length, 0);
+        assert.equal((await calls(page)).length, 1);
         await page.evaluate(() => {
           window.__chatFixture.add({ id: 'new-1', text: 'NEW INCOMING ONE' });
           window.__chatFixture.add({ id: 'new-2', text: 'NEW INCOMING TWO' });
         });
+        await advance(page, 500);
+        assert.equal((await calls(page)).length, 1, 'incoming messages must debounce');
         await advance(page, 2500);
-        assert.equal((await calls(page)).length, 0, 'incoming messages must debounce');
-        await advance(page, 3000);
-        await waitCalls(page, 1);
-        assert.equal((await calls(page)).length, 1);
+        await waitCalls(page, 2);
+        assert.equal((await calls(page)).length, 2);
         await page.evaluate(() => window.__chatFixture.add({ text: 'COALESCED LATEST SENTINEL' }));
-        await advance(page, 6000);
+        await advance(page, 500);
         assert.equal(
           (await calls(page)).length,
-          1,
+          2,
           'cooldown prevents an immediate second request'
         );
-        await advance(page, 30000);
-        assert.equal((await calls(page)).length, 2);
-        assert.match((await calls(page))[1].data, /COALESCED LATEST SENTINEL/);
+        await advance(page, 4000);
+        assert.equal((await calls(page)).length, 3);
+        assert.match((await calls(page))[2].data, /COALESCED LATEST SENTINEL/);
         await checkClean(harness);
       } finally {
         await page.close();
@@ -1349,12 +1386,10 @@ for (const [engineName, engine] of engines) {
         try {
           await settings(root);
           await advance(page, 6000);
-          await root.locator('#auto').check();
-          await advance(page, 6000);
           await page.evaluate((status) => {
             window.__gmMode = `http${status}`;
-            window.__chatFixture.add({ text: 'TRIGGER REJECTED REQUEST' });
           }, status);
+          await root.locator('#auto').check();
           await advance(page, 6000);
           assert.equal((await calls(page)).length, 1);
           assert.match(await root.locator('#status').textContent(), new RegExp(String(status)));

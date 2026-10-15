@@ -1,3 +1,72 @@
+# Chat Reply Assistant 0.3.0 驗證紀錄
+
+日期：2026-09-25。環境：macOS、Playwright 1.62.1、Chromium 151.0.7922.34、Firefox 153.0。
+
+最終 userscript SHA-256：`6ca97ed771c3d659939a32672c4cb5bda5f08e518fe5afa2f32a83978dec180b`。
+
+## 結論
+
+**221 項自動化案例通過**，涵蓋純函式、兩個瀏覽器的 adapter、完整 UI／自動回覆流程與本機診斷匯出。真實 Tampermonkey 5.5.0、Violentmonkey 2.49.0 另通過原始 metadata 安裝、本機 HTTP 模型請求，以及 Gemini 合成頁的單次原生送出與新對話接續。
+
+本版仍為 experimental：測試使用合成聊天及假模型回覆，沒有在登入中的真人聊天室送出訊息，也沒有用真 Key 呼叫 Gemini／Jev。合成頁通過不能證明目前所有帳號的網站 DOM 都相容。
+
+## 自動化驗證
+
+```sh
+npm run test:chat-reply-assistant
+npm run verify
+```
+
+| 層級                                   | 結果      | 重點                                                                                                   |
+| -------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------ |
+| 純函式／provider／Jev／歷史 controller | 47 項通過 | v1/v2 設定保留、4141 新預設、候選／byte 上限、人工排除、Jev 門檻、500 則快取、UID 保留與 metadata 更新 |
+| Chromium + GM shim                     | 87 項通過 | Meta／Gemini adapters、舊 UI 回歸、自動生成／倒數／送出、匿名診斷                                      |
+| Firefox + GM shim                      | 87 項通過 | 同一矩陣；不是 Firefox manager 實測                                                                    |
+| 語法／格式／metadata／索引             | 通過      | 15 支腳本 metadata 零錯誤；5 個既有外部依賴警告屬於 page-reader-markdown                               |
+
+重要案例包括：
+
+- 姓名與自己／他人身分分開；原生證據優先，匿名泡泡使用實際左右位置，RTL 文字不反轉角色；滿版／置中的不明訊息保留未知。
+- 頭像、引用作者頭像、操作圖示不當成聊天照片；真正的人像照片仍保留。
+- 相同 fallback 標題、共用部分訊息、URL 先變而舊 DOM 暫留；工具列繼續掛載，但不以標題或 URL 當成新內容已就緒的證明。
+- 可信最新視窗可繼續生成，較舊且順序不明的區段保留供人工查看，預設不納入。調整左右偏好保留 UID 與人工選取；更新發言者／圖片 URL 不冒充新來訊。
+- 開啟自動生成後對穩定的最新來訊生成一次；自己的新訊息只更新上下文。Jev 篩選不傳人工排除的訊息；失敗時只用原選取產生草稿並停止自動送出。
+- 三候選 + Jev 或單一回覆；倒數取消／立即送出、零秒、次數上限與明確不限輪數、新訊息使舊候選失效、手動重生候選不沿用舊倒數。
+- 完成手動上下文選取後，切到背景再返回也不重播同一輪；新對方訊息才恢復觸發。
+- 編輯草稿／IME、背景／失焦、路由切換、設定／上下文操作會停止待送流程。送出結果不明時不重試。
+- Gemini 空白對話兩種策略開場、串流完成才回覆、`/app` 到正式對話 ID 的已送出證明、原生 Send 延遲啟用時最多等待 1.5 秒；等待途中修改草稿／取消不點擊。
+- 本機診斷 JSON 只含受限的 DOM 結構、長度及幾何：最多 800 節點、8 層。訊息原文、姓名、網址、input 值、keys 與設定不寫入；實際 Blob 下載不發送網路請求。
+
+自動化日誌與截圖位於 `.preview/chat-reply-assistant-v03-test.log`、`.preview/chat-reply-assistant-tests/`、`.preview/chat-reply-assistant-automation-tests/`。測試直接抽取或執行發佈的 `.user.js`，沒有另外維護一份實作。
+
+## 真實 manager
+
+使用前版保留的官方 Tampermonkey 5.5.0／Violentmonkey 2.49.0 套件，建立全新 Chromium profile，經 manager UI 安裝上述 hash 的原始 userscript。**沒有 GM shim、沒有直接注入腳本、沒有修改 production metadata。** 原網站 URL 只重播匿名合成 fixture，loopback 接收器是真實 HTTP server，沒有 CORS header。
+
+兩個 manager 各通過 9 項檢查：
+
+- Instagram、Messenger、Gemini 原始 match 執行，行內 host 不遮擋原生 Send。
+- 真正的 `GET /v1/models` 與 `POST /v1/chat/completions`；每個 manager 共一個 GET、四個 POST，無 cookie／Authorization（本次接收器免 Key）。
+- provider、model、全域／聊天室 prompt 與自動生成偏好在 GM storage 重載保留；最新是自己訊息時不續說，新對方訊息會觸發生成。
+- 填入／接續草稿與原生輸入狀態一致；Gemini 空白對話只點一次原生 Send，確認新本人訊息與草稿清空後接續新路由，達到一則上限即停止。
+
+報告與截圖：
+
+- `.preview/chat-reply-assistant-v03-manager/tampermonkey-1790350172682/report.json`
+- `.preview/chat-reply-assistant-v03-manager/violentmonkey-1790350172682/report.json`
+
+報告記錄套件、來源、harness、fixture hash 與頁面錯誤；兩者均為零頁面錯誤，測試期間來源 hash 未變。profiles、瀏覽器與 HTTP server 已清理，官方套件保持原樣。
+
+## 尚未驗證
+
+- 本版沒有取得登入後完整原始 DOM 或完成真人聊天 smoke；舊版的 Instagram AX 語義觀察不等於完整 DOM。仍需要使用者在自己頁面測試，必要時以本版「匯出匿名診斷」提供結構資訊。
+- 沒有以真 Key 驗證 Gemini、TypeSafe、Vercel 模型品質、中文相關性或圖片事實判斷；Jev 分數只是操作門檻，不是準確率保證。圖片 bytes 不交給 Jev，圖片才能支持的事實可能因此無法通過候選判斷。
+- 沒有啟動真實 Copilot API／LiteLLM／Copilot SDK Proxy；通過的是相容協定與實際本機 HTTP transport，不代表訂閱認證或額度驗證。
+- 真實 manager 的 Meta CDN 圖片下載／額外 host 授權、Firefox 真實 manager、Safari／手機、系統剪貼簿、登入頁 Gemini share UI 仍未實測。
+- Grok／Character.ai、無新對方訊息的自由續聊及外部 adapter library 留在 [TODO](../../TODO.md)。
+
+---
+
 # Chat Reply Assistant 0.2.0 驗證紀錄
 
 日期：2026-09-25。環境：macOS、Playwright 1.62.1、Chromium 151.0.7922.34、Firefox 153.0。

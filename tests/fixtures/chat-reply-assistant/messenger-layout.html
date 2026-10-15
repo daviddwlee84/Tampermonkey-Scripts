@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Messenger 位置與媒體邊界測試</title>
+    <!-- 重建沒有發話者 ARIA／data-sender 的布局；不是登入帳號的原始 DOM。class 僅供 fixture 排版與操作。 -->
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font: 15px/1.4 system-ui;
+        background: #fff;
+        color: #222;
+      }
+      .workspace {
+        display: flex;
+        height: 100vh;
+      }
+      .thread-list {
+        width: 180px;
+        padding: 16px;
+        border-right: 1px solid #ddd;
+      }
+      main {
+        flex: 1;
+        min-width: 0;
+        padding: 18px;
+      }
+      .thread {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+      .topbar {
+        flex: none;
+        padding: 8px 0 16px;
+      }
+      [role='log'] {
+        overflow-y: auto;
+        flex: 1;
+        min-height: 90px;
+        padding: 8px;
+      }
+      .message {
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+        margin: 10px 0;
+      }
+      .right {
+        justify-content: flex-end;
+      }
+      .left {
+        justify-content: flex-start;
+      }
+      .avatar,
+      .quote-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex: none;
+      }
+      .bubble {
+        width: fit-content;
+        max-width: 75%;
+        border-radius: 17px;
+        padding: 10px 14px;
+        background: #eee;
+      }
+      .right .bubble {
+        background: #0084ff;
+        color: white;
+      }
+      blockquote {
+        margin: 0 0 8px;
+        padding: 7px;
+        border-left: 3px solid #aaa;
+        background: #ddd;
+        color: #333;
+        border-radius: 8px;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .system {
+        justify-content: center;
+        font-size: 11px;
+        color: #888;
+      }
+      .wide {
+        width: 98%;
+        max-width: none;
+        margin: auto;
+      }
+      .composer-shell {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px;
+        margin-top: 8px;
+        border-radius: 23px;
+        background: #eee;
+      }
+      [contenteditable] {
+        flex: 1;
+        min-width: 40px;
+        min-height: 25px;
+        max-height: 140px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        outline: none;
+      }
+      button {
+        border: 0;
+        background: transparent;
+        font: inherit;
+        color: #0084ff;
+        cursor: pointer;
+      }
+      @media (max-width: 650px) {
+        .thread-list {
+          display: none;
+        }
+        main {
+          padding: 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="workspace">
+      <div class="thread-list" aria-label="Thread list">
+        <a href="/t/100">同名群組</a><a href="/t/200">同名群組</a
+        ><span dir="auto">SIDEBAR SENTINEL</span>
+      </div>
+      <main role="main">
+        <section class="thread">
+          <div class="topbar"><strong>同名群組</strong></div>
+          <div role="log">
+            <div role="row" class="message left">
+              <img class="avatar" src="https://scontent.xx.fbcdn.net/fixtures/avatar-a.png" />
+              <div class="bubble"><span dir="auto">好</span></div>
+            </div>
+            <div role="row" class="message right">
+              <div class="bubble"><span dir="auto">好</span></div>
+            </div>
+            <div role="row" class="message left">
+              <img class="avatar" src="https://scontent.xx.fbcdn.net/fixtures/avatar-a.png" />
+              <div class="bubble">
+                <blockquote aria-label="Replied to someone">
+                  <img
+                    class="quote-avatar"
+                    src="https://scontent.xx.fbcdn.net/fixtures/quote-face.png"
+                  /><span dir="auto">引用的文字</span>
+                </blockquote>
+                <span dir="auto">這是目前的回覆</span>
+              </div>
+            </div>
+            <div role="row" class="message right">
+              <div class="bubble">
+                <button aria-label="Open photo">
+                  <img
+                    alt="Portrait photo"
+                    src="https://scontent.xx.fbcdn.net/fixtures/real-portrait.png?signature=one"
+                    width="150"
+                    height="180"
+                  /></button
+                ><span dir="auto">這是我傳的照片</span>
+              </div>
+            </div>
+            <div role="row" class="message left">
+              <img class="avatar" src="https://scontent.xx.fbcdn.net/fixtures/avatar-b.png" />
+              <div class="bubble">
+                <span dir="auto" style="text-align: right">مرحبا صديقي</span>
+              </div>
+            </div>
+            <div role="row" class="message system">
+              <span dir="auto">Messages and calls are end-to-end encrypted</span>
+            </div>
+            <div role="row" class="message">
+              <div class="bubble wide">
+                <span dir="auto">CENTERED WIDE MESSAGE — POSITION AMBIGUOUS</span>
+              </div>
+            </div>
+          </div>
+          <div class="composer-shell">
+            <button aria-label="Attach a file">▣</button>
+            <div contenteditable="true" role="textbox" aria-label="Message"></div>
+            <button aria-label="Choose an emoji">☺</button><button aria-label="Send">Send</button>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script>
+      (() => {
+        const log = () => document.querySelector('[role="log"]');
+        window.__fixtureSendClicks = 0;
+        window.__fixtureEnter = 0;
+        window.__layoutFixture = {
+          mode: 'normal',
+          selfSide: 'right',
+          add({ text, side = 'left', photo = '', prepend = false } = {}) {
+            const row = document.createElement('div');
+            row.setAttribute('role', 'row');
+            row.className = `message ${side}`;
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            if (photo) {
+              const open = document.createElement('button');
+              open.setAttribute('aria-label', 'Open photo');
+              const img = document.createElement('img');
+              img.src = photo;
+              img.width = 150;
+              img.height = 180;
+              open.append(img);
+              bubble.append(open);
+            }
+            if (text) {
+              const span = document.createElement('span');
+              span.dir = 'auto';
+              span.textContent = text;
+              bubble.append(span);
+            }
+            row.append(bubble);
+            if (prepend) log().prepend(row);
+            else {
+              log().append(row);
+              log().scrollTop = log().scrollHeight;
+            }
+            return row;
+          },
+          switchThread(id = '200', { empty = false, keepDOM = false } = {}) {
+            history.pushState({}, '', `/t/${id}`);
+            if (!keepDOM) {
+              log().replaceChildren();
+              if (!empty) {
+                this.add({ text: '好', side: 'left' });
+                this.add({ text: 'NEW THREAD CONTENT', side: 'right' });
+              }
+            }
+          },
+          remountComposer() {
+            const old = document.querySelector('.composer-shell');
+            old.replaceWith(old.cloneNode(true));
+          },
+          draftFile() {
+            const button = document.createElement('button');
+            button.setAttribute('aria-label', 'Remove photo');
+            button.textContent = 'Remove';
+            document.querySelector('.composer-shell').append(button);
+          },
+        };
+        document.addEventListener('keydown', (event) => {
+          if (event.target.closest('[contenteditable]') && event.key === 'Enter' && !event.shiftKey)
+            window.__fixtureEnter++;
+        });
+        document.addEventListener('click', (event) => {
+          if (!event.target.closest('[aria-label="Send"]')) return;
+          window.__fixtureSendClicks++;
+          const composer = document.querySelector('[contenteditable]'),
+            draft = composer.innerText;
+          const mode = window.__layoutFixture.mode;
+          if (mode === 'route-switch') {
+            window.__layoutFixture.switchThread('999');
+            return;
+          }
+          if (mode === 'no-echo') return;
+          if (mode !== 'echo-only') composer.textContent = '';
+          if (mode !== 'clear-only')
+            window.__layoutFixture.add({ text: draft, side: window.__layoutFixture.selfSide });
+          if (mode === 'remount') window.__layoutFixture.remountComposer();
+        });
+        log().scrollTop = log().scrollHeight;
+      })();
+    </script>
+  </body>
+</html>

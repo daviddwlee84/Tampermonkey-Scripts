@@ -14,11 +14,9 @@ vm.runInContext(
   context
 );
 const api = context.api;
-const adapterSource = source.slice(
-  source.indexOf('  function createSiteAdapter()'),
-  source.indexOf("  const ID = 'chat-reply-assistant';")
-);
-const parseRoute = vm.runInContext(`${adapterSource}\ncreateSiteAdapter().route`, context);
+const adapterSource = source.match(/\/\/\s*BEGIN ADAPTERS\b([\s\S]*?)\/\/\s*END ADAPTERS\b/)?.[1];
+assert.ok(adapterSource, 'the delivered userscript must include its Meta adapter');
+const parseRoute = vm.runInContext(`${adapterSource}\ncreateMetaAdapter().route`, context);
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const message = (id, text, direction = 'other') => ({
   id,
@@ -154,6 +152,12 @@ test('輸出只接受三個非空、不同的字串，允許 JSON fence', () => 
     '{"replies":["甲"]}',
   ])
     assert.throws(() => api.parseReplies(body));
+});
+
+test('單一回覆策略只接受一個非空白字串，不悄悄取三候選的第一個', () => {
+  assert.deepEqual(plain(api.parseReplies('{"replies":["單一回覆"]}', 1)), ['單一回覆']);
+  assert.throws(() => api.parseReplies('{"replies":["一","二","三"]}', 1));
+  assert.throws(() => api.parseReplies('{"replies":[""]}', 1));
 });
 
 test('Jev 只接受預先定義型別與分類，不把 confidence 當情緒事實', () => {

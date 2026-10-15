@@ -21,8 +21,8 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 
 test('provider defaults separate both Copilot servers and all credentials', () => {
   const defaults = api.providerDefaults();
-  assert.equal(defaults.version, 2);
-  assert.equal(defaults.provider, 'gemini');
+  assert.equal(defaults.version, 3);
+  assert.equal(defaults.provider, 'copilot-api');
   assert.equal(
     defaults.profiles['copilot-api'].endpoint,
     'http://localhost:4141/v1/chat/completions'
@@ -100,7 +100,7 @@ test('v1 Copilot migration recognizes loopback 4141 and 3001 without replacing c
   }
 });
 
-test('v2 settings survive repeated normalization without sharing or transferring profile keys', () => {
+test('v2 profiles migrate to v3 without losing configuration and v3 normalization is stable', () => {
   const original = api.providerDefaults();
   original.provider = 'custom';
   Object.assign(original.profiles.custom, {
@@ -115,6 +115,9 @@ test('v2 settings survive repeated normalization without sharing or transferring
   original.jev.profiles.vercel.apiKey = 'vercel-key';
   const normalized = api.migrateSettings(original);
   assert.deepEqual(plain(normalized), plain(original));
+  const legacy = plain(original);
+  legacy.version = 2;
+  assert.deepEqual(plain(api.migrateSettings(legacy)), plain(original));
   assert.deepEqual(plain(api.migrateSettings(normalized)), plain(normalized));
   normalized.profiles.gemini.apiKey = 'replacement';
   assert.equal(original.profiles.gemini.apiKey, 'gemini-key');
@@ -134,7 +137,7 @@ test('malformed settings fall back safely while retaining editable incomplete co
     threads: [],
     jev: { provider: 'constructor', enabled: 'true' },
   });
-  assert.equal(normalized.provider, 'gemini');
+  assert.equal(normalized.provider, 'copilot-api');
   assert.equal(normalized.profiles.gemini.model, '');
   assert.equal(normalized.profiles.gemini.vision, false);
   assert.equal(normalized.maxMessages, 200);
@@ -231,7 +234,7 @@ test('profiles resolve fixed provider metadata without exposing another provider
   assert.equal(jev.modelsUrl, 'https://ai-gateway.vercel.sh/typesafe/v1/models');
   assert.equal(jev.model, 'typesafe-ai/jev');
   assert.equal(jev.apiKey, 'gateway-only');
-  assert.equal(api.resolvedProfile(settings, 'constructor').id, 'gemini');
+  assert.equal(api.resolvedProfile(settings, 'constructor').id, 'copilot-api');
 });
 
 test('model parsing uses official IDs and display labels without inferring vision support', () => {

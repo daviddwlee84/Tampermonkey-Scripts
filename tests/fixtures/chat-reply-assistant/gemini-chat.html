@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Gemini adapter fixture</title>
+    <style>
+      body {
+        font: 16px system-ui;
+        margin: 0;
+      }
+      nav {
+        padding: 12px;
+        background: #eee;
+      }
+      main {
+        width: min(780px, calc(100% - 32px));
+        margin: 16px auto;
+      }
+      user-query,
+      user-query-content,
+      model-response,
+      message-content,
+      message-actions,
+      rich-textarea,
+      input-area-v2 {
+        display: block;
+      }
+      .conversation-container {
+        padding: 12px;
+      }
+      #gemini-history {
+        height: 360px;
+        overflow-y: auto;
+        border: 1px solid #bbb;
+      }
+      user-query {
+        background: #eef2fa;
+        padding: 8px;
+      }
+      .cdk-visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+      }
+      .ql-editor {
+        min-height: 60px;
+        padding: 8px;
+        border: 1px solid #777;
+      }
+      .ql-editor p {
+        margin: 0;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      button {
+        min-height: 32px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <user-query
+        ><user-query-content
+          ><div class="query-content">SIDEBAR MUST NOT CAPTURE</div></user-query-content
+        ></user-query
+      >
+    </nav>
+    <main class="chat-web">
+      <h1 data-test-id="conversation-title">Fixture Gemini conversation</h1>
+      <div id="gemini-history">
+        <div class="conversation-container" id="turn-one">
+          <user-query id="query-one"
+            ><user-query-content
+              ><div class="query-content">
+                <h5 class="cdk-visually-hidden">You said REPEATED HIDDEN SENTINEL</h5>
+                <p>你今天想聊什麼</p>
+              </div></user-query-content
+            ></user-query
+          >
+          <model-response id="response-one"
+            ><message-content
+              ><div class="markdown-main-panel">
+                <p>我們可以聊旅行</p>
+                <p>或聊今天的小事</p>
+                <button>MODEL TOOLBAR NOISE</button>
+              </div></message-content
+            ><message-actions
+              ><button aria-label="Copy response">Copy</button></message-actions
+            ></model-response
+          >
+        </div>
+      </div>
+      <input-area-v2>
+        <fieldset class="input-area-container">
+          <div class="text-input-field">
+            <rich-textarea
+              ><div
+                class="ql-editor textarea new-input-ui"
+                contenteditable="true"
+                role="textbox"
+                aria-label="Enter a prompt for Gemini"
+              >
+                <p><br /></p></div
+            ></rich-textarea>
+            <div class="attachment-preview-wrapper" hidden>
+              <uploader-file-preview-container>Fixture attachment</uploader-file-preview-container>
+            </div>
+          </div>
+          <span data-test-id="send-button-container"
+            ><button class="send-button submit" type="button" aria-label="Send message" disabled>
+              Send
+            </button></span
+          >
+          <button id="gemini-stop" type="button" aria-label="Stop response" hidden>
+            Stop response
+          </button>
+        </fieldset>
+      </input-area-v2>
+    </main>
+    <script>
+      (() => {
+        const history = document.querySelector('#gemini-history');
+        const composer = () => document.querySelector('.ql-editor');
+        const send = document.querySelector('.send-button');
+        const stop = document.querySelector('#gemini-stop');
+        let sequence = 1;
+        let readyTimer;
+        const synchronizeSend = () => {
+          clearTimeout(readyTimer);
+          const delay = window.__geminiFixture?.sendReadyDelay || 0;
+          if (composer().innerText.trim() && delay) {
+            send.disabled = true;
+            readyTimer = setTimeout(() => {
+              send.disabled = !composer().innerText.trim();
+            }, delay);
+          } else send.disabled = !composer().innerText.trim();
+        };
+        document.querySelector('main').addEventListener('input', synchronizeSend);
+        const scrollLatest = () => {
+          history.scrollTop = history.scrollHeight;
+        };
+        const addUser = (text) => {
+          const turn = document.createElement('div');
+          turn.className = 'conversation-container';
+          turn.id = `turn-${++sequence}`;
+          const query = document.createElement('user-query');
+          query.id = `query-${sequence}`;
+          const queryContent = document.createElement('user-query-content');
+          const body = document.createElement('div');
+          body.className = 'query-content';
+          body.textContent = text;
+          queryContent.append(body);
+          query.append(queryContent);
+          turn.append(query);
+          history.append(turn);
+          scrollLatest();
+          return turn;
+        };
+        window.__geminiFixture = {
+          sendMode: 'normal',
+          sendReadyDelay: 0,
+          sentCount: 0,
+          appendUser(text) {
+            return addUser(text).id;
+          },
+          beginStream(text = '回答正在逐字出現') {
+            let turn = history.lastElementChild;
+            if (!turn) {
+              turn = document.createElement('div');
+              turn.className = 'conversation-container';
+              history.append(turn);
+            }
+            let response = turn.querySelector('model-response');
+            if (!response) {
+              response = document.createElement('model-response');
+              response.id = `response-${sequence}`;
+              turn.append(response);
+            }
+            response.innerHTML =
+              '<message-content><div class="markdown-main-panel"></div></message-content>';
+            response.querySelector('.markdown-main-panel').textContent = text;
+            response.setAttribute('aria-busy', 'true');
+            stop.hidden = false;
+            send.hidden = true;
+            scrollLatest();
+          },
+          complete(text = '這是已完成的 Gemini 回覆') {
+            const response =
+              history.querySelector('model-response:last-of-type') ||
+              history.lastElementChild?.querySelector('model-response');
+            const lastResponse =
+              Array.from(history.querySelectorAll('model-response')).at(-1) || response;
+            if (!lastResponse) return;
+            lastResponse.querySelector('.markdown-main-panel').textContent = text;
+            lastResponse.removeAttribute('aria-busy');
+            if (!lastResponse.querySelector('message-actions')) {
+              const actions = document.createElement('message-actions');
+              actions.innerHTML = '<button aria-label="Copy response">Copy</button>';
+              lastResponse.append(actions);
+            }
+            stop.hidden = true;
+            send.hidden = false;
+            synchronizeSend();
+            scrollLatest();
+          },
+          attachments(show) {
+            document.querySelector('.attachment-preview-wrapper').hidden = !show;
+            document.querySelector('.text-input-field').classList.toggle('with-file-preview', show);
+          },
+          replaceComposer() {
+            const old = composer(),
+              next = old.cloneNode(true);
+            old.replaceWith(next);
+          },
+        };
+        send.addEventListener('click', () => {
+          const fixture = window.__geminiFixture;
+          fixture.sentCount++;
+          const text = composer().innerText;
+          if (fixture.sendMode === 'noop') return;
+          composer().innerHTML = '<p><br /></p>';
+          synchronizeSend();
+          if (fixture.sendMode === 'clearOnly') return;
+          addUser(fixture.sendMode === 'wrongTurn' ? 'NOT THE EXPECTED PROMPT' : text);
+          if (location.pathname.replace(/\/$/, '') === '/app')
+            window.history.pushState({}, '', '/app/generated-thread');
+          fixture.beginStream();
+          if (fixture.sendMode === 'replaceComposer') fixture.replaceComposer();
+        });
+        if (location.pathname.replace(/\/$/, '') === '/app') history.replaceChildren();
+        if (location.pathname.startsWith('/share/'))
+          document.querySelector('input-area-v2').hidden = true;
+        scrollLatest();
+      })();
+    </script>
+  </body>
+</html>
