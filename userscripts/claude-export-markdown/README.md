@@ -4,7 +4,7 @@
 [`chatgpt-export-markdown`](../chatgpt-export-markdown/) 一致（仿 SpecStory 的 chat history），
 目的是**貼給 coding agent**（Claude Code / Codex / Cursor…）當作前情提要。
 
-- **生效網站**：`https://claude.ai/*`（`/chat/<id>` 與 `/share/<id>`）
+- **生效網站**：`https://claude.ai/*`（`/chat/<id>`、`/share/<id>`、Claude Code on the web 的 `/code/session_<id>`）
 - **安裝**：[點這裡安裝](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/claude-export-markdown/claude-export-markdown.user.js)（需先裝好 Tampermonkey / Violentmonkey）
 - **原始碼**：[`claude-export-markdown.user.js`](./claude-export-markdown.user.js)
 
@@ -42,6 +42,31 @@ GET /api/chat_snapshots/<id>?rendering_mode=messages&render_all_tools=true
 `/api/organizations/<org>/chat_conversations/<id>`，格式一樣。
 
 腳本用 `@run-at document-start` 攔 `fetch`，接住頁面自己那一次回應。
+
+## Claude Code on the web（`/code/session_…`）
+
+Claude Code web 不走 `chat_conversations`，而是 `/v1/…sessions…` 系列 API，
+內容是 Claude Code SDK message（`type: user|assistant|system|result`，
+`message.content[]` 是標準 Messages API block）。v1.0.0 不認得這種頁面，
+所以一律報「請重新整理」——重新整理當然沒用。
+
+這條路的 endpoint 與分頁欄位**沒有文件，是推測後寫得寬鬆**：
+
+- 攔截所有 `/v1/` 的 JSON 回應（fetch 與 XHR），只要裡面找得到 SDK message 陣列就收
+  （支援直接是 message，或包在 `payload` / `data` / `event` 裡），依 uuid／id 去重合併。
+- 按下匯出時再用頁面自己帶過的 header 補打 `/v1/sessions/<id>`（標題）與
+  `/v1/sessions/<id>/events`（沿 `has_more` + `last_id` → `after_id` 翻頁），
+  不通再試 `/v1/code/sessions/<id>/…`。
+- 每個 `/v1/` 回應都會在 console 印 `v1 response: <url> <status> <形狀>`，
+  補打失敗則印 `code session api failed: <url> <status> <body 開頭>`。
+  **匯出失敗時把這些 log 貼回來**，就能把 endpoint 定死。
+- `text/event-stream`（例如 `/v1/code/sessions/watch`）不讀，避免卡住串流；
+  如果 transcript 只從串流或 WebSocket 進來，目前這條路會抓不到。
+
+轉換規則：user 文字 → User；assistant 的 block 沿用 chat 的規則（thinking／工具開關照舊）；
+只含 `tool_result` 的 user event 算工具輸出、`parent_tool_use_id` 有值的 subagent 內部對話
+都只在「含工具呼叫」開啟時出現；`system`／`result` 事件不進 transcript。
+Download .json 會輸出 `{ kind, session_id, meta, events }`。
 
 ## 為什麼只有「攔截」這一條路
 

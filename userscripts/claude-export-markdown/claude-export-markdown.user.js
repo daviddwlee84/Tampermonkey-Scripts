@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Claude Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      1.0.0
-// @description  把整段 Claude 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用
+// @version      1.1.0
+// @description  把整段 Claude 對話（含 Claude Code on the web session）匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用
 // @author       Da-Wei Lee
 // @license      MIT
 // @match        https://claude.ai/*
@@ -44,7 +44,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
   const NS = 'claude-export-md';
   const EXPORTER = `claude-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[claude-export-markdown]';
@@ -95,24 +95,195 @@
     );
   }
 
+  // ------------------------------------- 來源：Claude Code on the web（/code/session_…）
+
+  /**
+   * Claude Code web 不走 chat_conversations，而是 `/v1/...sessions...` 系列 API，
+   * 內容是 Claude Code SDK message（`type: user|assistant|system|result`）。
+   * endpoint 與分頁欄位沒有文件，所以這裡刻意寫得寬鬆：
+   * 只要 `/v1/` 回應裡找得到 SDK message 陣列就收，並把每個 `/v1/` 回應的形狀印到 console，
+   * 改版時看 log 就知道該怎麼調。
+   */
+  const V1_URL = /^(?:https:\/\/(?:claude\.ai|api\.anthropic\.com))?\/v1\//;
+  const SESSION_ID_RE = /session_[0-9A-Za-z]+/;
+
+  /** session id -> { meta, events: Map<key, event>, urls: Set<string> } */
+  const codeSessions = new Map();
+  /** 頁面自己打 `/v1/` 時帶的 header（anthropic-version、org id 之類），重放用。 */
+  let v1Headers = null;
+
+  function codeSessionEntry(id) {
+    if (!codeSessions.has(id)) {
+      codeSessions.set(id, { meta: null, events: new Map(), urls: new Set() });
+    }
+    return codeSessions.get(id);
+  }
+
+  function headersToObject(init) {
+    const out = {};
+    try {
+      if (!init) return out;
+      const list = typeof init.forEach === 'function' && !Array.isArray(init) ? init : null;
+      if (list) list.forEach((value, name) => (out[name.toLowerCase()] = String(value)));
+      else if (Array.isArray(init)) for (const [n, v] of init) out[String(n).toLowerCase()] = String(v);
+      else for (const [n, v] of Object.entries(init)) out[n.toLowerCase()] = String(v);
+    } catch {
+      /* header 拿不到就算了 */
+    }
+    delete out['content-type'];
+    delete out['content-length'];
+    return out;
+  }
+
+  function rememberV1Headers(url, init) {
+    if (!V1_URL.test(url)) return;
+    const headers = headersToObject(init);
+    if (Object.keys(headers).length) v1Headers = headers;
+  }
+
+  /** 這個物件是不是一則 SDK message（可能被包在 `payload` / `data` / `event` 裡）。 */
+  function unwrapEvent(item) {
+    for (const candidate of [item, item?.payload, item?.data, item?.event, item?.message_data]) {
+      if (
+        candidate &&
+        typeof candidate === 'object' &&
+        ['user', 'assistant', 'system', 'result'].includes(candidate.type) &&
+        (candidate.message || candidate.type === 'system' || candidate.type === 'result')
+      ) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  function findEventList(payload) {
+    const candidates = Array.isArray(payload)
+      ? [payload]
+      : [payload?.data, payload?.events, payload?.messages, payload?.items, payload?.results];
+    for (const list of candidates) {
+      if (Array.isArray(list) && list.some((item) => unwrapEvent(item))) return list;
+    }
+    return null;
+  }
+
+  function eventKey(raw, event) {
+    return (
+      event.uuid ||
+      raw.uuid ||
+      raw.id ||
+      (event.message?.id && `${event.message.id}:${JSON.stringify(event.message.content)}`) ||
+      JSON.stringify(event)
+    );
+  }
+
+  function shapeOf(value) {
+    if (Array.isArray(value)) return `array(${value.length})`;
+    if (!value || typeof value !== 'object') return typeof value;
+    const keys = Object.keys(value).slice(0, 12).join(',');
+    const list = findEventList(value) || value.data;
+    const first = Array.isArray(list) && list[0] && typeof list[0] === 'object'
+      ? ` first{${Object.keys(list[0]).slice(0, 12).join(',')}}`
+      : '';
+    return `{${keys}}${first}`;
+  }
+
+  function mergeCodeEvents(id, list) {
+    const entry = codeSessionEntry(id);
+    for (const raw of list) {
+      const event = unwrapEvent(raw);
+      if (!event) continue;
+      const ts = event.timestamp || raw.created_at || raw.timestamp;
+      entry.events.set(eventKey(raw, event), ts && !event.timestamp ? { ...event, timestamp: ts } : event);
+    }
+    log('captured code session:', id, `${entry.events.size} events`);
+  }
+
+  function rememberV1Payload(url, status, payload) {
+    log('v1 response:', url.replace(/^https:\/\/claude\.ai/, ''), status, shapeOf(payload));
+    if (status < 200 || status >= 300) return;
+    const id = url.match(SESSION_ID_RE)?.[0] || currentIds().codeSessionId;
+    if (!id) return;
+
+    const list = findEventList(payload);
+    if (list) {
+      codeSessionEntry(id).urls.add(url);
+      mergeCodeEvents(id, list);
+      return;
+    }
+    // 不是 event 清單、但 id 對得上的物件，當成 session metadata（標題等）。
+    if (payload && typeof payload === 'object' && !Array.isArray(payload) && payload.id === id) {
+      codeSessionEntry(id).meta = payload;
+    }
+  }
+
+  /** 讀 body 但不碰串流（SSE / watch），否則 clone 會一直掛著。 */
+  function readJsonBody(text) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      // NDJSON：一行一個 event
+      const lines = text.split('\n').filter((line) => line.trim());
+      const items = [];
+      for (const line of lines) {
+        try {
+          items.push(JSON.parse(line));
+        } catch {
+          return null;
+        }
+      }
+      return items.length ? items : null;
+    }
+  }
+
+  function inspectResponse(url, response) {
+    if (response.ok && CAPTURE_URL.test(url)) {
+      // body 只能讀一次，一定要 clone，否則網站自己就讀不到了。
+      response
+        .clone()
+        .json()
+        .then(rememberPayload)
+        .catch(() => {});
+      return;
+    }
+    if (!V1_URL.test(url)) return;
+    const type = response.headers.get('content-type') || '';
+    if (/event-stream/.test(type)) {
+      log('v1 stream (not captured):', url, type);
+      return;
+    }
+    response
+      .clone()
+      .text()
+      .then((text) => {
+        const payload = readJsonBody(text);
+        if (payload !== null) rememberV1Payload(url, response.status, payload);
+      })
+      .catch(() => {});
+  }
+
+  function urlOf(input) {
+    if (typeof input === 'string') return input;
+    if (input instanceof URL) return input.href;
+    return input?.url || '';
+  }
+
   function installNetworkCapture() {
     const originalFetch = pageWin.fetch;
     if (typeof originalFetch !== 'function' || originalFetch.__claudeExportPatched) return;
 
     const patched = function (...args) {
+      const input = args[0];
+      const url = urlOf(input);
+      try {
+        // Request 物件的 header 掛在自己身上，否則看第二個參數的 init.headers。
+        rememberV1Headers(url, args[1]?.headers || input?.headers);
+      } catch {
+        /* 攔截失敗不能影響網站本身 */
+      }
       const promise = originalFetch.apply(this, args);
       return promise.then((response) => {
         try {
-          const input = args[0];
-          const url = typeof input === 'string' ? input : input?.url || '';
-          // body 只能讀一次，一定要 clone，否則網站自己就讀不到了。
-          if (response.ok && CAPTURE_URL.test(url)) {
-            response
-              .clone()
-              .json()
-              .then(rememberPayload)
-              .catch(() => {});
-          }
+          inspectResponse(url, response);
         } catch {
           /* 攔截失敗不能影響網站本身 */
         }
@@ -121,6 +292,66 @@
     };
     patched.__claudeExportPatched = true;
     pageWin.fetch = patched;
+  }
+
+  /** Claude Code web 的部分請求可能走 XHR（axios），所以兩種都攔。 */
+  function installXhrCapture() {
+    const XHR = pageWin.XMLHttpRequest;
+    if (!XHR || XHR.prototype.__claudeExportPatched) return;
+
+    const { open, send, setRequestHeader } = XHR.prototype;
+
+    XHR.prototype.open = function (method, url, ...rest) {
+      this.__claudeExportUrl = String(url || '');
+      this.__claudeExportHeaders = {};
+      return open.call(this, method, url, ...rest);
+    };
+
+    // XHR 的 header 是一個一個設的，得自己累積起來。
+    XHR.prototype.setRequestHeader = function (name, value) {
+      try {
+        if (this.__claudeExportHeaders) {
+          this.__claudeExportHeaders[String(name).toLowerCase()] = String(value);
+        }
+      } catch {
+        /* 攔截失敗不能影響網站本身 */
+      }
+      return setRequestHeader.call(this, name, value);
+    };
+
+    XHR.prototype.send = function (...args) {
+      try {
+        const url = this.__claudeExportUrl || '';
+        rememberV1Headers(url, this.__claudeExportHeaders);
+        if (V1_URL.test(url) || CAPTURE_URL.test(url)) {
+          this.addEventListener('load', () => {
+            try {
+              const raw =
+                this.responseType === '' || this.responseType === 'text'
+                  ? this.responseText
+                  : this.responseType === 'json'
+                    ? JSON.stringify(this.response)
+                    : null;
+              if (typeof raw !== 'string') return;
+              const payload = readJsonBody(raw);
+              if (payload === null) return;
+              if (CAPTURE_URL.test(url)) {
+                if (this.status >= 200 && this.status < 300) rememberPayload(payload);
+              } else {
+                rememberV1Payload(url, this.status, payload);
+              }
+            } catch {
+              /* 讀不到就算了 */
+            }
+          });
+        }
+      } catch {
+        /* 同上 */
+      }
+      return send.apply(this, args);
+    };
+
+    XHR.prototype.__claudeExportPatched = true;
   }
 
   // ------------------------------------------------------- 來源：自己打 API
@@ -199,12 +430,69 @@
     }
   }
 
+  /**
+   * Claude Code session 自己補打。endpoint 沒文件，所以依序試幾個候選，
+   * 每個的 status 都印出來（失敗時這就是除錯線索）。events 會沿分頁游標走到底——
+   * 攔截可能只接到最近一頁，長 session 不補齊就會少前半段。
+   */
+  async function fromCodeSessionApi(id) {
+    const headers = { accept: 'application/json', ...(v1Headers || {}) };
+    const get = async (path) => {
+      try {
+        const res = await pageWin.fetch(path, { credentials: 'include', headers });
+        const text = await res.text();
+        const payload = readJsonBody(text);
+        if (!res.ok) log('code session api failed:', path, res.status, text.slice(0, 200));
+        return { ok: res.ok, payload };
+      } catch (error) {
+        log('code session api threw:', path, error.message);
+        return { ok: false, payload: null };
+      }
+    };
+
+    const entry = codeSessionEntry(id);
+    if (!entry.meta) {
+      for (const path of [`/v1/sessions/${id}`, `/v1/code/sessions/${id}`]) {
+        const { ok, payload } = await get(path);
+        if (ok && payload && !Array.isArray(payload)) {
+          entry.meta = payload;
+          break;
+        }
+      }
+    }
+
+    for (const base of [`/v1/sessions/${id}/events`, `/v1/code/sessions/${id}/events`]) {
+      let cursor = null;
+      let gotAny = false;
+      for (let page = 0; page < 100; page++) {
+        const query = new URLSearchParams({ limit: '1000' });
+        if (cursor) query.set('after_id', cursor);
+        const { ok, payload } = await get(`${base}?${query}`);
+        const list = ok ? findEventList(payload) : null;
+        if (!list) break;
+        // 攔截那層的合併是 async 的，這裡直接併進去，不要等它（重複的會被 key 去重）。
+        mergeCodeEvents(id, list);
+        gotAny = true;
+        const next = payload?.has_more ? payload.last_id || payload.next_page || null : null;
+        if (!next || next === cursor) break;
+        cursor = next;
+      }
+      if (gotAny) break;
+    }
+    return entry.events.size ? entry : null;
+  }
+
   // ------------------------------------------------------------ 來源總調度
 
   function currentIds() {
     const chat = location.pathname.match(/\/chat\/([0-9a-zA-Z-]+)/);
     const share = location.pathname.match(/^\/share\/([0-9a-zA-Z-]+)/);
-    return { convId: chat?.[1] || null, shareId: share?.[1] || null };
+    const code = location.pathname.match(/^\/code\/(session_[0-9A-Za-z]+)/);
+    return {
+      convId: chat?.[1] || null,
+      shareId: share?.[1] || null,
+      codeSessionId: code?.[1] || null,
+    };
   }
 
   function shareIdFromUrl(input) {
@@ -212,7 +500,28 @@
     return match ? match[1] : null;
   }
 
+  async function resolveCodeSession(id) {
+    const seen = codeSessions.get(id);
+    // 攔到的可能只是部分頁，先試著補齊；補不到就用攔到的。
+    const full = (await fromCodeSessionApi(id)) || (seen?.events.size ? seen : null);
+    if (full) {
+      return {
+        data: { kind: 'claude-code-session', session_id: id, meta: full.meta, events: sortedEvents(full) },
+        source: full.urls.size ? 'network-capture' : 'api',
+      };
+    }
+    throw new Error(
+      '抓不到 Claude Code session 的 events。請開 DevTools console 看 ' +
+        `${LOG_PREFIX} 開頭的 v1 response / api failed 紀錄（回報時請附上）。`
+    );
+  }
+
   async function resolveConversation(ids) {
+    if (ids.codeSessionId) return resolveCodeSession(ids.codeSessionId);
+    if (!ids.convId && !ids.shareId && captured.size === 0) {
+      throw new Error('這一頁不是對話頁（支援 /chat/<id>、/share/<id>、/code/session_<id>）。');
+    }
+
     const hit = pickCaptured(ids) || (await waitForCapture(ids));
     if (hit) return { data: hit, source: 'network-capture' };
 
@@ -373,6 +682,82 @@
     };
   }
 
+  // ------------------------------------------ Claude Code session → Markdown
+
+  const toMillis = (value) => {
+    const time = typeof value === 'number' ? value * (value < 1e12 ? 1000 : 1) : Date.parse(value);
+    return Number.isFinite(time) ? time : null;
+  };
+
+  /** 有時間戳就照時間排（穩定排序，同時間保留收到的順序），否則照收到的順序。 */
+  function sortedEvents(entry) {
+    const events = [...entry.events.values()];
+    if (!events.every((event) => toMillis(event.timestamp) !== null)) return events;
+    return events
+      .map((event, order) => ({ event, order, time: toMillis(event.timestamp) }))
+      .sort((a, b) => a.time - b.time || a.order - b.order)
+      .map((item) => item.event);
+  }
+
+  function contentBlocks(message) {
+    const content = message?.content;
+    if (typeof content === 'string') return [{ type: 'text', text: content }];
+    return Array.isArray(content) ? content : [];
+  }
+
+  /**
+   * SDK message → section：
+   * - user 的文字是 User；只含 tool_result 的 user event 其實是工具輸出，歸到 Assistant 側
+   * - `parent_tool_use_id` 有值的是 subagent 內部對話，當成工具細節
+   * - system / result 是 session 控制訊息，不進 transcript
+   */
+  function codeEventToSection(event, opts) {
+    if (event.type !== 'user' && event.type !== 'assistant') return null;
+    if (event.isMeta) return null;
+    if (event.parent_tool_use_id && !opts.includeTools) return null;
+
+    const blocks = contentBlocks(event.message);
+    const isToolOutput =
+      event.type === 'user' && blocks.length > 0 && blocks.every((b) => b?.type === 'tool_result');
+    const body = blocks
+      .map((block) => blockToText(block, opts))
+      .filter((text) => text.trim())
+      .join('\n\n');
+    const role = event.type === 'user' && !isToolOutput ? 'User' : 'Assistant';
+    return {
+      role,
+      model: role === 'Assistant' ? event.message?.model || '' : '',
+      time: event.timestamp,
+      body,
+    };
+  }
+
+  function normalizeCodeSession(data, ctx, opts) {
+    const meta = data.meta || {};
+    const sections = data.events
+      .map((event) => codeEventToSection(event, opts))
+      .filter((section) => section && section.body.trim());
+    const init = data.events.find((event) => event.type === 'system' && event.model);
+    const firstUser = sections.find((section) => section.role === 'User');
+    return {
+      source: 'claude-code',
+      sourceLabel: 'Claude Code',
+      title:
+        meta.title || meta.name || firstUser?.body.split('\n')[0].slice(0, 80) || 'Claude Code session',
+      url: ctx.url,
+      ids: { session_id: data.session_id },
+      model: init?.model || '',
+      createdAt: meta.created_at || data.events[0]?.timestamp,
+      sections,
+    };
+  }
+
+  function toDoc(data, ctx, opts) {
+    return data?.kind === 'claude-code-session'
+      ? normalizeCodeSession(data, ctx, opts)
+      : normalize(data, ctx, opts);
+  }
+
   // ------------------------------------------------------------------ 動作
 
   async function doExport({ mode, to, ids }) {
@@ -385,7 +770,7 @@
       const text =
         mode === 'json'
           ? JSON.stringify(data, null, 2)
-          : renderTranscript(normalize(data, { url }, settings), {
+          : renderTranscript(toDoc(data, { url }, settings), {
               ...settings,
               handoff: mode === 'handoff',
               exporter: EXPORTER,
@@ -395,7 +780,7 @@
         GM_setClipboard(text, 'text');
         ui.setStatus(`已複製 ${text.length.toLocaleString()} 字（來源：${source}）`);
       } else {
-        const doc = normalize(data, { url }, settings);
+        const doc = toDoc(data, { url }, settings);
         downloadText(
           filenameFor(doc, mode === 'json' ? 'json' : 'md'),
           text,
@@ -511,6 +896,7 @@
   // ----------------------------------------------------------------- 啟動
 
   installNetworkCapture(); // 必須在網站發出請求之前，所以 @run-at document-start
+  installXhrCapture();
   registerMenu();
 
   function start() {
