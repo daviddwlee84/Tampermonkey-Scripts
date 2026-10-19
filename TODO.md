@@ -12,6 +12,7 @@ Tampermonkey Scripts 的長期待辦索引；維護方式見 [CLAUDE.md](CLAUDE.
 
 - [ ] **[L] ChatGPT Export Intelligent UI HTML 快照** — 選擇性匯出網頁版已渲染的卡片／雙欄等版面為自包含 HTML；v1.5.0 只用 fallbackMarkdown，完整 DIL 保存在 .json。需處理 virtualized 列表與 inline CSS。
 - [ ] **[S] ChatGPT Export 生圖輸出圖片打包** — 把工具產生的圖片（tool message 的 image_asset_pointer）納入預設 transcript 與 ZIP；需要含生圖的原始 JSON 樣本驗證。
+- [ ] **[M] LLM provider 共用層** — 把 chat-reply-assistant 與 etherscan-tx-explainer 各自複製的 provider 設定、endpoint 驗證、key 綁定與模型清單解析抽成 shared/llm-providers.js；需處理兩支腳本不同的 settings 版本與各自的 BEGIN PROVIDERS 測試。
 
 ## P3
 

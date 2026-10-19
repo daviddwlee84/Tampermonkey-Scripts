@@ -29,7 +29,8 @@
     "dino": "node scripts/dino-server.mjs",
     "test:dino-ai": "node --test tests/dino-ai-lab.test.mjs",
     "benchmark:dino": "node scripts/dino-benchmark.mjs",
-    "test:chat-reply-assistant": "node --test tests/chat-reply-assistant-core.test.mjs tests/chat-reply-assistant-providers.test.mjs tests/chat-reply-assistant-decisions.test.mjs tests/chat-reply-assistant-meta.test.mjs tests/chat-reply-assistant-gemini.test.mjs tests/chat-reply-assistant-diagnostics.test.mjs tests/chat-reply-assistant-history.test.mjs tests/chat-reply-assistant.test.mjs tests/chat-reply-assistant-automation.test.mjs"
+    "test:chat-reply-assistant": "node --test tests/chat-reply-assistant-core.test.mjs tests/chat-reply-assistant-providers.test.mjs tests/chat-reply-assistant-decisions.test.mjs tests/chat-reply-assistant-meta.test.mjs tests/chat-reply-assistant-gemini.test.mjs tests/chat-reply-assistant-diagnostics.test.mjs tests/chat-reply-assistant-history.test.mjs tests/chat-reply-assistant.test.mjs tests/chat-reply-assistant-automation.test.mjs",
+    "test:etherscan-tx-explainer": "node --test tests/etherscan-tx-explainer.test.mjs"
   },
   "devDependencies": {
     "prettier": "^3.4.2",
