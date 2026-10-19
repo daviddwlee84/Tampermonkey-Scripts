@@ -222,13 +222,19 @@ class ZipTests(unittest.TestCase):
 
     def test_catalog_defaults_and_explicit_selection(self):
         select = lambda **kwargs: syncer.select_zip_scripts(syncer.REPO_ROOT, self.sources, **kwargs)
+        # 分類成員從 catalog.json 讀，新增實驗性腳本時不必同步改測試
+        catalog = json.loads((syncer.REPO_ROOT / "scripts/catalog.json").read_text(encoding="utf-8"))
+        members = {c["id"]: {f"{slug}.user.js" for slug in c["scripts"]} for c in catalog}
+        examples = {"hello-userscript.user.js", "page-title-tag.user.js"}
+        self.assertEqual(members["examples"], examples)
+        self.assertTrue({"m365-copilot-export-markdown.user.js", "dino-ai-lab.user.js"} <= members["experimental"])
         defaults = {name for name, _ in select()}
         self.assertIn("page-reader-markdown.user.js", defaults)
-        self.assertTrue(defaults.isdisjoint({"hello-userscript.user.js", "page-title-tag.user.js", "m365-copilot-export-markdown.user.js", "dino-ai-lab.user.js"}))
+        self.assertTrue(defaults.isdisjoint(examples | members["experimental"]))
         self.assertEqual(select(include_all=True), self.sources)
-        self.assertEqual({name for name, _ in select(categories=["examples"])}, {"hello-userscript.user.js", "page-title-tag.user.js"})
+        self.assertEqual({name for name, _ in select(categories=["examples"])}, examples)
         both = {name for name, _ in select(categories=["examples", "experimental", "examples"])}
-        self.assertEqual(both, {"hello-userscript.user.js", "page-title-tag.user.js", "m365-copilot-export-markdown.user.js", "dino-ai-lab.user.js"})
+        self.assertEqual(both, examples | members["experimental"])
         self.assertEqual([name for name, _ in select(only=["page-title-tag"])], ["page-title-tag.user.js"])
         for kwargs in ({"categories": ["typo"]}, {"only": ["typo"]}):
             with self.assertRaisesRegex(ValueError, "Unknown"):
