@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Claude Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      1.1.0
+// @version      1.1.1
 // @description  把整段 Claude 對話（含 Claude Code on the web session）匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用
 // @author       Da-Wei Lee
 // @license      MIT
@@ -44,7 +44,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.1.0';
+  const VERSION = '1.1.1';
   const NS = 'claude-export-md';
   const EXPORTER = `claude-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[claude-export-markdown]';
@@ -705,6 +705,13 @@
     return Array.isArray(content) ? content : [];
   }
 
+  function blocksText(blocks, opts) {
+    return blocks
+      .map((block) => blockToText(block, opts))
+      .filter((text) => text.trim())
+      .join('\n\n');
+  }
+
   /**
    * SDK message → section：
    * - user 的文字是 User；只含 tool_result 的 user event 其實是工具輸出，歸到 Assistant 側
@@ -716,13 +723,22 @@
     if (event.isMeta) return null;
     if (event.parent_tool_use_id && !opts.includeTools) return null;
 
+    // harness 注入的 user turn（背景 task 通知、subagent 回報）帶 `origin`；
+    // 真人打的訊息沒有。這些不是使用者說的話，當成工具細節。
+    if (event.type === 'user' && event.origin?.kind) {
+      if (!opts.includeTools) return null;
+      const origin = event.origin;
+      const body =
+        origin.kind === 'peer' && typeof origin.handbackReportText === 'string'
+          ? `**Subagent report: ${origin.name || origin.from || 'agent'}**\n\n${origin.handbackReportText}`
+          : `**${origin.kind}**\n\n${blocksText(contentBlocks(event.message), opts)}`;
+      return { role: 'Assistant', model: '', time: event.timestamp, body };
+    }
+
     const blocks = contentBlocks(event.message);
     const isToolOutput =
       event.type === 'user' && blocks.length > 0 && blocks.every((b) => b?.type === 'tool_result');
-    const body = blocks
-      .map((block) => blockToText(block, opts))
-      .filter((text) => text.trim())
-      .join('\n\n');
+    const body = blocksText(blocks, opts);
     const role = event.type === 'user' && !isToolOutput ? 'User' : 'Assistant';
     return {
       role,

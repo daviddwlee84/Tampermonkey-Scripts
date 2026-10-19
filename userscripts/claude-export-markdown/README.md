@@ -63,7 +63,7 @@ Claude Code web 不走 `chat_conversations`，而是 `/v1/…sessions…` 系列
 - `text/event-stream`（例如 `/v1/code/sessions/watch`）不讀，避免卡住串流；
   如果 transcript 只從串流或 WebSocket 進來，目前這條路會抓不到。
 
-轉換規則：user 文字 → User；assistant 的 block 沿用 chat 的規則（thinking／工具開關照舊）；
+轉換規則：user 文字 → User（帶 `origin` 的 user turn 是 harness 注入的背景 task 通知與 subagent 回報，不算 User，只在「含工具呼叫」開啟時以 `**Subagent report: …**` 等標題出現）；assistant 的 block 沿用 chat 的規則（thinking／工具開關照舊）；
 只含 `tool_result` 的 user event 算工具輸出、`parent_tool_use_id` 有值的 subagent 內部對話
 都只在「含工具呼叫」開啟時出現；`system`／`result` 事件不進 transcript。
 Download .json 會輸出 `{ kind, session_id, meta, events }`。
