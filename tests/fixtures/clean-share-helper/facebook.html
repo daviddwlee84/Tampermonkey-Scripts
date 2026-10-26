@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><title>Facebook modeled fixture</title>
+  <style>
+    body {
+      font: 16px system-ui;
+      margin: 24px;
+    }
+    [role='article'] {
+      padding: 20px;
+      border: 1px solid #aaa;
+      margin: 12px;
+    }
+    button {
+      padding: 8px;
+    }
+  </style>
+  <main>
+    <div role="article" id="post-a">
+      <header>Alice</header>
+      <a href="/permalink.php?story_fbid=ALICE&id=42&fbclid=x&mibextid=y"
+        ><abbr>1 hour ago</abbr></a
+      >
+      <p>Facebook post</p>
+      <div class="actions">
+        <button id="like-a">Like</button>
+        <div
+          role="button"
+          tabindex="0"
+          id="share-a"
+          aria-label="Send this to friends or post it on your profile."
+        >
+          Share
+        </div>
+      </div>
+    </div>
+    <div role="article" id="post-b">
+      <a href="/bob/posts/BOB?__cft__=b&__tn__=R"><abbr>2 hours ago</abbr></a>
+      <p>Bob's post</p>
+      <div class="actions"><div role="button" tabindex="0" id="share-b">分享</div></div>
+    </div>
+    <div role="article" id="unlinked">
+      <p>No permalink</p>
+      <button aria-label="Share">✈</button>
+    </div>
+  </main>
+  <script>
+    window.nativeClicks = 0;
+    document.querySelector('main').addEventListener('click', () => window.nativeClicks++);
+  </script>
+</html>

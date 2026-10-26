@@ -18,6 +18,7 @@
     "default": true,
     "scripts": [
       "arxiv-ai-assistant",
+      "clean-share-helper",
       "media-helper",
       "page-reader-markdown",
       "youtube-gemini-summary"

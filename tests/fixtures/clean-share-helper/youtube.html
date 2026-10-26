@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><title>YouTube modeled fixture</title>
+  <style>
+    body {
+      font: 16px system-ui;
+      margin: 24px;
+    }
+    ytd-watch-flexy,
+    ytd-watch-metadata,
+    yt-unified-share-panel-renderer {
+      display: block;
+      padding: 20px;
+      border: 1px solid #aaa;
+    }
+    button {
+      padding: 8px;
+    }
+    input {
+      width: 500px;
+      max-width: 100%;
+    }
+  </style>
+  <ytd-watch-flexy
+    ><ytd-watch-metadata
+      ><h1>Video A</h1>
+      <div id="top-level-buttons-computed">
+        <ytd-button-renderer
+          ><button id="share-a" aria-label="Share">Share</button></ytd-button-renderer
+        >
+      </div></ytd-watch-metadata
+    ></ytd-watch-flexy
+  >
+  <yt-unified-share-panel-renderer hidden
+    ><label
+      >Link
+      <input id="share-url" readonly value="https://youtu.be/ALICE?si=share&t=83&list=PL1" /></label
+    ><button id="native-copy">Copy</button></yt-unified-share-panel-renderer
+  >
+  <script>
+    window.nativeClicks = 0;
+    document
+      .querySelector('ytd-watch-flexy')
+      .addEventListener('click', () => window.nativeClicks++);
+  </script>
+</html>

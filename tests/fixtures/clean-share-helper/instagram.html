@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><title>Instagram modeled fixture</title>
+  <style>
+    body {
+      font: 16px system-ui;
+      margin: 24px;
+    }
+    article {
+      padding: 20px;
+      border: 1px solid #aaa;
+      margin: 12px;
+    }
+    button {
+      padding: 8px;
+    }
+  </style>
+  <main>
+    <article id="post-a">
+      <header>Alice</header>
+      <p>Instagram carousel</p>
+      <a href="/p/ALICE/?igsh=parent&img_index=2"><time>1 hour ago</time></a>
+      <section>
+        <button id="like-a">Like</button
+        ><button id="share-a"><svg aria-label="Share Post" width="20" height="20"></svg></button>
+      </section>
+    </article>
+    <article id="post-b">
+      <p>Bob's Reel</p>
+      <a href="/reel/BOB/?igshid=b"><time>2 hours ago</time></a>
+      <section><button id="share-b" aria-label="分享">✈</button></section>
+    </article>
+    <article id="unlinked">
+      <p>No permalink</p>
+      <button aria-label="Share">✈</button>
+    </article>
+  </main>
+  <script>
+    window.nativeClicks = 0;
+    document.querySelector('main').addEventListener('click', () => window.nativeClicks++);
+  </script>
+</html>
