@@ -21999,3 +21999,566 @@ _**Agent (gpt-6-astra 2026-10-31 15:31:18Z)**_
 - 尚未 push
 
 `.specstory/` 會話紀錄與 `.claude/plans/` 計畫檔未納入，仍保留在工作區。
+
+---
+
+_**User (2026-10-31 15:37:47Z)**_
+
+我發現它其實沒辦法獲取完整頁面資訊 似乎只有最後一個回覆
+> 此匯出僅包含目前已載入的頁面訊息；未載入、收合或虛擬化內容可能缺漏。
+> 已下載 DOM snapshot（僅已載入訊息，非原始 API JSON）。
+@.specstory/references/grok-Grok-免費功能查詢與-Deep-Research-確認-20261031-2336.dom-snapshot.json 這是我download json的內容
+然後我多聊了一輪 並且滾動了整個頁面（試圖確保沒有未加載內容）
+
+---
+
+_**Agent (gpt-6-astra 2026-10-31 15:37:55Z)**_
+
+這份 JSON 實際包含兩輪問答，但它仍是 `/c/` 頁面的 DOM 快照，無法保證取得更早的歷史；滾動過的訊息也可能被網站移出 DOM。我會先對照檔案與擷取邏輯，確認漏失位置，再調查登入對話的資料來源，不再把「滾過整頁」當作完整性的保證。
+
+
+_**Agent (gpt-6-astra 2026-10-31 15:37:56Z)**_
+
+<tool-use data-tool-type="generic" data-tool-name="Skill"><details>
+<summary>Tool use: **Skill**</summary>
+
+**Input:**
+
+- skill: `userscript-development`
+
+</details></tool-use>
+
+---
+
+_**User (2026-10-31 15:37:56Z)**_
+
+Skill /userscript-development is already loaded above; instructions unchanged.
+
+---
+
+_**Agent (gpt-6-astra 2026-10-31 15:38:20Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Inspect current exporter acquisition paths and Grok research
+
+`git status --short && git branch --show-current && rg -n 'function (readRoute|fromShare|acquire|normalize|domSnapshot)|FETCH_TIMEOUT|export_scope|completeness|grok|OpenCLI' userscripts/grok-export-markdown/grok-export-markdown.user.js backlog/chat-reply-assistant-ai-platforms.md`
+
+```text
+ M .specstory/history/2026-10-31_14-50-25Z-at-userscripts-chatgpt-export.md
+ M .specstory/statistics.json
+?? ".specstory/references/grok-Grok-\345\205\215\350\262\273\345\212\237\350\203\275\346\237\245\350\251\242\350\210\207-Deep-Research-\347\242\272\350\252\215-20261031-2336.dom-snapshot.json"
+main
+backlog/chat-reply-assistant-ai-platforms.md:13:- [OpenCLI Grok adapter](https://github.com/jackwener/OpenCLI/blob/main/clis/grok/utils.js) 提供 `/c/<id>`、ProseMirror composer、訊息識別與新 user turn 驗證的參考；其部分操作依賴頁面 Tiptap instance，不可直接假設 userscript sandbox 可用。
+userscripts/grok-export-markdown/grok-export-markdown.user.js:8:// @match        https://grok.com/*
+userscripts/grok-export-markdown/grok-export-markdown.user.js:18:// @updateURL    https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/grok-export-markdown/grok-export-markdown.user.js
+userscripts/grok-export-markdown/grok-export-markdown.user.js:19:// @downloadURL  https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/grok-export-markdown/grok-export-markdown.user.js
+userscripts/grok-export-markdown/grok-export-markdown.user.js:28:  const NS = 'grok-export-md';
+userscripts/grok-export-markdown/grok-export-markdown.user.js:29:  const EXPORTER = `grok-export-markdown v${VERSION}`;
+userscripts/grok-export-markdown/grok-export-markdown.user.js:32:  const FETCH_TIMEOUT = 12_000;
+userscripts/grok-export-markdown/grok-export-markdown.user.js:66:    onStatus: (text) => console.log('[grok-export-markdown]', text),
+userscripts/grok-export-markdown/grok-export-markdown.user.js:78:  function readRoute() {
+userscripts/grok-export-markdown/grok-export-markdown.user.js:162:  async function fromShare(op) {
+userscripts/grok-export-markdown/grok-export-markdown.user.js:166:    const timer = setTimeout(abort, FETCH_TIMEOUT);
+userscripts/grok-export-markdown/grok-export-markdown.user.js:233:  function domSnapshot(op) {
+userscripts/grok-export-markdown/grok-export-markdown.user.js:285:        schema: 'grok-loaded-dom-v1',
+userscripts/grok-export-markdown/grok-export-markdown.user.js:286:        source: 'grok',
+userscripts/grok-export-markdown/grok-export-markdown.user.js:290:        export_scope: 'loaded-dom',
+userscripts/grok-export-markdown/grok-export-markdown.user.js:291:        completeness: 'partial',
+userscripts/grok-export-markdown/grok-export-markdown.user.js:309:  async function acquire(op) {
+userscripts/grok-export-markdown/grok-export-markdown.user.js:347:    let prefix = '\u0000grok-code-';
+userscripts/grok-export-markdown/grok-export-markdown.user.js:454:      source: 'grok',
+userscripts/grok-export-markdown/grok-export-markdown.user.js:470:  function normalize(capture) {
+userscripts/grok-export-markdown/grok-export-markdown.user.js:579:    const metadata = `\nexport_scope: "${scope}"\ncompleteness: "${state}"`;
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-10-31 15:38:21Z)**_
+
+<tool-use data-tool-type="read" data-tool-name="Read"><details>
+<summary>Tool use: **Read**</summary>
+ `./userscripts/grok-export-markdown/grok-export-markdown.user.js`
+
+```text
+140	  function assertCurrent(op) {
+141	    updateRoute();
+142	    if (operation !== op || generation !== op.generation || op.controller.signal.aborted) {
+143	      throw new DOMException('頁面或匯出操作已變更。', 'AbortError');
+144	    }
+145	  }
+146	
+147	  function delay(ms, signal) {
+148	    return new Promise((resolve, reject) => {
+149	      const abort = () => {
+150	        clearTimeout(timer);
+151	        reject(new DOMException('匯出已取消。', 'AbortError'));
+152	      };
+153	      const timer = setTimeout(() => {
+154	        signal.removeEventListener('abort', abort);
+155	        resolve();
+156	      }, ms);
+157	      signal.addEventListener('abort', abort, { once: true });
+158	      if (signal.aborted) abort();
+159	    });
+160	  }
+161	
+162	  async function fromShare(op) {
+163	    const controller = new AbortController();
+164	    const abort = () => controller.abort();
+165	    op.controller.signal.addEventListener('abort', abort, { once: true });
+166	    const timer = setTimeout(abort, FETCH_TIMEOUT);
+167	    try {
+168	      const response = await fetch(
+169	        `${location.origin}/rest/app-chat/share_links/${encodeURIComponent(op.route.id)}`,
+170	        {
+171	          credentials: 'same-origin',
+172	          signal: controller.signal,
+173	          headers: { Accept: 'application/json' },
+174	        }
+175	      );
+176	      assertCurrent(op);
+177	      if (!response.ok) throw new Error(`分享 API HTTP ${response.status}`);
+178	      if (
+179	        !/\bapplication\/(?:[\w.-]+\+)?json\b/i.test(response.headers.get('content-type') || '')
+180	      ) {
+181	        throw new Error('分享 API 未回傳 JSON（可能是登入或驗證頁）。');
+182	      }
+183	      const data = await response.json();
+184	      assertCurrent(op);
+185	      // 不要求 Markdown schema 完全可解析，讓 JSON 仍能作為格式改版時的救援。
+186	      if (
+187	        !data ||
+188	        typeof data !== 'object' ||
+189	        Array.isArray(data) ||
+190	        data.error ||
+191	        data.errors ||
+192	        (!Object.hasOwn(data, 'responses') && !Object.hasOwn(data, 'conversation'))
+193	      ) {
+194	        throw new Error('分享 API 回傳的不是可辨識的對話資料。');
+195	      }
+196	      return { kind: 'share', data, route: op.route, warnings: [], partial: false };
+197	    } catch (error) {
+198	      assertCurrent(op);
+199	      if (controller.signal.aborted) throw new Error('分享 API 等待逾時。');
+200	      throw error;
+201	    } finally {
+202	      clearTimeout(timer);
+203	      op.controller.signal.removeEventListener('abort', abort);
+204	    }
+205	  }
+206	
+207	  function pageTitle() {
+208	    const title = (document.title || '')
+209	      .replace(/\s*\|\s*Shared Grok Conversation\s*$/i, '')
+210	      .replace(/\s*[-–—|]\s*Grok\s*$/i, '')
+211	      .trim();
+212	    return title && !/^Grok$/i.test(title) ? title : 'Grok conversation';
+213	  }
+214	
+215	  function cleanClone(source) {
+216	    const clone = source.cloneNode(true);
+217	    const images = source.querySelectorAll('img');
+218	    clone.querySelectorAll('img').forEach((image, index) => {
+219	      const original = images[index];
+220	      const src =
+221	        original.currentSrc || original.getAttribute('src') || original.getAttribute('data-src');
+222	      if (src) image.setAttribute('src', src);
+223	    });
+224	    for (const node of clone.querySelectorAll(NOISE)) node.remove();
+225	    for (const node of [clone, ...clone.querySelectorAll('*')]) {
+226	      for (const attr of [...node.attributes]) {
+227	        if (/^on/i.test(attr.name) || attr.name === 'srcdoc') node.removeAttribute(attr.name);
+228	      }
+229	    }
+230	    return clone;
+231	  }
+232	
+233	  function domSnapshot(op) {
+234	    const bubbles = messageNodes();
+235	    // 換 URL 不等於換正文：寧可等待／報錯，不把舊泡泡貼上新對話 URL。
+236	    if (!bubbles.length || bubbles.some(staleNode)) return null;
+237	    const messages = [];
+238	    const nodes = new Map();
+239	    const warnings = [];
+240	    for (const bubble of bubbles) {
+241	      const parts = [];
+242	      const roots = [...bubble.querySelectorAll(CONTENT_SELECTOR)].filter(
+243	        (root) =>
+244	          root.closest(MESSAGE_SELECTOR) === bubble && !root.parentElement.closest(CONTENT_SELECTOR)
+245	      );
+246	      for (const source of roots) {
+247	        const clone = cleanClone(source);
+248	        const placeholders = [...clone.querySelectorAll('.invisible.whitespace-pre-wrap')];
+249	        const raw = placeholders.map((node) => node.textContent).join('\n\n');
+250	        placeholders.forEach((node) => node.remove());
+251	        const rendered = clone.textContent.trim() || clone.querySelector('img, pre, table, math');
+252	        if (!rendered && raw.trim()) {
+253	          parts.push({ format: 'markdown', content: raw });
+254	        } else if (rendered) {
+255	          const part = { format: 'html', content: clone.innerHTML };
+256	          parts.push(part);
+257	          nodes.set(part, clone);
+258	        }
+259	      }
+260	      if (parts.length) {
+261	        messages.push({
+262	          id: responseId(bubble),
+263	          role: bubble.getAttribute('data-testid') === 'user-message' ? 'User' : 'Assistant',
+264	          parts,
+265	        });
+266	      } else {
+267	        warnings.push('有訊息尚未載入或包含未支援的非文字內容。');
+268	      }
+269	      if (
+270	        bubble.querySelector(
+271	          '.inline-media-container img, .inline-media-container video, .inline-media-container a'
+272	        )
+273	      ) {
+274	        warnings.push('獨立附件區未匯出；目前只保留正文內可辨識的圖片與連結。');
+275	      }
+276	    }
+277	    if (!messages.length) return null;
+278	    return {
+279	      kind: 'dom',
+280	      route: op.route,
+281	      nodes,
+282	      warnings,
+283	      partial: true,
+284	      data: {
+285	        schema: 'grok-loaded-dom-v1',
+286	        source: 'grok',
+287	        url: op.route.url,
+288	        title: pageTitle(),
+289	        capturedAt: new Date().toISOString(),
+290	        export_scope: 'loaded-dom',
+291	        completeness: 'partial',
+292	        messages,
+293	      },
+294	    };
+295	  }
+296	
+297	  async function fromDom(op) {
+298	    const deadline = Date.now() + DOM_TIMEOUT;
+299	    for (;;) {
+300	      assertCurrent(op);
+301	      const capture = domSnapshot(op);
+302	      if (capture) return capture;
+303	      if (Date.now() >= deadline)
+304	        throw new Error('找不到可確認屬於目前對話的已載入訊息；請等待內容完成或重新載入頁面。');
+305	      await delay(150, op.controller.signal);
+306	    }
+307	  }
+308	
+309	  async function acquire(op) {
+310	    if (op.route.kind === 'share') {
+311	      try {
+312	        return await fromShare(op);
+313	      } catch (error) {
+314	        assertCurrent(op);
+315	        panel.setStatus(`${error.message} 改用已載入 DOM（可能不完整）。`);
+316	        const capture = await fromDom(op);
+317	        capture.warnings.push(`分享 API 無法讀取，已改用 DOM：${error.message}`);
+318	        return capture;
+319	      }
+320	    }
+321	    return fromDom(op);
+322	  }
+323	
+324	  function safeUrl(value, base) {
+325	    if (typeof value !== 'string' || !value.trim()) return '';
+326	    try {
+327	      const url = new URL(value, base);
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-10-31 15:39:50Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Inspect public Grok client for conversation data endpoints
+
+```bash
+node --input-type=module <<'JS'
+import { chromium } from 'playwright';
+const browser = await chromium.launch();
+const results = [];
+const pending = [];
+try {
+  const page = await browser.newPage();
+  page.on('response', response => {
+    if (response.request().resourceType() !== 'script') return;
+    pending.push((async () => {
+      const source = await response.text().catch(() => '');
+      const pattern = /\/rest\/app-chat\/(?:conversations|responses)[^"'`\s]{0,180}/g;
+      const hits = [...source.matchAll(pattern)];
+      if (hits.length) results.push({url: response.url(), endpoints: [...new Set(hits.map(m => m[0]))], examples: hits.slice(0, 8).map(m => source.slice(Math.max(0, m.index - 250), m.index + 450))});
+    })());
+  });
+  await page.goto('https://grok.com/share/bGVnYWN5_0031bed2-7d10-4f94-b312-51ba763328a8', {waitUntil: 'networkidle', timeout: 60000});
+  await Promise.all(pending);
+  console.log(JSON.stringify(results, null, 2));
+} finally { await browser.close(); }
+JS
+```
+
+```text
+Exit code 1
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.goto: Timeout 60000ms exceeded.
+Call log:
+  - navigating to "https://grok.com/share/bGVnYWN5_0031bed2-7d10-4f94-b312-51ba763328a8", waiting until "networkidle"**
+
+    at /Users/zhouhanru/Documents/David/Program/Tampermonkey-Scripts/[eval1]:16:14 {
+  log: [
+    '  - navigating to "https://grok.com/share/bGVnYWN5_0031bed2-7d10-4f94-b312-51ba763328a8", waiting until "networkidle"'
+  ],
+  name: 'TimeoutError'
+}
+
+Node.js v24.13.0
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-10-31 15:40:03Z)**_
+
+目前程式的確讓 `/c/` 一律走 DOM，並沒有嘗試取得對話歷史；那段警告是固定的保守標示，不是已偵測到缺漏。你提供的檔案有兩則 User、兩則 Assistant，我會把「這份檔案抓到幾則」與「整段歷史是否完整」分開確認。
+
+
+_**Agent (gpt-6-astra 2026-10-31 15:40:14Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read conversation endpoint definitions after page rendering
+
+```bash
+node --input-type=module <<'JS'
+import { chromium } from 'playwright';
+const browser = await chromium.launch();
+const results = [];
+const pending = [];
+try {
+  const page = await browser.newPage();
+  page.on('response', response => {
+    if (response.request().resourceType() !== 'script') return;
+    pending.push((async () => {
+      const source = await response.text().catch(() => '');
+      const pattern = /\/rest\/app-chat\/(?:conversations|responses)[^"'`\s]{0,180}/g;
+      const hits = [...source.matchAll(pattern)];
+      if (hits.length) results.push({url: response.url(), endpoints: [...new Set(hits.map(m => m[0]))], examples: hits.slice(0, 12).map(m => source.slice(Math.max(0, m.index - 180), m.index + 370))});
+    })());
+  });
+  await page.goto('https://grok.com/share/bGVnYWN5_0031bed2-7d10-4f94-b312-51ba763328a8', {waitUntil: 'domcontentloaded', timeout: 30000});
+  await page.locator('[data-testid="assistant-message"] table').waitFor({timeout: 20000}).catch(e => console.log('Render wait:', e.message.split('\n')[0]));
+  await Promise.all(pending);
+  console.log(JSON.stringify(results, null, 2));
+} finally { await browser.close(); }
+JS
+```
+
+```text
+[
+  {
+    "url": "https://cdn.grok.com/_next/static/chunks/0v8n8n6pkf1_g.js",
+    "endpoints": [
+      "/rest/app-chat/conversations",
+      "/rest/app-chat/conversations-many",
+      "/rest/app-chat/conversations/deleted",
+      "/rest/app-chat/conversations/exists/{conversationId}",
+      "/rest/app-chat/conversations/from-ai-overview",
+      "/rest/app-chat/conversations/inflight-response/{responseId}",
+      "/rest/app-chat/conversations/new",
+      "/rest/app-chat/conversations/reconnect-response-v2/{responseId}",
+      "/rest/app-chat/conversations/reconnect-response/{responseId}",
+      "/rest/app-chat/conversations/restore",
+      "/rest/app-chat/conversations/soft/{conversationId}",
+      "/rest/app-chat/conversations/{conversationId}",
+      "/rest/app-chat/conversations/{conversationId}/ask-to-share",
+      "/rest/app-chat/conversations/{conversationId}/continue-project",
+      "/rest/app-chat/conversations/{conversationId}/deploy-app",
+      "/rest/app-chat/conversations/{conversationId}/download-workspace",
+      "/rest/app-chat/conversations/{conversationId}/export-github",
+      "/rest/app-chat/conversations/{conversationId}/load-responses",
+      "/rest/app-chat/conversations/{conversationId}/model-responses",
+      "/rest/app-chat/conversations/{conversationId}/response-node",
+      "/rest/app-chat/conversations/{conversationId}/responses",
+      "/rest/app-chat/conversations/{conversationId}/share",
+      "/rest/app-chat/conversations/{conversationId}/sharing",
+      "/rest/app-chat/conversations/{conversationId}/stop-inflight-responses",
+      "/rest/app-chat/conversations/{conversationId}/title",
+      "/rest/app-chat/conversations/{conversationId}/user-responses",
+      "/rest/app-chat/conversations/{conversationId}/warm-sandbox",
+      "/rest/app-chat/conversations_v2/{conversationId}"
+    ],
+    "examples": [
+      "-chat/app-builder-conversations\",\"/rest/app-chat/app-deployments\",\"/rest/app-chat/bot-chat-attachment\",\"/rest/app-chat/choose_sbs_response\",\"/rest/app-chat/conversation-starters\",\"/rest/app-chat/conversations\",\"/rest/app-chat/conversations-many\",\"/rest/app-chat/conversations/deleted\",\"/rest/app-chat/conversations/exists/{conversationId}\",\"/rest/app-chat/conversations/from-ai-overview\",\"/rest/app-chat/conversations/inflight-response/{responseId}\",\"/rest/app-chat/conversations/new\",\"/rest/app-chat/conversations/reconnect-response-v2/{responseId}\"",
+      "\",\"/rest/app-chat/app-deployments\",\"/rest/app-chat/bot-chat-attachment\",\"/rest/app-chat/choose_sbs_response\",\"/rest/app-chat/conversation-starters\",\"/rest/app-chat/conversations\",\"/rest/app-chat/conversations-many\",\"/rest/app-chat/conversations/deleted\",\"/rest/app-chat/conversations/exists/{conversationId}\",\"/rest/app-chat/conversations/from-ai-overview\",\"/rest/app-chat/conversations/inflight-response/{responseId}\",\"/rest/app-chat/conversations/new\",\"/rest/app-chat/conversations/reconnect-response-v2/{responseId}\",\"/rest/app-chat/conversations/",
+      "/rest/app-chat/bot-chat-attachment\",\"/rest/app-chat/choose_sbs_response\",\"/rest/app-chat/conversation-starters\",\"/rest/app-chat/conversations\",\"/rest/app-chat/conversations-many\",\"/rest/app-chat/conversations/deleted\",\"/rest/app-chat/conversations/exists/{conversationId}\",\"/rest/app-chat/conversations/from-ai-overview\",\"/rest/app-chat/conversations/inflight-response/{responseId}\",\"/rest/app-chat/conversations/new\",\"/rest/app-chat/conversations/reconnect-response-v2/{responseId}\",\"/rest/app-chat/conversations/reconnect-response/{responseId}\",\"/r",
+      "est/app-chat/choose_sbs_response\",\"/rest/app-chat/conversation-starters\",\"/rest/app-chat/conversations\",\"/rest/app-chat/conversations-many\",\"/rest/app-chat/conversations/deleted\",\"/rest/app-chat/conversations/exists/{conversationId}\",\"/rest/app-chat/conversations/from-ai-overview\",\"/rest/app-chat/conversations/inflight-response/{responseId}\",\"/rest/app-chat/conversations/new\",\"/rest/app-chat/conversations/reconnect-response-v2/{responseId}\",\"/rest/app-chat/conversations/reconnect-response/{responseId}\",\"/rest/app-chat/conversations/restore\",\"/r",
+      "rsation-starters\",\"/rest/app-chat/conversations\",\"/rest/app-chat/conversations-many\",\"/rest/app-chat/conversations/deleted\",\"/rest/app-chat/conversations/exists/{conversationId}\",\"/rest/app-chat/conversations/from-ai-overview\",\"/rest/app-chat/conversations/inflight-response/{responseId}\",\"/rest/app-chat/conversations/new\",\"/rest/app-chat/conversations/reconnect-response-v2/{responseId}\",\"/rest/app-chat/conversations/reconnect-response/{responseId}\",\"/rest/app-chat/conversations/restore\",\"/rest/app-chat/conversations/soft/{conversationId}\",\"/res",
+      ",\"/rest/app-chat/conversations-many\",\"/rest/app-chat/conversations/deleted\",\"/rest/app-chat/conversations/exists/{conversationId}\",\"/rest/app-chat/conversations/from-ai-overview\",\"/rest/app-chat/conversations/inflight-response/{responseId}\",\"/rest/app-chat/conversations/new\",\"/rest/app-chat/conversations/reconnect-response-v2/{responseId}\",\"/rest/app-chat/conversations/reconnect-response/{responseId}\",\"/rest/app-chat/conversations/restore\",\"/rest/app-chat/conversations/soft/{conversationId}\",\"/rest/app-chat/conversations/{conversationId}\",\"/res",
+      "ions/deleted\",\"/rest/app-chat/conversations/exists/{conversationId}\",\"/rest/app-chat/conversations/from-ai-overview\",\"/rest/app-chat/conversations/inflight-response/{responseId}\",\"/rest/app-chat/conversations/new\",\"/rest/app-chat/conversations/reconnect-response-v2/{responseId}\",\"/rest/app-chat/conversations/reconnect-response/{responseId}\",\"/rest/app-chat/conversations/restore\",\"/rest/app-chat/conversations/soft/{conversationId}\",\"/rest/app-chat/conversations/{conversationId}\",\"/rest/app-chat/conversations/{conversationId}/ask-to-share\",\"/rest",
+      "rsations/exists/{conversationId}\",\"/rest/app-chat/conversations/from-ai-overview\",\"/rest/app-chat/conversations/inflight-response/{responseId}\",\"/rest/app-chat/conversations/new\",\"/rest/app-chat/conversations/reconnect-response-v2/{responseId}\",\"/rest/app-chat/conversations/reconnect-response/{responseId}\",\"/rest/app-chat/conversations/restore\",\"/rest/app-chat/conversations/soft/{conversationId}\",\"/rest/app-chat/conversations/{conversationId}\",\"/rest/app-chat/conversations/{conversationId}/ask-to-share\",\"/rest/app-chat/conversations/{conversati",
+      "om-ai-overview\",\"/rest/app-chat/conversations/inflight-response/{responseId}\",\"/rest/app-chat/conversations/new\",\"/rest/app-chat/conversations/reconnect-response-v2/{responseId}\",\"/rest/app-chat/conversations/reconnect-response/{responseId}\",\"/rest/app-chat/conversations/restore\",\"/rest/app-chat/conversations/soft/{conversationId}\",\"/rest/app-chat/conversations/{conversationId}\",\"/rest/app-chat/conversations/{conversationId}/ask-to-share\",\"/rest/app-chat/conversations/{conversationId}/continue-project\",\"/rest/app-chat/conversations/{conversatio",
+      "/{responseId}\",\"/rest/app-chat/conversations/new\",\"/rest/app-chat/conversations/reconnect-response-v2/{responseId}\",\"/rest/app-chat/conversations/reconnect-response/{responseId}\",\"/rest/app-chat/conversations/restore\",\"/rest/app-chat/conversations/soft/{conversationId}\",\"/rest/app-chat/conversations/{conversationId}\",\"/rest/app-chat/conversations/{conversationId}/ask-to-share\",\"/rest/app-chat/conversations/{conversationId}/continue-project\",\"/rest/app-chat/conversations/{conversationId}/deploy-app\",\"/rest/app-chat/conversations/{conversationId}",
+      "tions/new\",\"/rest/app-chat/conversations/reconnect-response-v2/{responseId}\",\"/rest/app-chat/conversations/reconnect-response/{responseId}\",\"/rest/app-chat/conversations/restore\",\"/rest/app-chat/conversations/soft/{conversationId}\",\"/rest/app-chat/conversations/{conversationId}\",\"/rest/app-chat/conversations/{conversationId}/ask-to-share\",\"/rest/app-chat/conversations/{conversationId}/continue-project\",\"/rest/app-chat/conversations/{conversationId}/deploy-app\",\"/rest/app-chat/conversations/{conversationId}/download-workspace\",\"/rest/app-chat/co",
+      "sponse-v2/{responseId}\",\"/rest/app-chat/conversations/reconnect-response/{responseId}\",\"/rest/app-chat/conversations/restore\",\"/rest/app-chat/conversations/soft/{conversationId}\",\"/rest/app-chat/conversations/{conversationId}\",\"/rest/app-chat/conversations/{conversationId}/ask-to-share\",\"/rest/app-chat/conversations/{conversationId}/continue-project\",\"/rest/app-chat/conversations/{conversationId}/deploy-app\",\"/rest/app-chat/conversations/{conversationId}/download-workspace\",\"/rest/app-chat/conversations/{conversationId}/export-github\",\"/rest/ap"
+    ]
+  },
+  {
+    "url": "https://cdn.grok.com/_next/static/chunks/2ww8kcyiudqn-.js",
+    "endpoints": [
+      "/rest/app-chat/conversations/{conversationId}/model-responses",
+      "/rest/app-chat/conversations/{conversationId}/responses",
+      "/rest/app-chat/conversations/{conversationId}/user-responses",
+      "/rest/app-chat/conversations/{conversationId}/ask-to-share",
+      "/rest/app-chat/conversations/{conversationId}/continue-project",
+      "/rest/app-chat/conversations",
+      "/rest/app-chat/conversations/new",
+      "/rest/app-chat/conversations/from-ai-overview",
+      "/rest/app-chat/conversations/{conversationId}",
+      "/rest/app-chat/conversations/{conversationId}/deploy-app",
+      "/rest/app-chat/conversations/{conversationId}/download-workspace",
+      "/rest/app-chat/conversations/{conversationId}/export-github",
+      "/rest/app-chat/conversations/{conversationId}/title",
+      "/rest/app-chat/conversations/exists/{conversationId}",
+      "/rest/app-chat/conversations/{conversationId}/sharing",
+      "/rest/app-chat/conversations_v2/{conversationId}",
+      "/rest/app-chat/conversations-many",
+      "/rest/app-chat/conversations/{conversationId}/response-node",
+      "/rest/app-chat/conversations/deleted",
+      "/rest/app-chat/conversations/{conversationId}/load-responses",
+      "/rest/app-chat/conversations/reconnect-response/{responseId}",
+      "/rest/app-chat/conversations/reconnect-response-v2/{responseId}",
+      "/rest/app-chat/conversations/restore",
+      "/rest/app-chat/conversations/{conversationId}/share",
+      "/rest/app-chat/conversations/soft/{conversationId}",
+      "/rest/app-chat/conversations/{conversationId}/stop-inflight-responses",
+      "/rest/app-chat/conversations/inflight-response/{responseId}",
+      "/rest/app-chat/conversations/{conversationId}/warm-sandbox"
+    ],
+    "examples": [
+      "ew n.w(\"body\",'Required parameter \"body\" was null or undefined when calling chatAddModelResponse().');let o={};o[\"Content-Type\"]=\"application/json\";let l=await this.request({path:\"/rest/app-chat/conversations/{conversationId}/model-responses\".replace(\"{conversationId}\",encodeURIComponent(String(e.conversationId))),method:\"POST\",headers:o,query:{},body:function(e,n=!1){return null==e?e:{message:e.message,partial:e.partial,parentResponseId:e.parentResponseId,webSearchResults:null==e.webSearchResults?void 0:e.webSearchResults.map(D.$),xpostIds:e.x",
+      "row new n.w(\"body\",'Required parameter \"body\" was null or undefined when calling chatAddResponse().');let l={};l[\"Content-Type\"]=\"application/json\";let i=await this.request({path:\"/rest/app-chat/conversations/{conversationId}/responses\".replace(\"{conversationId}\",encodeURIComponent(String(e.conversationId))),method:\"POST\",headers:l,query:{},body:(0,t.f)(e.body)},o);return new n.H(i,e=>q(e,!1))}async chatAddResponse(e,n){let t=await this.chatAddResponseRaw(e,n);return await t.value()}async chatAddToolResponseRaw(e,t){if(null==e.body)throw new n.",
+      "new n.w(\"body\",'Required parameter \"body\" was null or undefined when calling chatAddUserResponse().');let o={};o[\"Content-Type\"]=\"application/json\";let l=await this.request({path:\"/rest/app-chat/conversations/{conversationId}/user-responses\".replace(\"{conversationId}\",encodeURIComponent(String(e.conversationId))),method:\"POST\",headers:o,query:{},body:function(e,n=!1){return null==e?e:{message:e.message,parentResponseId:e.parentResponseId}}(e.body,!1)},t);return new n.H(l,e=>(0,i.f)(e))}async chatAddUserResponse(e,n){let t=await this.chatAddUser",
+      "(\"body\",'Required parameter \"body\" was null or undefined when calling chatAskToShareConversation().');let o={};o[\"Content-Type\"]=\"application/json\";let l=await this.request({path:\"/rest/app-chat/conversations/{conversationId}/ask-to-share\".replace(\"{conversationId}\",encodeURIComponent(String(e.conversationId))),method:\"POST\",headers:o,query:{},body:e.body},t);return new n.H(l)}async chatAskToShareConversation(e,n){let t=await this.chatAskToShareConversationRaw(e,n);return await t.value()}async chatChooseSBSResponseRaw(e,t){if(null==e.body)throw",
+      "y\",'Required parameter \"body\" was null or undefined when calling chatContinueProjectConversation().');let o={};o[\"Content-Type\"]=\"application/json\";let l=await this.request({path:\"/rest/app-chat/conversations/{conversationId}/continue-project\".replace(\"{conversationId}\",encodeURIComponent(String(e.conversationId))),method:\"POST\",headers:o,query:{},body:function(e,n=!1){return null==e?e:{leafResponseId:e.leafResponseId}}(e.body,!1)},t);return new n.H(l,e=>{var n;return null==(n=e)?n:{conversation:null==n.conversation?void 0:v(n.conversation),res",
+      " n.w(\"body\",'Required parameter \"body\" was null or undefined when calling chatCreateConversation().');let l={};l[\"Content-Type\"]=\"application/json\";let i=await this.request({path:\"/rest/app-chat/conversations\",method:\"POST\",headers:l,query:{},body:function(e,n=!1){return null==e?e:{systemPromptName:e.systemPromptName,temporary:e.temporary,addResponseRequest:(0,o.f)(e.addResponseRequest),workspaceIds:e.workspaceIds,taskResultId:e.taskResultId,templateId:e.templateId,kind:(0,u.Y)(e.kind)}}(e.body,!1)},t);return new n.H(i,e=>v(e))}async chatCreate",
+      "\",'Required parameter \"body\" was null or undefined when calling chatCreateConversationAndRespond().');let o={};o[\"Content-Type\"]=\"application/json\";let i=await this.request({path:\"/rest/app-chat/conversations/new\",method:\"POST\",headers:o,query:{},body:function(e,n=!1){return null==e?e:{systemPromptName:e.systemPromptName,temporary:e.temporary,modelName:e.modelName,message:e.message,fileAttachments:e.fileAttachments,imageAttachments:e.imageAttachments,disableSearch:e.disableSearch,enableImageGeneration:e.enableImageGeneration,returnImageBytes:e.",
+      "equired parameter \"body\" was null or undefined when calling chatCreateConversationFromAiOverview().');let o={};o[\"Content-Type\"]=\"application/json\";let l=await this.request({path:\"/rest/app-chat/conversations/from-ai-overview\",method:\"POST\",headers:o,query:{},body:function(e,n=!1){return null==e?e:{overviewId:e.overviewId,query:e.query,language:e.language,deferred:e.deferred,firstUserMessage:e.firstUserMessage}}(e.body,!1)},t);return new n.H(l,e=>{var n;return null==(n=e)?n:{conversationId:null==n.conversationId?void 0:n.conversationId,title:nu",
+      "rameter \"conversationId\" was null or undefined when calling chatDeleteConversation().');let o={};null!=e.deleteMedia&&(o.deleteMedia=e.deleteMedia);let l=await this.request({path:\"/rest/app-chat/conversations/{conversationId}\".replace(\"{conversationId}\",encodeURIComponent(String(e.conversationId))),method:\"DELETE\",headers:{},query:o},t);return new n.H(l)}async chatDeleteConversation(e,n){let t=await this.chatDeleteConversationRaw(e,n);return await t.value()}async chatDeleteMemoryRaw(e,t){let o={};null!=e.conversationIds&&(o.conversationIds=e.co",
+      "throw new n.w(\"body\",'Required parameter \"body\" was null or undefined when calling chatDeployApp().');let o={};o[\"Content-Type\"]=\"application/json\";let l=await this.request({path:\"/rest/app-chat/conversations/{conversationId}/deploy-app\".replace(\"{conversationId}\",encodeURIComponent(String(e.conversationId))),method:\"POST\",headers:o,query:{},body:function(e,n=!1){return null==e?e:{projectDir:e.projectDir,projectName:e.projectName,idempotencyKey:e.idempotencyKey,allowForking:e.allowForking,accessVisibility:G(e.accessVisibility),shareUserIds:e.sh",
+      ".w(\"body\",'Required parameter \"body\" was null or undefined when calling chatDownloadAppWorkspace().');let o={};o[\"Content-Type\"]=\"application/json\";let l=await this.request({path:\"/rest/app-chat/conversations/{conversationId}/download-workspace\".replace(\"{conversationId}\",encodeURIComponent(String(e.conversationId))),method:\"POST\",headers:o,query:{},body:function(e,n=!1){return null==e?e:{path:e.path}}(e.body,!1)},t);return new n.H(l,e=>{var n;return null==(n=e)?n:{downloadUrl:null==n.downloadUrl?void 0:n.downloadUrl,sizeBytes:null==n.sizeBytes",
+      "w n.w(\"body\",'Required parameter \"body\" was null or undefined when calling chatExportAppToGithub().');let o={};o[\"Content-Type\"]=\"application/json\";let l=await this.request({path:\"/rest/app-chat/conversations/{conversationId}/export-github\".replace(\"{conversationId}\",encodeURIComponent(String(e.conversationId))),method:\"POST\",headers:o,query:{},body:function(e,n=!1){return null==e?e:{repoFullName:e.repoFullName,private:e._private,branch:e.branch,commitMessage:e.commitMessage}}(e.body,!1)},t);return new n.H(l,e=>{var n;return null==(n=e)?n:{repo"
+    ]
+  }
+]
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-10-31 15:40:26Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Read Grok client history loading methods and response schemas
+
+```bash
+curl -sS --max-time 25 'https://cdn.grok.com/_next/static/chunks/2ww8kcyiudqn-.js' | python3 -I -c 'import sys,re
+s=sys.stdin.read()
+for m in re.finditer(r"async (chat(?:Get|Load|List)[A-Za-z]*Raw)\(",s):
+ end=s.find("async ",m.end())
+ part=s[m.start():end]
+ if any(x in part for x in ["conversations/{conversationId}","load-responses","response-node","conversations_v2"]): print(part[:12000],"\n")
+'
+```
+
+```text
+async chatGetConversationRaw(e,t){if(null==e.conversationId)throw new n.w("conversationId",'Required parameter "conversationId" was null or undefined when calling chatGetConversation().');let o={};null!=e.includeWorkspaces&&(o.includeWorkspaces=e.includeWorkspaces),null!=e.includeTaskResult&&(o.includeTaskResult=e.includeTaskResult),null!=e.rid&&(o.rid=e.rid);let l=await this.request({path:"/rest/app-chat/conversations/{conversationId}".replace("{conversationId}",encodeURIComponent(String(e.conversationId))),method:"GET",headers:{},query:o},t);return new n.H(l,e=>v(e))} 
+
+async chatGetConversationChatAttachmentRaw(e,t){if(null==e.conversationId)throw new n.w("conversationId",'Required parameter "conversationId" was null or undefined when calling chatGetConversationChatAttachment().');if(null==e.filename)throw new n.w("filename",'Required parameter "filename" was null or undefined when calling chatGetConversationChatAttachment().');let o={};null!=e.filename&&(o.filename=e.filename);let l=await this.request({path:"/rest/conversations/{conversationId}/chat-attachments".replace("{conversationId}",encodeURIComponent(String(e.conversationId))),method:"GET",headers:{},query:o},t);return new n.H(l,e=>j(e,!1))} 
+
+async chatGetConversationSharingRaw(e,t){if(null==e.conversationId)throw new n.w("conversationId",'Required parameter "conversationId" was null or undefined when calling chatGetConversationSharing().');let o={};null!=e.responseId&&(o.responseId=e.responseId);let l=await this.request({path:"/rest/app-chat/conversations/{conversationId}/sharing".replace("{conversationId}",encodeURIComponent(String(e.conversationId))),method:"GET",headers:{},query:o},t);return new n.H(l,e=>(function(e){if(null==e)return e;return{sharing:null==e.sharing?void 0:function(e){if(null==e)return e;return{scope:null==e.scope?void 0:ey(e.scope),users:null==e.users?void 0:e.users.map(eR),teams:null==e.teams?void 0:e.teams.map(eS),shareLinkId:null==e.shareLinkId?void 0:e.shareLinkId,publicId:null==e.publicId?void 0:e.publicId,viewCount:null==e.viewCount?void 0:e.viewCount,sharedWithOwnTeam:null==e.sharedWithOwnTeam?void 0:e.sharedWithOwnTeam,workspacePreviewPublic:null==e.workspacePreviewPublic?void 0:e.workspacePreviewPublic,workspaceSeedActive:null==e.workspaceSeedActive?void 0:e.workspaceSeedActive,seedExpiresAt:null==e.seedExpiresAt?void 0:e.seedExpiresAt,workspaceSeedEligible:null==e.workspaceSeedEligible?void 0:e.workspaceSeedEligible,workspaceSeedIneligibleReason:null==e.workspaceSeedIneligibleReason?void 0:e.workspaceSeedIneligibleReason}}(e.sharing),workspaceSeedEligible:null==e.workspaceSeedEligible?void 0:e.workspaceSeedEligible,workspaceSeedIneligibleReason:null==e.workspaceSeedIneligibleReason?void 0:e.workspaceSeedIneligibleReason}})(e))} 
+
+async chatGetResponseToolResultsRaw(e,t){if(null==e.conversationId)throw new n.w("conversationId",'Required parameter "conversationId" was null or undefined when calling chatGetResponseToolResults().');if(null==e.responseId)throw new n.w("responseId",'Required parameter "responseId" was null or undefined when calling chatGetResponseToolResults().');let o=await this.request({path:"/rest/app-chat/v2/conversations/{conversationId}/responses/{responseId}/tool-results".replace("{conversationId}",encodeURIComponent(String(e.conversationId))).replace("{responseId}",encodeURIComponent(String(e.responseId))),method:"GET",headers:{},query:{}},t);return new n.H(o,e=>{var n;return null==(n=e)?n:{toolUsageResults:null==n.toolUsageResults?void 0:n.toolUsageResults.map(J.n)}})} 
+
+async chatListResponseNodesRaw(e,t){if(null==e.conversationId)throw new n.w("conversationId",'Required parameter "conversationId" was null or undefined when calling chatListResponseNodes().');let o={};null!=e.includeThreads&&(o.includeThreads=e.includeThreads);let l=await this.request({path:"/rest/app-chat/conversations/{conversationId}/response-node".replace("{conversationId}",encodeURIComponent(String(e.conversationId))),method:"GET",headers:{},query:o},t);return new n.H(l,e=>{var n;return null==(n=e)?n:{responseNodes:null==n.responseNodes?void 0:n.responseNodes.map(eo),inflightResponses:null==n.inflightResponses?void 0:n.inflightResponses.map(U)}})} 
+
+async chatListResponsesRaw(e,t){if(null==e.conversationId)throw new n.w("conversationId",'Required parameter "conversationId" was null or undefined when calling chatListResponses().');let o={};null!=e.includeThreads&&(o.includeThreads=e.includeThreads),null!=e.conversationKind&&(o.conversationKind=e.conversationKind),null!=e.isKidsMode&&(o.isKidsMode=e.isKidsMode),null!=e.enableNsfw&&(o.enableNsfw=e.enableNsfw);let l=await this.request({path:"/rest/app-chat/conversations/{conversationId}/responses".replace("{conversationId}",encodeURIComponent(String(e.conversationId))),method:"GET",headers:{},query:o},t);return new n.H(l,e=>{var n;return null==(n=e)?n:{responses:null==n.responses?void 0:n.responses.map(i.f),inflightResponses:null==n.inflightResponses?void 0:n.inflightResponses.map(U),conversationId:null==n.conversationId?void 0:n.conversationId,workspaceId:null==n.workspaceId?void 0:n.workspaceId}})} 
+
+async chatLoadResponsesRaw(e,t){if(null==e.conversationId)throw new n.w("conversationId",'Required parameter "conversationId" was null or undefined when calling chatLoadResponses().');if(null==e.body)throw new n.w("body",'Required parameter "body" was null or undefined when calling chatLoadResponses().');let o={};o["Content-Type"]="application/json";let l=await this.request({path:"/rest/app-chat/conversations/{conversationId}/load-responses".replace("{conversationId}",encodeURIComponent(String(e.conversationId))),method:"POST",headers:o,query:{},body:function(e,n=!1){return null==e?e:{responseIds:e.responseIds}}(e.body,!1)},t);return new n.H(l,e=>{var n;return null==(n=e)?n:{responses:null==n.responses?void 0:n.responses.map(i.f)}})}
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-10-31 15:40:59Z)**_
+
+<tool-use data-tool-type="shell" data-tool-name="Bash"><details>
+<summary>Tool use: **Bash**</summary>
+Inspect conversation and response-node metadata contracts
+
+```bash
+curl -sS --max-time 25 'https://cdn.grok.com/_next/static/chunks/2ww8kcyiudqn-.js' | python3 -I -c 'import sys,re,hashlib
+s=sys.stdin.read(); print("sha256:",hashlib.sha256(s.encode()).hexdigest())
+for name in ["v", "eo", "U"]:
+ m=re.search(r"function "+name+r"\(",s)
+ print("\nFUNCTION",name, s[m.start():m.start()+7000] if m else "not found")
+'
+```
+
+```text
+sha256: bec82bcc2e1186210e3fe9e9c3afb03fe3051f7a01b9ae1085f9a30e519bf496
+
+FUNCTION v function v(e){var n;return null==(n=e)?n:{conversationId:null==n.conversationId?void 0:n.conversationId,title:null==n.title?void 0:n.title,starred:null==n.starred?void 0:n.starred,createTime:null==n.createTime?void 0:n.createTime,modifyTime:null==n.modifyTime?void 0:n.modifyTime,systemPromptName:null==n.systemPromptName?void 0:n.systemPromptName,temporary:null==n.temporary?void 0:n.temporary,mediaTypes:null==n.mediaTypes?void 0:n.mediaTypes,workspaces:null==n.workspaces?void 0:n.workspaces.map(r.f),taskResult:null==n.taskResult?void 0:(0,d.f)(n.taskResult),teamId:null==n.teamId?void 0:n.teamId,xUserId:null==n.xUserId?void 0:n.xUserId,templateId:null==n.templateId?void 0:n.templateId,voiceChatAssetUrl:null==n.voiceChatAssetUrl?void 0:n.voiceChatAssetUrl,voiceChatAlignmentInfo:null==n.voiceChatAlignmentInfo?void 0:n.voiceChatAlignmentInfo,voiceChatSessionMetadata:null==n.voiceChatSessionMetadata?void 0:n.voiceChatSessionMetadata,workFolder:null==n.workFolder?void 0:(0,s.f)(n.workFolder),latestAssetMetadata:null==n.latestAssetMetadata?void 0:(0,c.f)(n.latestAssetMetadata),organizationId:null==n.organizationId?void 0:n.organizationId,viewerIsOwner:null==n.viewerIsOwner?void 0:n.viewerIsOwner,workspaceId:null==n.workspaceId?void 0:n.workspaceId,ownerDisplayName:null==n.ownerDisplayName?void 0:n.ownerDisplayName,kind:null==n.kind?void 0:(0,u.g)(n.kind),hasUnreadCheckin:null==n.hasUnreadCheckin?void 0:n.hasUnreadCheckin,botAgentId:null==n.botAgentId?void 0:n.botAgentId,computer:null==n.computer?void 0:(0,a.f)(n.computer)}}var p=e.i(4614430),m=e.i(8485117),h=e.i(1268031),g=e.i(3783757),f=e.i(8131726),I=e.i(436922),w=e.i(172492),y=e.i(8452408),R=e.i(2485322);function S(e){var n;return null==(n=e)?n:{responseId:null==n.responseId?void 0:n.responseId,sender:null==n.sender?void 0:n.sender,message:null==n.message?void 0:n.message,createTime:null==n.createTime?void 0:n.createTime,parentResponseId:null==n.parentResponseId?void 0:n.parentResponseId,query:null==n.query?void 0:n.query,model:null==n.model?void 0:n.model,thinkingTrace:null==n.thinkingTrace?void 0:n.thinkingTrace,error:null==n.error?void 0:n.error,manual:null==n.manual?void 0:n.manual,partial:null==n.partial?void 0:n.partial,isControl:null==n.isControl?void 0:n.isControl,queryType:null==n.queryType?void 0:n.queryType,mediaTypes:null==n.mediaTypes?void 0:n.mediaTypes,generatedImageUrls:null==n.generatedImageUrls?void 0:n.generatedImageUrls,webpageUrls:null==n.webpageUrls?void 0:n.webpageUrls,xpostIds:null==n.xpostIds?void 0:n.xpostIds,enrichedResponse:null==n.enrichedResponse?void 0:(0,i.f)(n.enrichedResponse)}}function T(e,n){return null==e?e:{teamId:null==e.teamId?void 0:e.teamId,switchToPersonalTeam:null==e.switchToPersonalTeam?void 0:e.switchToPersonalTeam}}function C(e){return e}function b(e){var n;return null==(n=e)?n:{conversationId:null==n.conversationId?void 0:n.conversationId,subagentStatus:null==n.subagentStatus?void 0:C(n.subagentStatus)}}function k(e){var n;return null==(n=e)?n:{responses:null==n.responses?void 0:n.responses.map(i.f),conversation:null==n.conversation?void 0:v(n.conversation),teamSwitchPrompt:null==n.teamSwitchPrompt?void 0:T(n.teamSwitchPrompt,!1),allowIndexing:null==n.allowIndexing?void 0:n.allowIndexing,viewCount:null==n.viewCount?void 0:n.viewCount,isPublic:null==n.isPublic?void 0:n.isPublic,workspacePreviewPublic:null==n.workspacePreviewPublic?void 0:n.workspacePreviewPublic,workspacePreviewUrl:null==n.workspacePreviewUrl?void 0:n.workspacePreviewUrl,workspacePreviewAvailable:null==n.workspacePreviewAvailable?void 0:n.workspacePreviewAvailable,sharedSubagents:null==n.sharedSubagents?void 0:n.sharedSubagents.map(b),canonicalShareLinkId:null==n.canonicalShareLinkId?void 0:n.canonicalShareLinkId,workspacePreviewState:null==n.workspacePreviewState?void 0:n.workspacePreviewState}}function A(e){var n;return null==(n=e)?n:{responses:null==n.responses?void 0:n.responses.map(i.f),conversation:null==n.conversation?void 0:v(n.conversation),subagentStatus:null==n.subagentStatus?void 0:C(n.subagentStatus)}}function P(e){var n=e;if(null==n)return n;return{conversation:null==n.conversation?void 0:v(n.conversation),matchType:null==n.matchType?void 0:n.matchType,matchedResponseId:null==n.matchedResponseId?void 0:n.matchedResponseId,highlight:null==n.highlight?void 0:n.highlight,matchedWords:null==n.matchedWords?void 0:n.matchedWords}}function U(e){var n=e;if(null==n)return n;return{responseId:null==n.responseId?void 0:n.responseId,status:null==n.status?void 0:n.status,createTime:null==n.createTime?void 0:n.createTime,parentResponseId:null==n.parentResponseId?void 0:n.parentResponseId,threadParentId:null==n.threadParentId?void 0:n.threadParentId}}function E(e){var n;return null==(n=e)?n:{shareLinkId:null==n.shareLinkId?void 0:n.shareLinkId,conversationId:null==n.conversationId?void 0:n.conversationId,responseId:null==n.responseId?void 0:n.responseId,isPublic:null==n.isPublic?void 0:n.isPublic,createTime:null==n.createTime?void 0:n.createTime,modifyTime:null==n.modifyTime?void 0:n.modifyTime,teamId:null==n.teamId?void 0:n.teamId,sharedWithTeam:null==n.sharedWithTeam?void 0:n.sharedWithTeam,sharedWithUserIds:null==n.sharedWithUserIds?void 0:n.sharedWithUserIds,publicId:null==n.publicId?void 0:n.publicId,xaiUserId:null==n.xaiUserId?void 0:n.xaiUserId,sharedLink:null==n.sharedLink?void 0:k(n.sharedLink),viewCount:null==n.viewCount?void 0:n.viewCount,sharedWithTeamIds:null==n.sharedWithTeamIds?void 0:n.sharedWithTeamIds,sharedWithOrgId:null==n.sharedWithOrgId?void 0:n.sharedWithOrgId}}function x(e){var n;return null==(n=e)?n:{conversation:null==n.conversation?void 0:v(n.conversation),settled:null==n.settled?void 0:n.settled,mode:null==n.mode?void 0:n.mode,skipReason:null==n.skipReason?void 0:n.skipReason}}function M(e){var n;return null==(n=e)?n:{...n,type:null==n["@type"]?void 0:n["@type"]}}function N(e){var n;return null==(n=e)?n:{code:null==n.code?void 0:n.code,message:null==n.message?void 0:n.message,details:null==n.details?void 0:n.details.map(M)}}e.s(["y",0,{SubAgentStatusUnspecified:"SUB_AGENT_STATUS_UNSPECIFIED",SubAgentStatusDone:"SUB_AGENT_STATUS_DONE",SubAgentStatusFailed:"SUB_AGENT_STATUS_FAILED",SubAgentStatusCancelled:"SUB_AGENT_STATUS_CANCELLED"},"j",0,C],9260731),e.s(["f",0,k],7212113),e.s(["f",0,A],1557754),e.s(["f",0,x],9277309),e.i(776027);function q(e,n){return null==e?e:{result:null==e.result?void 0:(0,l.f)(e.result),error:null==e.error?void 0:N(e.error)}}var O=e.i(2640197),D=e.i(9211092);function G(e){return e}e.s(["Q",0,{AppAccessVisibilityUnspecified:"APP_ACCESS_VISIBILITY_UNSPECIFIED",AppAccessVisibilityPublic:"APP_ACCESS_VISIBILITY_PUBLIC",AppAccessVisibilityPrivate:"APP_ACCESS_VISIBILITY_PRIVATE"},"F",0,G],4147485);function L(e,n){return null==e?e:{numDeleted:null==e.numDeleted?void 0:e.numDeleted}}function _(e){return e}function F(e){var n;return null==(n=e)?n:{id:null==n.id?void 0:n.id,projectId:null==n.projectId?void 0:n.projectId,hostname:null==n.hostname?void 0:n.hostname,conversa
+
+FUNCTION eo function eo(e){var n;return null==(n=e)?n:{responseId:null==n.responseId?void 0:n.responseId,sender:null==n.sender?void 0:n.sender,parentResponseId:null==n.parentResponseId?void 0:n.parentResponseId,threadParentId:null==n.threadParentId?void 0:n.threadParentId}}function el(e){var n;return null==(n=e)?n:{shareLinkId:null==n.shareLinkId?void 0:n.shareLinkId,conversationId:null==n.conversationId?void 0:n.conversationId,conversationTitle:null==n.conversationTitle?void 0:n.conversationTitle,createTime:null==n.createTime?void 0:n.createTime}}function ei(e){var n;return null==(n=e)?n:{voiceId:null==n.voiceId?void 0:n.voiceId,name:null==n.name?void 0:n.name,language:null==n.language?void 0:n.language,gender:null==n.gender?void 0:n.gender,age:null==n.age?void 0:n.age,previewUrl:null==n.previewUrl?void 0:n.previewUrl}}function ea(e){var n;return null==(n=e)?n:{conversationId:null==n.conversationId?void 0:n.conversationId,image:null==n.image?void 0:n.image}}function er(e){return function(e,n=!1){return null==e?e:{conversationId:e.conversationId,title:e.title,createTime:e.createTime,modifyTime:e.modifyTime,starred:e.starred,systemPromptName:e.systemPromptName,isXShared:e.isXShared,controller:e.controller}}(e,!1)}function es(e){return function(e,n=!1){return null==e?e:{xUserId:e.xUserId,xConversationId:e.xConversationId,xaiUserId:e.xaiUserId,xaiConversationId:e.xaiConversationId}}(e,!1)}e.s(["Q",0,{GifProviderUnspecified:"GIF_PROVIDER_UNSPECIFIED",GifProviderGiphy:"GIF_PROVIDER_GIPHY"},"l",0,en],3025009);var ed=e.i(7229718),eu=e.i(7481440),ec=e.i(823598),ev=e.i(2753706),ep=e.i(1969883);function em(e){return function(e,n=!1){return null==e?e:{responseId:e.responseId,conversationId:e.conversationId,message:e.message,sender:e.sender,createTime:e.createTime,parentResponseId:e.parentResponseId,partial:e.partial,query:e.query,queryType:e.queryType,webSearchResults:null==e.webSearchResults?void 0:e.webSearchResults.map(D.$),xpostIds:e.xpostIds,generatedImageUrls:e.generatedImageUrls,imageAttachments:e.imageAttachments,fileAttachments:e.fileAttachments,cardAttachmentsJson:e.cardAttachmentsJson,thinkingTrace:e.thinkingTrace,steps:null==e.steps?void 0:e.steps.map(O.E),imageEditUri:e.imageEditUri,error:e.error,webpageUrls:e.webpageUrls,metadata:e.metadata,citedWebSearchResults:null==e.citedWebSearchResults?void 0:e.citedWebSearchResults.map(D.$),memoryReferences:null==e.memoryReferences?void 0:e.memoryReferences.map(ev.o),uiLayout:(0,eu.R)(e.uiLayout),ragResults:null==e.ragResults?void 0:e.ragResults.map(ed.L),citedRagResults:null==e.citedRagResults?void 0:e.citedRagResults.map(ed.L),connectorSearchResults:null==e.connectorSearchResults?void 0:e.connectorSearchResults.map(ep.Q),collectionSearchResults:null==e.collectionSearchResults?void 0:e.collectionSearchResults.map(ec.t)}}(e,!1)}var eh=e.i(2290566);function eg(e){return function(e,n=!1){return null==e?e:{partNumber:e.partNumber,etag:e.etag}}(e,!1)}function ef(e){var n;return null==(n=e)?n:{uploadId:null==n.uploadId?void 0:n.uploadId,fileMetadata:null==n.fileMetadata?void 0:(0,H.f)(n.fileMetadata),terminalError:null==n.terminalError?void 0:n.terminalError}}function eI(e){return e}function ew(e){var n;return null==(n=e)?n:{partNumber:null==n.partNumber?void 0:n.partNumber,url:null==n.url?void 0:n.url}}function ey(e){return e}function eR(e){var n;return null==(n=e)?n:{userId:null==n.userId?void 0:n.userId,displayName:null==n.displayName?void 0:n.displayName,email:null==n.email?void 0:n.email,profileImage:null==n.profileImage?void 0:n.profileImage,teamId:null==n.teamId?void 0:n.teamId,teamName:null==n.teamName?void 0:n.teamName}}function eS(e){var n;return null==(n=e)?n:{teamId:null==n.teamId?void 0:n.teamId,teamName:null==n.teamName?void 0:n.teamName,profileImage:null==n.profileImage?void 0:n.profileImage,memberCount:null==n.memberCount?void 0:n.memberCount,isMemberCountAboveCap:null==n.isMemberCountAboveCap?void 0:n.isMemberCountAboveCap}}e.s(["f",0,ef],8003318),e.s(["W",0,{UploadMethodUnspecified:"UPLOAD_METHOD_UNSPECIFIED",UploadMethodSinglePut:"UPLOAD_METHOD_SINGLE_PUT",UploadMethodResumable:"UPLOAD_METHOD_RESUMABLE",UploadMethodMultipart:"UPLOAD_METHOD_MULTIPART"},"r",0,eI],132860),e.s(["M",0,{SharingScopeUnspecified:"SHARING_SCOPE_UNSPECIFIED",SharingScopeNone:"SHARING_SCOPE_NONE",SharingScopeTeam:"SHARING_SCOPE_TEAM",SharingScopeOrganization:"SHARING_SCOPE_ORGANIZATION",SharingScopePublic:"SHARING_SCOPE_PUBLIC"},"O",0,ey],9679660);function eT(e,n){var t;if(null==e)return e;return{result:null==e.result?void 0:null==(t=e.result)?t:{data:null==t.data?void 0:t.data,contentType:null==t.contentType?void 0:t.contentType},error:null==e.error?void 0:N(e.error)}}class eC extends n._{async chatAddModelResponseRaw(e,t){if(null==e.conversationId)throw new n.w("conversationId",'Required parameter "conversationId" was null or undefined when calling chatAddModelResponse().');if(null==e.body)throw new n.w("body",'Required parameter "body" was null or undefined when calling chatAddModelResponse().');let o={};o["Content-Type"]="application/json";let l=await this.request({path:"/rest/app-chat/conversations/{conversationId}/model-responses".replace("{conversationId}",encodeURIComponent(String(e.conversationId))),method:"POST",headers:o,query:{},body:function(e,n=!1){return null==e?e:{message:e.message,partial:e.partial,parentResponseId:e.parentResponseId,webSearchResults:null==e.webSearchResults?void 0:e.webSearchResults.map(D.$),xpostIds:e.xpostIds,cardAttachmentsJson:e.cardAttachmentsJson,thinkingTrace:e.thinkingTrace,steps:null==e.steps?void 0:e.steps.map(O.E),bannerMessage:e.bannerMessage,disclaimer:e.disclaimer}}(e.body,!1)},t);return new n.H(l,e=>(0,i.f)(e))}async chatAddModelResponse(e,n){let t=await this.chatAddModelResponseRaw(e,n);return await t.value()}async chatAddResponseRaw(e,o){if(null==e.conversationId)throw new n.w("conversationId",'Required parameter "conversationId" was null or undefined when calling chatAddResponse().');if(null==e.body)throw new n.w("body",'Required parameter "body" was null or undefined when calling chatAddResponse().');let l={};l["Content-Type"]="application/json";let i=await this.request({path:"/rest/app-chat/conversations/{conversationId}/responses".replace("{conversationId}",encodeURIComponent(String(e.conversationId))),method:"POST",headers:l,query:{},body:(0,t.f)(e.body)},o);return new n.H(i,e=>q(e,!1))}async chatAddResponse(e,n){let t=await this.chatAddResponseRaw(e,n);return await t.value()}async chatAddToolResponseRaw(e,t){if(null==e.body)throw new n.w("body",'Required parameter "body" was null or undefined when calling chatAddToolResponse().');let o={};o["Content-Type"]="application/json";let l=await this.request({path:"/rest/app-chat/tool-responses",method:"POST",headers:o,query:{},body:function(e,n=!1){return null==e?e:{responseId:e.responseId,toolResponse:e.toolResponse}}(e.body,!1)},t);return new n.H(l)}async chatAddToolResponse(e,n){let t=await this.chatAddToolResponseRaw(e,n);return await t.value()}as
+
+FUNCTION U function U(e){var n=e;if(null==n)return n;return{responseId:null==n.responseId?void 0:n.responseId,status:null==n.status?void 0:n.status,createTime:null==n.createTime?void 0:n.createTime,parentResponseId:null==n.parentResponseId?void 0:n.parentResponseId,threadParentId:null==n.threadParentId?void 0:n.threadParentId}}function E(e){var n;return null==(n=e)?n:{shareLinkId:null==n.shareLinkId?void 0:n.shareLinkId,conversationId:null==n.conversationId?void 0:n.conversationId,responseId:null==n.responseId?void 0:n.responseId,isPublic:null==n.isPublic?void 0:n.isPublic,createTime:null==n.createTime?void 0:n.createTime,modifyTime:null==n.modifyTime?void 0:n.modifyTime,teamId:null==n.teamId?void 0:n.teamId,sharedWithTeam:null==n.sharedWithTeam?void 0:n.sharedWithTeam,sharedWithUserIds:null==n.sharedWithUserIds?void 0:n.sharedWithUserIds,publicId:null==n.publicId?void 0:n.publicId,xaiUserId:null==n.xaiUserId?void 0:n.xaiUserId,sharedLink:null==n.sharedLink?void 0:k(n.sharedLink),viewCount:null==n.viewCount?void 0:n.viewCount,sharedWithTeamIds:null==n.sharedWithTeamIds?void 0:n.sharedWithTeamIds,sharedWithOrgId:null==n.sharedWithOrgId?void 0:n.sharedWithOrgId}}function x(e){var n;return null==(n=e)?n:{conversation:null==n.conversation?void 0:v(n.conversation),settled:null==n.settled?void 0:n.settled,mode:null==n.mode?void 0:n.mode,skipReason:null==n.skipReason?void 0:n.skipReason}}function M(e){var n;return null==(n=e)?n:{...n,type:null==n["@type"]?void 0:n["@type"]}}function N(e){var n;return null==(n=e)?n:{code:null==n.code?void 0:n.code,message:null==n.message?void 0:n.message,details:null==n.details?void 0:n.details.map(M)}}e.s(["y",0,{SubAgentStatusUnspecified:"SUB_AGENT_STATUS_UNSPECIFIED",SubAgentStatusDone:"SUB_AGENT_STATUS_DONE",SubAgentStatusFailed:"SUB_AGENT_STATUS_FAILED",SubAgentStatusCancelled:"SUB_AGENT_STATUS_CANCELLED"},"j",0,C],9260731),e.s(["f",0,k],7212113),e.s(["f",0,A],1557754),e.s(["f",0,x],9277309),e.i(776027);function q(e,n){return null==e?e:{result:null==e.result?void 0:(0,l.f)(e.result),error:null==e.error?void 0:N(e.error)}}var O=e.i(2640197),D=e.i(9211092);function G(e){return e}e.s(["Q",0,{AppAccessVisibilityUnspecified:"APP_ACCESS_VISIBILITY_UNSPECIFIED",AppAccessVisibilityPublic:"APP_ACCESS_VISIBILITY_PUBLIC",AppAccessVisibilityPrivate:"APP_ACCESS_VISIBILITY_PRIVATE"},"F",0,G],4147485);function L(e,n){return null==e?e:{numDeleted:null==e.numDeleted?void 0:e.numDeleted}}function _(e){return e}function F(e){var n;return null==(n=e)?n:{id:null==n.id?void 0:n.id,projectId:null==n.projectId?void 0:n.projectId,hostname:null==n.hostname?void 0:n.hostname,conversationId:null==n.conversationId?void 0:n.conversationId,projectName:null==n.projectName?void 0:n.projectName,status:null==n.status?void 0:_(n.status),errorMessage:null==n.errorMessage?void 0:n.errorMessage,createTime:null==n.createTime?void 0:n.createTime,updateTime:null==n.updateTime?void 0:n.updateTime,projectType:null==n.projectType?void 0:n.projectType}}function B(e){var n;return null==(n=e)?n:{id:null==n.id?void 0:n.id,content:null==n.content?void 0:n.content,companionId:null==n.companionId?void 0:n.companionId,createdAt:null==n.createdAt?void 0:n.createdAt,updatedAt:null==n.updatedAt?void 0:n.updatedAt,expiresAt:null==n.expiresAt?void 0:n.expiresAt}}e.s(["r",0,{AppDeploymentStatusUnspecified:"APP_DEPLOYMENT_STATUS_UNSPECIFIED",AppDeploymentStatusBuilding:"APP_DEPLOYMENT_STATUS_BUILDING",AppDeploymentStatusDeploying:"APP_DEPLOYMENT_STATUS_DEPLOYING",AppDeploymentStatusWaitingForProvider:"APP_DEPLOYMENT_STATUS_WAITING_FOR_PROVIDER",AppDeploymentStatusReady:"APP_DEPLOYMENT_STATUS_READY",AppDeploymentStatusError:"APP_DEPLOYMENT_STATUS_ERROR"},"D",0,_],2638869),e.s(["f",0,F],208463);var H=e.i(9158631);function W(e){return e}function V(e){var n;return null==(n=e)?n:{connectorType:null==n.connectorType?void 0:n.connectorType,connectorCatalogId:null==n.connectorCatalogId?void 0:n.connectorCatalogId,connectorCatalogName:null==n.connectorCatalogName?void 0:n.connectorCatalogName}}function K(e){var n;return null==(n=e)?n:{id:null==n.id?void 0:n.id,projectId:null==n.projectId?void 0:n.projectId,hostname:null==n.hostname?void 0:n.hostname,conversationId:null==n.conversationId?void 0:n.conversationId,projectName:null==n.projectName?void 0:n.projectName,status:null==n.status?void 0:_(n.status),errorMessage:null==n.errorMessage?void 0:n.errorMessage,createTime:null==n.createTime?void 0:n.createTime,updateTime:null==n.updateTime?void 0:n.updateTime,projectType:null==n.projectType?void 0:n.projectType,requiredConnectors:null==n.requiredConnectors?void 0:n.requiredConnectors.map(V)}}e.s(["R",0,{Unset:"UNSET",Initialized:"INITIALIZED",Uploading:"UPLOADING",Uploaded:"UPLOADED",Processing:"PROCESSING",Error:"ERROR",Success:"SUCCESS",Aborted:"ABORTED",Expired:"EXPIRED",Retrying:"RETRYING"},"g",0,W],127416);function j(e,n){return null==e?e:{ownerUserId:null==e.ownerUserId?void 0:e.ownerUserId,fileSource:null==e.fileSource?void 0:e.fileSource,filename:null==e.filename?void 0:e.filename,ready:null==e.ready?void 0:e.ready,sizeBytes:null==e.sizeBytes?void 0:e.sizeBytes,bytesBase64:null==e.bytesBase64?void 0:e.bytesBase64}}function z(e){return e}function Y(e){var n;return null==(n=e)?n:{convoId:null==n.convoId?void 0:n.convoId,convoSummary:null==n.convoSummary?void 0:n.convoSummary}}function X(e){var n;return null==(n=e)?n:{text:null==n.text?void 0:n.text,type:null==n.type?void 0:n.type}}e.s(["f",0,K],530170),e.s(["b",0,{ImportedMemoryStatusUnspecified:"IMPORTED_MEMORY_STATUS_UNSPECIFIED",ImportedMemoryStatusNone:"IMPORTED_MEMORY_STATUS_NONE",ImportedMemoryStatusPending:"IMPORTED_MEMORY_STATUS_PENDING",ImportedMemoryStatusComplete:"IMPORTED_MEMORY_STATUS_COMPLETE"},"B",0,z],9246287);var J=e.i(4316044);function Q(e){return function(e,n=!1){return null==e?e:{title:e.title,timestampMs:e.timestampMs}}(e,!1)}function $(e){return function(e,n=!1){return null==e?e:{role:e.role,content:e.content}}(e,!1)}function Z(e,n){return null==e?e:{query:null==e.query?void 0:e.query,suggestions:null==e.suggestions?void 0:e.suggestions.map(X)}}function ee(e){var n;return null==(n=e)?n:{id:null==n.id?void 0:n.id,name:null==n.name?void 0:n.name,mimeType:null==n.mimeType?void 0:n.mimeType}}function en(e){return e}function et(e){var n;return null==(n=e)?n:{conversationId:null==n.conversationId?void 0:n.conversationId,imageUrl:null==n.imageUrl?void 0:n.imageUrl,imageQuery:null==n.imageQuery?void 0:n.imageQuery,assistantMessage:null==n.assistantMessage?void 0:n.assistantMessage,createTime:null==n.createTime?void 0:n.createTime,responseId:null==n.responseId?void 0:n.responseId}}function eo(e){var n;return null==(n=e)?n:{responseId:null==n.responseId?void 0:n.responseId,sender:null==n.sender?void 0:n.sender,parentResponseId:null==n.parentResponseId?void 0:n.parentResponseId,threadParentId:null==n.threadParentId?void 0:n.threadParentId}}function el(e){var n;return null==(n=e)?n:{shareLinkId:null==n.shareLinkId?void 0:n.shareLinkId,conversationId:null
+```
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-10-31 15:42:16Z)**_
+
+已找到 Grok 現行前端使用的對話 API，包括訊息索引與按 ID 載入原始回覆的介面，不必靠猜 endpoint。不過，這份 JSON 本身有完整的兩輪正文；我想先確認你預期的輪數，避免把固定的「可能不完整」警告誤判成已證實漏抓。
+
+
+_**Agent (gpt-6-astra 2026-10-31 15:45:44Z)**_
+
+<tool-use data-tool-type="generic" data-tool-name="AskUserQuestion"><details>
+<summary>Tool use: **AskUserQuestion**</summary>
+**你下載這份 JSON 時，該對話實際應有幾輪問答？檔案中目前有兩輪：「Grok 免費功能」與「如何觸發 Deep Research」，各有一則 User 和 Assistant。**
+
+Options:
+- **應有三輪以上** - 還有更早的問答沒出現在 JSON；可在補充文字描述缺少的第一則問題，不需要提供私人內容。
+- **確實只有這兩輪** - 主要是「partial／DOM snapshot」提示讓我以為只抓到最後一則，希望改成能確認完整性的匯出方式。
+- **JSON 兩輪，Markdown 較少** - 下載 JSON 有兩輪，但 Copy Markdown 或 .md 少了內容；需要另查轉換或交付階段。
+
+
+**Answer:** 確實只有這兩輪
+</details></tool-use>
+
+_**Agent (gpt-6-astra 2026-10-31 15:46:23Z)**_
+
+<think><details><summary>Thought Process</summary>
+**Considering UI decisions**
+
+I need to think about whether asking the user to change certain things, like "要我改成...", is really necessary. It seems like it might just add unnecessary overhead to their decision-making. Instead, we could implement a clear UI with minimal options using the API, which might be more user-friendly. I want to make things easier for the user, so I’ll focus on simplicity and clarity in the design.
+</details></think>
+
+_**Agent (gpt-6-astra 2026-10-31 15:46:27Z)**_
+
+那這次**沒有漏抓問答**：JSON 有 **4 則訊息、完整兩輪**：
+
+1. Grok 免費功能 → Grok 回覆
+2. 如何觸發 Deep Research → Grok 回覆
+
+容易誤解的是目前的提示：
+
+- `partial` 是 DOM 擷取模式的**固定保守標記**，不是程式偵測到缺少訊息。
+- `DOM snapshot` 表示來源是頁面 HTML，而非 Grok 的原始 API JSON；不代表只有最後一則。
+
+我前一版的提示應該更精確，例如：
+
+> 已匯出 4 則訊息（User 2／Assistant 2）。來源：DOM；尚未與伺服器歷史核對完整性。
+
+**這份檔案的兩輪正文都有保存，不需要為此再滾動頁面。** 不過長對話確實仍有 DOM 虛擬化的限制；若要真正確認完整性，需要接上剛查到的 Grok 訊息索引／原始回覆 API，核對取得的訊息，而不是只移除警告。
