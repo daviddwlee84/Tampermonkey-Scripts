@@ -21,6 +21,7 @@
 | [Claude Export Markdown](userscripts/claude-export-markdown/) | 把整段 Claude 對話（含 Claude Code on the web session）匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用 | `https://claude.ai/*` | 1.1.1 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/claude-export-markdown/claude-export-markdown.user.js) |
 | [Copilot Export Markdown](userscripts/copilot-export-markdown/) | 把整段 Microsoft Copilot 對話匯成 Markdown（含 Agent Handoff 與原始 JSON），貼給 coding agent 用 | `https://copilot.microsoft.com/*`<br>`https://www.copilot.com/*` | 1.2.1 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/copilot-export-markdown/copilot-export-markdown.user.js) |
 | [Gemini Export Markdown](userscripts/gemini-export-markdown/) | 把整段 Gemini 對話匯成 Markdown（含 share 頁與 Agent Handoff），貼給 coding agent 用 | `https://gemini.google.com/*` | 0.2.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/gemini-export-markdown/gemini-export-markdown.user.js) |
+| [Grok Export Markdown](userscripts/grok-export-markdown/) | 將 Grok 對話匯出為 Markdown、Agent Handoff 或 JSON | `https://grok.com/*` | 0.1.0 | [Install](https://raw.githubusercontent.com/daviddwlee84/Tampermonkey-Scripts/main/userscripts/grok-export-markdown/grok-export-markdown.user.js) |
 
 ### 閱讀與媒體工具
 

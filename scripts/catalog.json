@@ -8,7 +8,8 @@
       "chatgpt-export-markdown",
       "claude-export-markdown",
       "copilot-export-markdown",
-      "gemini-export-markdown"
+      "gemini-export-markdown",
+      "grok-export-markdown"
     ]
   },
   {

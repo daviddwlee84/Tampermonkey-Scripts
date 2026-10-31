@@ -30,6 +30,13 @@ route identity changes; don't reuse data from another article/conversation.
 6. Preserve tables, code languages/fences, lists and links. Inspect the resulting
    text/file, not just the UI screenshot.
 
+Some client renderers briefly keep raw Markdown in an invisible placeholder before
+replacing it with rendered HTML. Inspect the transition: when the placeholder is
+the only representation, preserve its text as Markdown rather than converting it
+as HTML or dropping it for being hidden. When both representations coexist, choose
+one to avoid duplicate output. Test placeholder-only, rendered-only, and overlap
+states; do not generalize this to discarding all hidden content.
+
 A useful regression inserts an unmistakable sentinel into owned UI and a
 translation wrapper, then asserts it is absent from exported Markdown. Also
 assert the source page's HTML/scroll/overflow survive opening and closing a reader.

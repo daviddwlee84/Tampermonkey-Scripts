@@ -20,6 +20,7 @@
     "verify": "npm run check && npm run index:check",
     "preview": "node scripts/preview.mjs",
     "test:chatgpt-export": "node --test tests/chatgpt-export-markdown.test.mjs",
+    "test:grok-export": "node --test tests/grok-export-markdown.test.mjs",
     "build:chat-explorer": "node scripts/build-chat-explorer.mjs",
     "test:chat-explorer": "node --test tests/conversation-archive.test.mjs tests/conversation-explorer.test.mjs",
     "test:page-reader": "node --test tests/page-reader-markdown.test.mjs",

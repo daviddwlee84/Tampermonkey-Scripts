@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Synthetic Grok DOM</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <nav>OUTSIDE_CONVERSATION_SENTINEL</nav>
+    <main id="conversation">
+      <section id="response-dom-user">
+        <div data-testid="user-message">
+          <div data-no-copy>ROLE_LABEL_SENTINEL</div>
+          <div class="response-content-markdown">
+            <p>DOM QUESTION: preserve semantic content.</p>
+          </div>
+        </div>
+      </section>
+      <section id="response-dom-assistant">
+        <div data-testid="assistant-message">
+          <div data-no-copy>ROLE_LABEL_SENTINEL</div>
+          <div class="thinking-container">THINKING_DOM_SENTINEL</div>
+          <div class="response-content-markdown">
+            <h2>DOM ANSWER</h2>
+            <p>
+              <strong>Bold value</strong> and <em>emphasis</em>;
+              <a href="/docs/fixture">Relative document</a>.
+            </p>
+            <blockquote>
+              <p>Quoted value</p>
+              <pre><code class="language-text">alpha
+  beta
+</code></pre>
+            </blockquote>
+            <ol>
+              <li>
+                First item
+                <ul>
+                  <li>
+                    Nested item
+                    <pre><code class="language-python">for i in range(2):
+    print(i)
+</code></pre>
+                  </li>
+                </ul>
+              </li>
+              <li>Second item</li>
+            </ol>
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Alpha</td>
+                  <td>42</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-controls">
+              <button>COPY_TABLE_SENTINEL</button><button>DOWNLOAD_TABLE_SENTINEL</button>
+            </div>
+            <pre><code class="language-js">const ticks = '```';
+  console.log(ticks);
+</code></pre>
+            <p>
+              Inline math
+              <span class="katex"
+                ><span class="katex-mathml"
+                  ><math
+                    ><semantics
+                      ><mrow><mi>x</mi><mo>+</mo><mn>1</mn></mrow
+                      ><annotation encoding="application/x-tex">x + 1</annotation></semantics
+                    ></math
+                  ></span
+                ><span class="katex-html" aria-hidden="true">MATH_RENDER_SENTINEL</span></span
+              >.
+            </p>
+            <p><img src="/assets/fixture.svg" alt="Synthetic diagram" /></p>
+            <button>SOURCES_BUTTON_SENTINEL</button>
+            <span role="button">ROLE_BUTTON_SENTINEL</span>
+            <span data-no-copy>NO_COPY_SENTINEL</span>
+            <div class="thinking-container">NESTED_THINKING_SENTINEL</div>
+            <div id="grok-export-md-fixture-noise">OWN_UI_SENTINEL</div>
+            <script type="application/json">
+              { "ignore": "SCRIPT_SENTINEL" }
+            </script>
+            <style>
+              .fixture-unused::after {
+                content: 'STYLE_SENTINEL';
+              }
+            </style>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer>FOOTER_SENTINEL</footer>
+  </body>
+</html>

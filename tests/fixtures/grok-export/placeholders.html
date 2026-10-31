@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Synthetic placeholder transition</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <main id="conversation">
+      <!-- prettier-ignore -->
+      <section id="response-raw-only"><div data-testid="user-message"><div class="response-content-markdown"><div class="invisible whitespace-pre-wrap">RAW ONLY QUESTION
+
+```md
+# This is code, not a heading
+```
+
+- raw list value</div></div></div></section>
+      <section id="response-rendered">
+        <div data-testid="assistant-message">
+          <div class="response-content-markdown">
+            <div class="invisible whitespace-pre-wrap">
+              RAW_DUPLICATE_SENTINEL **RENDERED ANSWER**
+            </div>
+            <p><strong>RENDERED ANSWER</strong></p>
+            <p>Rendered transition content.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

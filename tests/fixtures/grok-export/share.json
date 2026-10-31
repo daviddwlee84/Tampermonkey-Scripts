@@ -1,0 +1,77 @@
+{
+  "conversation": {
+    "conversationId": "synthetic-conversation",
+    "title": "Synthetic Grok snapshot",
+    "createTime": "2026-10-31T09:00:00Z"
+  },
+  "responses": [
+    {
+      "responseId": "user-first",
+      "parentResponseId": null,
+      "sender": "human",
+      "message": "FIRST QUESTION: compare two values.",
+      "createTime": "2026-10-31T09:04:00Z",
+      "partial": false,
+      "isControl": false
+    },
+    {
+      "responseId": "assistant-first",
+      "parentResponseId": "user-first",
+      "sender": "assistant",
+      "message": "FIRST ANSWER\n\n| Item | Value |\n| --- | --- |\n| A | 42 |\n\n```js\nconst value = 42;\n```\n\n[Remote document](https://example.com/document)",
+      "createTime": "2026-10-31T09:03:00Z",
+      "partial": false,
+      "isControl": false,
+      "citedWebSearchResults": [
+        { "title": "Cited reference", "url": "https://example.com/cited" },
+        { "title": "Duplicate citation", "url": "https://example.com/cited" }
+      ],
+      "webSearchResults": [
+        { "title": "CANDIDATE_ONLY", "url": "https://example.com/uncited-candidate" }
+      ]
+    },
+    {
+      "responseId": "control-step",
+      "parentResponseId": "assistant-first",
+      "sender": "assistant",
+      "message": "CONTROL_SENTINEL",
+      "isControl": true
+    },
+    {
+      "responseId": "tool-step",
+      "sender": "tool",
+      "message": "TOOL_SENTINEL"
+    },
+    {
+      "responseId": "thinking-step",
+      "sender": "thinking",
+      "message": "THINKING_SENTINEL"
+    },
+    {
+      "responseId": "unknown-role",
+      "sender": "future-role",
+      "message": "UNKNOWN_ROLE_SENTINEL"
+    },
+    {
+      "responseId": "user-followup",
+      "parentResponseId": "assistant-first",
+      "sender": "human",
+      "message": "FOLLOWUP QUESTION: keep the response order.",
+      "createTime": "2026-10-31T09:02:00Z",
+      "partial": false,
+      "isControl": false
+    },
+    {
+      "responseId": "assistant-followup",
+      "parentResponseId": "user-followup",
+      "sender": "assistant",
+      "message": "FOLLOWUP ANSWER\n\n1. Preserve order.\n2. Preserve Markdown.\n\n$$x^2 + y^2$$",
+      "createTime": "2026-10-31T09:01:00Z",
+      "partial": false,
+      "isControl": false,
+      "citedWebSearchResults": [],
+      "webSearchResults": []
+    }
+  ],
+  "opaqueFixtureField": { "keep": [0, false, null, "unchanged"] }
+}
