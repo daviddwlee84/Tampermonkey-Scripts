@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini Export Markdown
 // @namespace    https://github.com/daviddwlee84/Tampermonkey-Scripts
-// @version      0.2.0
+// @version      0.2.1
 // @description  把整段 Gemini 對話匯成 Markdown（含 share 頁與 Agent Handoff），貼給 coding agent 用
 // @author       Da-Wei Lee
 // @license      MIT
@@ -47,7 +47,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.2.0';
+  const VERSION = '0.2.1';
   const NS = 'gemini-export-md';
   const EXPORTER = `gemini-export-markdown v${VERSION}`;
   const LOG_PREFIX = '[gemini-export-markdown]';
@@ -592,21 +592,51 @@
     return null;
   }
 
-  function pickCaptured({ conversationId, shareId }) {
-    for (let i = captured.length - 1; i >= 0; i -= 1) {
-      const hit = captured[i];
-      if (shareId && (hit.url.includes(shareId) || hit.convo.shareId === shareId)) return hit;
-      if (conversationId && hit.convo.turns.some((turn) => turn[0][0] === `c_${conversationId}`)) {
-        return hit;
-      }
+  function belongsTo(hit, { conversationId, shareId }) {
+    if (shareId && (hit.url.includes(shareId) || hit.convo.shareId === shareId)) return true;
+    return Boolean(
+      conversationId && hit.convo.turns.some((turn) => turn[0][0] === `c_${conversationId}`)
+    );
+  }
+
+  /**
+   * 把同一段對話攔到的**所有** capture 合併成一份。
+   *
+   * 只挑最新一筆會出事：app 頁送出新訊息或捲動載入時，網站會再發 batchexecute，
+   * 那筆可能只帶最新一輪（或只帶一頁），把先前完整的歷史蓋掉，匯出就只剩最後一輪。
+   * 同一輪（response id）出現多次時，較新的 capture 優先——內容可能被重新生成過。
+   * 一筆都對不上時退回最新一筆，維持原本的 fallback。
+   */
+  function mergeCaptured(ids) {
+    const hits = captured.filter((hit) => belongsTo(hit, ids));
+    if (hits.length === 0) return captured[captured.length - 1] || null;
+    if (hits.length === 1) return hits[0];
+
+    const byId = new Map();
+    let richest = hits[0];
+    for (const hit of hits) {
+      if (hit.convo.turns.length > richest.convo.turns.length) richest = hit;
+      for (const turn of hit.convo.turns) byId.set(turn[0][1], turn); // 後到的覆蓋先到的
     }
-    return captured[captured.length - 1] || null;
+    const pick = (key) => hits.map((hit) => hit.convo[key]).find(Boolean) || null;
+
+    return {
+      url: richest.url,
+      rpcid: richest.rpcid,
+      convo: {
+        turns: [...byId.values()],
+        meta: pick('meta'),
+        shareId: pick('shareId') || '',
+        created: pick('created'),
+      },
+      data: richest.data, // Download .json 維持「一份原始 payload」，取最完整那筆
+    };
   }
 
   async function waitForCapture(ids, { timeout = 8_000, interval = 200 } = {}) {
     const deadline = Date.now() + timeout;
     for (;;) {
-      const hit = pickCaptured(ids);
+      const hit = mergeCaptured(ids);
       if (hit) return hit;
       if (Date.now() >= deadline) return null;
       await delay(interval);
@@ -614,7 +644,7 @@
   }
 
   async function resolveConversation(ids) {
-    const hit = pickCaptured(ids);
+    const hit = mergeCaptured(ids);
     if (hit) return { ...hit, source: 'network-capture' };
 
     if (ids.shareId) {
@@ -732,6 +762,60 @@
     return Array.isArray(stamp) && typeof stamp[0] === 'number' ? stamp[0] : undefined;
   }
 
+  /** 排序用的精確時間（秒 + 奈秒）；沒有時間戳回 Infinity，排到最後。 */
+  function turnSortKey(turn) {
+    const stamp = turn[4];
+    if (!Array.isArray(stamp) || typeof stamp[0] !== 'number') return Infinity;
+    return stamp[0] + (typeof stamp[1] === 'number' ? stamp[1] / 1e9 : 0);
+  }
+
+  /**
+   * 把 turns 排成「由舊到新」。
+   *
+   * share 頁 `ujx1Bf` 本來就是正序，但 **app 頁載歷史的 payload 是最新在前**，
+   * 照原順序輸出的話最後一輪會跑到最上面，看起來就像只抓到最後一輪。
+   *
+   * 主依據是 parent 鏈：`turn[1]` 是 `["c_…", "r_<上一輪>", "rc_…"]`，第一輪是 null。
+   * 從沒有 parent（或 parent 不在手上）的那輪往下串，同一個 parent 底下有多個分支
+   * （例如重新生成）就照時間排。時間戳只當輔助，連時間都沒有就保留原相對順序。
+   */
+  function orderTurns(turns) {
+    const indexed = turns.map((turn, index) => ({ turn, index, key: turnSortKey(turn) }));
+    const byTime = (a, b) => (a.key === b.key ? a.index - b.index : a.key < b.key ? -1 : 1);
+    const ids = new Set(turns.map((turn) => turn[0][1]));
+    const parentOf = (turn) =>
+      Array.isArray(turn[1]) && typeof turn[1][1] === 'string' ? turn[1][1] : '';
+
+    const children = new Map();
+    const roots = [];
+    for (const item of indexed) {
+      const parent = parentOf(item.turn);
+      if (!parent || !ids.has(parent) || parent === item.turn[0][1]) {
+        roots.push(item);
+        continue;
+      }
+      if (!children.has(parent)) children.set(parent, []);
+      children.get(parent).push(item);
+    }
+
+    const out = [];
+    const visited = new Set();
+    const visit = (item) => {
+      const id = item.turn[0][1];
+      if (visited.has(id)) return;
+      visited.add(id);
+      out.push(item.turn);
+      for (const child of (children.get(id) || []).sort(byTime)) visit(child);
+    };
+    roots.sort(byTime).forEach(visit);
+    // 鏈上有環之類的怪資料：剩下沒走到的照時間補在後面，不丟資料。
+    indexed
+      .filter((item) => !visited.has(item.turn[0][1]))
+      .sort(byTime)
+      .forEach(visit);
+    return out;
+  }
+
   /**
    * app 頁的歷史 RPC 把型號寫在 response 的某一格（實測是 `"3 Flash"`），
    * share 頁的 response 沒有這格、型號在容器的 meta 裡。
@@ -812,17 +896,18 @@
       };
     }
 
-    const { turns, meta, shareId, created } = hit.convo;
+    const { meta, shareId, created } = hit.convo;
 
-    // 同一份 payload 有時會重複帶到同一輪，用 response id 去重。
+    // 同一份 payload 有時會重複帶到同一輪，用 response id 去重，再排成由舊到新。
     const seen = new Set();
-    const sections = [];
-    for (const turn of turns) {
+    const unique = hit.convo.turns.filter((turn) => {
       const id = turn[0][1];
-      if (seen.has(id)) continue;
+      if (seen.has(id)) return false;
       seen.add(id);
-      sections.push(...turnToSections(turn, opts));
-    }
+      return true;
+    });
+    const turns = orderTurns(unique);
+    const sections = turns.flatMap((turn) => turnToSections(turn, opts));
 
     const conversationId = String(turns[0]?.[0]?.[0] || '').replace(/^c_/, '');
 

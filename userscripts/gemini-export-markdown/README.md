@@ -74,6 +74,7 @@ app 頁（`/app/<id>`）載入歷史用的是哪一支 rpcid 只能從攔截學�
 | 標題 | payload 的 meta 裡有 | **payload 裡完全沒有**，只能從畫面拿 |
 | 型號 | meta 的 `[2, "<id>", "Flash"]` | 每輪 response 裡的 `"3 Flash"` |
 | 建立時間 | 容器帶整段對話的 | 沒有，退回第一輪的時間戳 |
+| turns 順序 | 由舊到新 | **最新在前** |
 | 每一輪的容器（DOM） | `<share-turn-viewer>` | `.conversation-container` |
 | 補打 RPC | 可以（`ujx1Bf`，匿名可用） | 不行 |
 | 登入 | 不需要 | 需要 |
@@ -94,6 +95,13 @@ app 那三格是 `null / null / []`，型別檢查會擋掉，不會生出假資
   `<h5>You said …</h5>`，把提問整段重複了一次，不剔掉輸出就會出現兩份一樣的問題。
 - **Sources 去重**：payload 除了正文之外還躺著一份渲染用的 structured content 鏡像，
   不濾的話每個行內連結都會在 `**Sources**` 再列一次。已經在內文出現過的連結會被濾掉。
+- **turns 依 parent 鏈重排**：app 頁載歷史的 payload 是**最新在前**，照原順序輸出的話
+  最後一輪會跑到最上面，看起來像只抓到最後一輪（0.2.1 修掉）。每輪的 `turn[1]` 是
+  `["c_…", "r_<上一輪>", "rc_…"]`（第一輪是 null），所以順著 parent 鏈排回由舊到新，
+  鏈斷掉的部分再用時間戳補。share 頁本來就是正序，排完不變。
+- **同一段對話的 capture 全部合併**：app 頁送出新訊息或捲動載入時，網站會再發
+  batchexecute，那筆可能只帶最新一輪。只取最新一筆會把完整歷史蓋掉，所以改成依
+  response id 合併所有 capture（同一輪以較新的為準）。`Download .json` 仍輸出最完整那筆原始 payload。
 - **每一輪都有時間戳**：`turn[4]` 是 `[epoch 秒, 奈秒]`，share 與 app 兩種 payload 都有，
   所以每則訊息的抬頭都帶得出時間，不是只有整段對話一個 `created_at`。
 - **型號認字樣不認索引**：app 頁把型號寫在 response 的某一格（實測是 `"3 Flash"`），
